@@ -27,7 +27,15 @@ import {
   Key,
   Globe,
   Copy,
-  Check
+  Check,
+  Trash2,
+  Edit,
+  Play,
+  X,
+  Tv,
+  Eye,
+  Video,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -81,6 +89,13 @@ export default function AdminPanel() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Biblioteca de Mídias States
+  const [midias, setMidias] = useState<any[]>([]);
+  const [editingMidia, setEditingMidia] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ titulo_video: '', tela_id: '' });
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [isUpdatingMidia, setIsUpdatingMidia] = useState(false);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === 'maestro5') {
@@ -133,6 +148,187 @@ export default function AdminPanel() {
     }
   };
 
+  const fetchMidias = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('midias')
+        .select(`
+          *,
+          clientes (
+            nome_empresa
+          ),
+          playlists (
+            id,
+            tela_id,
+            telas (
+              id,
+              nome_local,
+              identificador_unico
+            )
+          )
+        `)
+        .order('criado_em', { ascending: false });
+
+      if (error) throw error;
+      setMidias(data || []);
+    } catch (error: any) {
+      console.error('Error fetching midias:', error);
+      const errorMsg = error.message || error.details || JSON.stringify(error);
+      showToast('error', `Falha ao carregar mídias: ${errorMsg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeletarMidia = async (midiaId: string, urlStorage: string) => {
+    if (!confirm('Deseja realmente excluir esta mídia? Ela será removida de todas as telas vinculadas.')) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // 1. Deleta do banco
+      const { error: deleteDbError } = await supabase
+        .from('midias')
+        .delete()
+        .eq('id', midiaId);
+
+      if (deleteDbError) throw deleteDbError;
+
+      // 2. Deleta do storage se aplicável
+      if (urlStorage) {
+        const parts = urlStorage.split('/videos/');
+        if (parts.length > 1) {
+          const fileName = parts[1];
+          const filePath = `videos/${fileName}`;
+          
+          await supabase.storage
+            .from('midias')
+            .remove([filePath]);
+        }
+      }
+
+      showToast('success', 'Mídia excluída com sucesso.');
+      fetchMidias();
+      fetchDashboardData();
+    } catch (error: any) {
+      console.error('Error deleting midia:', error);
+      showToast('error', 'Erro ao excluir mídia: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenEditMidiaModal = (midia: any) => {
+    setEditingMidia(midia);
+    setEditForm({
+      titulo_video: midia.titulo_video || '',
+      tela_id: midia.playlists?.[0]?.tela_id || ''
+    });
+    setEditFile(null);
+  };
+
+  const handleUpdateMidiaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMidia) return;
+    if (!editForm.titulo_video || !editForm.tela_id) {
+      showToast('error', 'Preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    setIsUpdatingMidia(true);
+    try {
+      let finalUrl = editingMidia.url_storage;
+      let finalSize = editingMidia.tamanho_mb;
+
+      if (editFile) {
+        // Upload do novo vídeo
+        const fileExt = editFile.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+        const filePath = `videos/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('midias')
+          .upload(filePath, editFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('midias')
+          .getPublicUrl(filePath);
+
+        finalUrl = publicUrlData.publicUrl;
+        finalSize = parseFloat((editFile.size / (1024 * 1024)).toFixed(2));
+
+        // Deleta arquivo antigo do storage
+        if (editingMidia.url_storage) {
+          const parts = editingMidia.url_storage.split('/videos/');
+          if (parts.length > 1) {
+            const oldFileName = parts[1];
+            const oldFilePath = `videos/${oldFileName}`;
+            await supabase.storage
+              .from('midias')
+              .remove([oldFilePath]);
+          }
+        }
+      }
+
+      const targetTela = telas.find(t => t.id === editForm.tela_id);
+      if (!targetTela) throw new Error("Tela de destino inválida.");
+
+      // Atualiza a tabela 'midias'
+      const { error: dbError } = await supabase
+        .from('midias')
+        .update({
+          titulo_video: editForm.titulo_video,
+          url_storage: finalUrl,
+          tamanho_mb: finalSize,
+          cliente_id: targetTela.cliente_id
+        })
+        .eq('id', editingMidia.id);
+
+      if (dbError) throw dbError;
+
+      // Atualiza ou insere o vínculo de playlist
+      const playlistId = editingMidia.playlists?.[0]?.id;
+      if (playlistId) {
+        const { error: playlistError } = await supabase
+          .from('playlists')
+          .update({
+            tela_id: editForm.tela_id
+          })
+          .eq('id', playlistId);
+
+        if (playlistError) throw playlistError;
+      } else {
+        const { error: playlistError } = await supabase
+          .from('playlists')
+          .insert([{
+            tela_id: editForm.tela_id,
+            midia_id: editingMidia.id,
+            ordem_exibicao: 0
+          }]);
+
+        if (playlistError) throw playlistError;
+      }
+
+      showToast('success', 'Mídia atualizada com sucesso.');
+      setEditingMidia(null);
+      setEditFile(null);
+      fetchMidias();
+      fetchDashboardData();
+    } catch (error: any) {
+      console.error('Error updating midia:', error);
+      showToast('error', 'Erro ao atualizar mídia: ' + error.message);
+    } finally {
+      setIsUpdatingMidia(false);
+    }
+  };
+
   useEffect(() => {
     document.title = `${systemSettings.systemName} | Workspace`;
     let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
@@ -152,6 +348,7 @@ export default function AdminPanel() {
         fetchClientes();
       } else if (activeTab === 'nova-midia') {
         fetchDashboardData(); // Fetches both telas and clientes, which is needed for nova-midia dropdown
+        fetchMidias(); // Carrega biblioteca de mídias
       }
     }
   }, [activeTab, isAuthenticated]);
@@ -451,6 +648,25 @@ alter table clientes disable row level security;
 alter table telas disable row level security;
 alter table midias disable row level security;
 alter table playlists disable row level security;
+
+-- Caso o RLS seja reativado ou mantido ativo pelo Supabase, criamos políticas públicas irrestritas (CRUD completo)
+-- para permitir que as requisições anônimas funcionem normalmente.
+
+-- Políticas para Clientes
+drop policy if exists "Acesso público total clientes" on clientes;
+create policy "Acesso público total clientes" on clientes for all using (true) with check (true);
+
+-- Políticas para Telas
+drop policy if exists "Acesso público total telas" on telas;
+create policy "Acesso público total telas" on telas for all using (true) with check (true);
+
+-- Políticas para Mídias
+drop policy if exists "Acesso público total midias" on midias;
+create policy "Acesso público total midias" on midias for all using (true) with check (true);
+
+-- Políticas para Playlists
+drop policy if exists "Acesso público total playlists" on playlists;
+create policy "Acesso público total playlists" on playlists for all using (true) with check (true);
 
 insert into storage.buckets (id, name, public) 
 values ('midias', 'midias', true)
@@ -878,6 +1094,7 @@ create policy "Permitir deletar midias" on storage.objects
                 <PerfilSettings showToast={showToast} settings={systemSettings} onSettingsChange={setSystemSettings} />
               </motion.div>
             )}
+
             {/* Nova Mídia Tab */}
             {activeTab === 'nova-midia' && (
               <motion.div 
@@ -886,93 +1103,342 @@ create policy "Permitir deletar midias" on storage.objects
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3 }}
-                className="max-w-2xl mx-auto pt-10"
+                className="max-w-6xl mx-auto pt-6 animate-fade-in"
               >
-                <div className="mb-10 text-center">
-                  <div className="w-16 h-16 mx-auto bg-[#0f0f11] border border-white/10 rounded-2xl flex items-center justify-center mb-6 shadow-2xl">
-                    <UploadCloud className="w-6 h-6 text-amber-500" />
+                <div className="mb-8 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-3xl font-display font-light text-white mb-2 tracking-tight">Gerenciar Mídias</h2>
+                    <p className="text-sm text-slate-500 font-light">Envie, edite, exclua e mude o destino das mídias em sua rede.</p>
                   </div>
-                  <h2 className="text-3xl font-display font-light text-white mb-2">Gerenciar Mídias</h2>
-                  <p className="text-sm text-slate-500 font-light">Faça upload de vídeos e vincule às telas de exibição.</p>
+                  <button 
+                    onClick={() => { fetchMidias(); fetchDashboardData(); }}
+                    className="text-xs text-amber-500 hover:text-amber-400 font-mono transition-colors border border-amber-500/20 hover:border-amber-500/50 px-3 py-1.5 rounded-lg bg-amber-500/5"
+                  >
+                    {isLoading ? 'Sincronizando...' : 'Sincronizar Biblioteca'}
+                  </button>
                 </div>
 
-                <form onSubmit={handleMidiaSubmit} className="bg-[#0f0f11] border border-white/5 p-8 rounded-3xl shadow-2xl shadow-black/50">
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Título do Vídeo</label>
-                      <input 
-                        type="text" 
-                        value={midiaForm.titulo_video}
-                        onChange={e => setMidiaForm({...midiaForm, titulo_video: e.target.value})}
-                        className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700"
-                        placeholder="Ex: Campanha Dia das Mães"
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Tela de Destino</label>
-                      <select 
-                        value={midiaForm.tela_id}
-                        onChange={e => setMidiaForm({...midiaForm, tela_id: e.target.value})}
-                        className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all appearance-none cursor-pointer"
-                        required
-                      >
-                        <option value="" disabled className="text-slate-500">Selecione a tela alvo...</option>
-                        {telas.map(t => (
-                          <option key={t.id} value={t.id}>{t.nome_local} ({t.identificador_unico})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Arquivo de Vídeo</label>
-                      <div className="relative border-2 border-dashed border-white/10 rounded-2xl p-8 hover:border-amber-500/50 transition-colors bg-[#050505] group">
-                        <input 
-                          type="file" 
-                          accept="video/*"
-                          onChange={e => setSelectedFile(e.target.files?.[0] || null)}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          required
-                        />
-                        <div className="flex flex-col items-center justify-center text-center">
-                          <FileVideo className={`w-10 h-10 mb-4 transition-colors ${selectedFile ? 'text-amber-500' : 'text-slate-600 group-hover:text-amber-500/50'}`} />
-                          {selectedFile ? (
-                            <>
-                              <p className="text-sm font-medium text-white mb-1">{selectedFile.name}</p>
-                              <p className="text-xs text-amber-500/70 font-mono">
-                                {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-sm font-medium text-white mb-1">Arraste e solte o vídeo aqui</p>
-                              <p className="text-xs text-slate-500">ou clique para procurar no computador</p>
-                              <p className="text-[10px] font-mono text-slate-600 uppercase tracking-widest mt-4">MP4, WEBM (Max. 500MB)</p>
-                            </>
-                          )}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Coluna do Formulário de Upload */}
+                  <div className="lg:col-span-5 space-y-6">
+                    <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-3xl shadow-xl">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center">
+                          <UploadCloud className="w-5 h-5 text-amber-500" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-medium text-white">Novo Upload</h3>
+                          <p className="text-xs text-slate-500">Adicione um novo arquivo de vídeo às telas.</p>
                         </div>
                       </div>
+
+                      <form onSubmit={handleMidiaSubmit} className="space-y-5">
+                        <div>
+                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">Título do Vídeo</label>
+                          <input 
+                            type="text" 
+                            value={midiaForm.titulo_video}
+                            onChange={e => setMidiaForm({...midiaForm, titulo_video: e.target.value})}
+                            className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700"
+                            placeholder="Ex: Propaganda Promocional"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">Tela de Destino</label>
+                          <div className="relative">
+                            <select 
+                              value={midiaForm.tela_id}
+                              onChange={e => setMidiaForm({...midiaForm, tela_id: e.target.value})}
+                              className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all appearance-none cursor-pointer"
+                              required
+                            >
+                              <option value="" disabled className="text-slate-500">Selecione a tela alvo...</option>
+                              {telas.map(t => (
+                                <option key={t.id} value={t.id}>{t.nome_local} ({t.identificador_unico})</option>
+                              ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                              <ChevronRight className="w-4 h-4 rotate-90" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">Arquivo de Vídeo</label>
+                          <div className="relative border-2 border-dashed border-white/10 rounded-xl p-6 hover:border-amber-500/50 transition-colors bg-[#050505] group">
+                            <input 
+                              type="file" 
+                              accept="video/*"
+                              onChange={e => setSelectedFile(e.target.files?.[0] || null)}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                              required
+                            />
+                            <div className="flex flex-col items-center justify-center text-center">
+                              <FileVideo className={`w-8 h-8 mb-3 transition-colors ${selectedFile ? 'text-amber-500' : 'text-slate-600 group-hover:text-amber-500/50'}`} />
+                              {selectedFile ? (
+                                <>
+                                  <p className="text-xs font-medium text-white mb-0.5 truncate max-w-[200px]">{selectedFile.name}</p>
+                                  <p className="text-[10px] text-amber-500/70 font-mono">
+                                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-xs font-medium text-white mb-0.5">Arraste ou clique para enviar</p>
+                                  <p className="text-[10px] text-slate-500">MP4, WEBM (Max. 500MB)</p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-2">
+                          <button 
+                            type="submit"
+                            disabled={isSubmitting} 
+                            className="w-full bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 py-3 rounded-xl text-sm font-medium transition-all shadow-[0_0_15px_rgba(245,158,11,0.15)] hover:shadow-[0_0_20px_rgba(245,158,11,0.3)] flex items-center justify-center gap-2"
+                          >
+                            {isSubmitting ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Enviando para Nuvem...
+                              </>
+                            ) : (
+                              <>
+                                <UploadCloud className="w-4 h-4" />
+                                Enviar e Vincular Mídia
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </form>
                     </div>
                   </div>
 
-                  <div className="mt-10 pt-6 border-t border-white/5 flex justify-end">
-                    <button 
-                      type="submit"
-                      disabled={isSubmitting} 
-                      className="bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 px-8 py-3 rounded-xl text-sm font-medium transition-all shadow-[0_0_20px_rgba(245,158,11,0.2)] hover:shadow-[0_0_25px_rgba(245,158,11,0.4)] flex items-center gap-2"
-                    >
-                      {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Processar e Enviar
-                    </button>
+                  {/* Coluna da Biblioteca de Mídias */}
+                  <div className="lg:col-span-7 space-y-6">
+                    <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-3xl shadow-xl min-h-[450px]">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center">
+                            <Film className="w-5 h-5 text-amber-500" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-medium text-white">Mídias Ativas</h3>
+                            <p className="text-xs text-slate-500">Clique para reproduzir ou use os botões para editar/deletar.</p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono text-slate-400 bg-white/5 px-2.5 py-1 rounded-full border border-white/5">
+                          {midias.length} {midias.length === 1 ? 'mídia' : 'mídias'}
+                        </span>
+                      </div>
+
+                      {isLoading ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-500 gap-3">
+                          <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                          <p className="text-xs font-mono uppercase tracking-widest">Buscando biblioteca...</p>
+                        </div>
+                      ) : midias.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 border border-dashed border-white/5 rounded-2xl text-center p-6">
+                          <FileVideo className="w-12 h-12 text-slate-700 mb-4 animate-pulse" />
+                          <p className="text-sm font-medium text-slate-400 mb-1">Nenhuma mídia registrada</p>
+                          <p className="text-xs text-slate-600 max-w-sm">Os vídeos cadastrados e os vínculos das telas de exibição serão exibidos aqui.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                          {midias.map((m: any) => {
+                            const playlistTela = m.playlists?.[0]?.telas;
+                            return (
+                              <div key={m.id} className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex gap-4 hover:border-white/10 transition-colors group relative">
+                                {/* Prévia do vídeo (reproduz com som desativado em hover) */}
+                                <div className="w-24 h-24 rounded-xl bg-[#0a0a0c] overflow-hidden flex-shrink-0 relative border border-white/5 flex items-center justify-center group-hover:border-amber-500/30 transition-colors">
+                                  {m.url_storage ? (
+                                    <video 
+                                      src={m.url_storage} 
+                                      className="w-full h-full object-cover" 
+                                      muted 
+                                      loop 
+                                      playsInline 
+                                      onMouseEnter={e => e.currentTarget.play()} 
+                                      onMouseLeave={e => {
+                                        e.currentTarget.pause();
+                                        e.currentTarget.currentTime = 0;
+                                      }}
+                                    />
+                                  ) : (
+                                    <FileVideo className="w-8 h-8 text-slate-600" />
+                                  )}
+                                  <div className="absolute top-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] font-mono text-slate-400">
+                                    {m.tamanho_mb ? `${m.tamanho_mb} MB` : '-'}
+                                  </div>
+                                </div>
+
+                                {/* Detalhes */}
+                                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                                  <div>
+                                    <h4 className="text-sm font-medium text-white truncate" title={m.titulo_video}>
+                                      {m.titulo_video}
+                                    </h4>
+                                    <p className="text-[10px] font-mono text-slate-500 mt-1 uppercase tracking-wider">
+                                      Cliente: <span className="text-slate-300">{m.clientes?.nome_empresa || 'Sem Cliente'}</span>
+                                    </p>
+                                  </div>
+
+                                  <div className="mt-2 bg-[#0c0c0e] border border-white/5 rounded-xl p-2.5 flex items-center gap-2">
+                                    <Tv className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider mb-0.5">Veiculação Ativa</p>
+                                      <p className="text-xs text-slate-300 font-medium truncate">
+                                        {playlistTela ? `${playlistTela.nome_local} (${playlistTela.identificador_unico})` : 'Sem tela associada'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Ações */}
+                                <div className="flex items-center gap-1 self-start">
+                                  <button 
+                                    onClick={() => handleOpenEditMidiaModal(m)}
+                                    className="p-2 text-slate-500 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
+                                    title="Editar Mídia"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeletarMidia(m.id, m.url_storage)}
+                                    className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                    title="Excluir Mídia"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </form>
+                </div>
               </motion.div>
             )}
 
           </AnimatePresence>
         </div>
       </main>
+
+      {/* Modal de Edição de Mídia */}
+      <AnimatePresence>
+        {editingMidia && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-[#0f0f11] border border-white/10 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative"
+            >
+              <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Film className="w-5 h-5 text-amber-500" />
+                  <h3 className="text-lg font-medium text-white">Editar Mídia</h3>
+                </div>
+                <button 
+                  onClick={() => setEditingMidia(null)}
+                  className="p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateMidiaSubmit} className="p-6 space-y-5">
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">Título do Vídeo</label>
+                  <input 
+                    type="text" 
+                    value={editForm.titulo_video}
+                    onChange={e => setEditForm({...editForm, titulo_video: e.target.value})}
+                    className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">Tela de Destino</label>
+                  <div className="relative">
+                    <select 
+                      value={editForm.tela_id}
+                      onChange={e => setEditForm({...editForm, tela_id: e.target.value})}
+                      className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="" disabled className="text-slate-500">Selecione a tela alvo...</option>
+                      {telas.map(t => (
+                        <option key={t.id} value={t.id}>{t.nome_local} ({t.identificador_unico})</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                      <ChevronRight className="w-4 h-4 rotate-90" />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest">Substituir Vídeo (Opcional)</label>
+                    <span className="text-[9px] text-slate-600 uppercase font-mono">Manter atual se vazio</span>
+                  </div>
+                  <div className="relative border border-white/10 rounded-xl p-4 hover:border-amber-500/30 transition-colors bg-[#050505] group">
+                    <input 
+                      type="file" 
+                      accept="video/*"
+                      onChange={e => setEditFile(e.target.files?.[0] || null)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <div className="flex items-center gap-3">
+                      <FileVideo className={`w-6 h-6 shrink-0 transition-colors ${editFile ? 'text-amber-500' : 'text-slate-600'}`} />
+                      <div className="min-w-0 flex-1">
+                        {editFile ? (
+                          <>
+                            <p className="text-xs font-medium text-white truncate">{editFile.name}</p>
+                            <p className="text-[10px] text-amber-500/70 font-mono">
+                              {(editFile.size / (1024 * 1024)).toFixed(2)} MB
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs font-medium text-slate-400">Clique para escolher outro vídeo</p>
+                            <p className="text-[9px] text-slate-600 font-mono">MP4, WEBM (Max. 500MB)</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-5 border-t border-white/5 flex items-center justify-end gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => setEditingMidia(null)}
+                    className="px-5 py-2.5 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-white/5 font-medium transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isUpdatingMidia}
+                    className="bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 px-6 py-2.5 rounded-xl text-xs font-medium transition-all shadow-[0_0_15px_rgba(245,158,11,0.15)] flex items-center gap-1.5"
+                  >
+                    {isUpdatingMidia && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    Salvar Alterações
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Toast Notifications Container */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
