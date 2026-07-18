@@ -46,7 +46,8 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       setClientes(data || []);
     } catch (error: any) {
       console.error(error);
-      showToast('error', 'Erro ao carregar clientes.');
+      const errorMsg = error.message || error.details || JSON.stringify(error);
+      showToast('error', `Erro ao carregar clientes: ${errorMsg}. Verifique as tabelas do Supabase.`);
     } finally {
       setIsLoading(false);
     }

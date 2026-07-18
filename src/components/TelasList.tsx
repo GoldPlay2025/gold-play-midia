@@ -56,7 +56,8 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       setTelas(data as Tela[] || []);
     } catch (error: any) {
       console.error(error);
-      showToast('error', 'Erro ao carregar telas.');
+      const errorMsg = error.message || error.details || JSON.stringify(error);
+      showToast('error', `Erro ao carregar telas: ${errorMsg}. Verifique as tabelas do Supabase.`);
     } finally {
       setIsLoading(false);
     }
