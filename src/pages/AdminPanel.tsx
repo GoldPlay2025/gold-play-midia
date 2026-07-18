@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey, saveSupabaseConfig, clearSupabaseConfig } from '../lib/supabase';
 import { ClientesList } from '../components/ClientesList';
 import { TelasList } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
@@ -21,7 +21,13 @@ import {
   Film,
   UploadCloud,
   FileVideo,
-  Settings
+  Settings,
+  Database,
+  AlertTriangle,
+  Key,
+  Globe,
+  Copy,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -63,6 +69,11 @@ export default function AdminPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // Setup States
+  const [setupUrl, setSetupUrl] = useState(supabaseUrl || '');
+  const [setupKey, setSetupKey] = useState(supabaseAnonKey || '');
+  const [copiedSql, setCopiedSql] = useState(false);
+
   // Form States
   const [clienteForm, setClienteForm] = useState({ nome: '', whatsapp: '', email: '' });
   const [telaForm, setTelaForm] = useState({ nome_local: '', identificador_unico: '', cliente_id: '' });
@@ -102,7 +113,8 @@ export default function AdminPanel() {
       setClientes(clientesData || []);
     } catch (error: any) {
       console.error('Error fetching data:', error);
-      showToast('error', 'Falha ao carregar dados. Verifique a conexão com o banco.');
+      const errorMsg = error.message || error.details || JSON.stringify(error);
+      showToast('error', `Falha ao carregar dados: ${errorMsg}. Verifique a conexão do banco.`);
     } finally {
       setIsLoading(false);
     }
@@ -383,6 +395,200 @@ export default function AdminPanel() {
               Infraestrutura de Gerenciamento Digital Signage<br/>
               © {new Date().getFullYear()} Gold Play Mídia
             </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const sqlSetupCode = `-- =========================================================================
+-- SCRIPT DE CONFIGURAÇÃO COMPLETA DO BANCO DE DADOS SUPABASE
+-- Gold Play Mídia - Digital Signage Workspace
+-- =========================================================================
+
+drop table if exists playlists cascade;
+drop table if exists midias cascade;
+drop table if exists telas cascade;
+drop table if exists clientes cascade;
+
+create table clientes (
+  id uuid default gen_random_uuid() primary key,
+  nome_empresa text not null,
+  whatsapp text,
+  endereco_fisico text,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table telas (
+  id uuid default gen_random_uuid() primary key,
+  nome_local text not null,
+  identificador_unico text not null unique,
+  status_online boolean default false,
+  cliente_id uuid references clientes(id) on delete cascade not null,
+  endereco text,
+  whatsapp text,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table midias (
+  id uuid default gen_random_uuid() primary key,
+  titulo_video text not null,
+  url_storage text not null,
+  tamanho_mb numeric,
+  cliente_id uuid references clientes(id) on delete cascade not null,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table playlists (
+  id uuid default gen_random_uuid() primary key,
+  tela_id uuid references telas(id) on delete cascade not null,
+  midia_id uuid references midias(id) on delete cascade not null,
+  ordem_exibicao integer default 0 not null,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table clientes disable row level security;
+alter table telas disable row level security;
+alter table midias disable row level security;
+alter table playlists disable row level security;
+
+insert into storage.buckets (id, name, public) 
+values ('midias', 'midias', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Permitir uploads publicos de midias" on storage.objects;
+drop policy if exists "Permitir leitura publica de midias" on storage.objects;
+drop policy if exists "Permitir deletar midias" on storage.objects;
+
+create policy "Permitir uploads publicos de midias" on storage.objects
+  for insert with check (bucket_id = 'midias');
+
+create policy "Permitir leitura publica de midias" on storage.objects
+  for select using (bucket_id = 'midias');
+
+create policy "Permitir deletar midias" on storage.objects
+  for delete using (bucket_id = 'midias');`;
+
+  const copySqlToClipboard = () => {
+    navigator.clipboard.writeText(sqlSetupCode);
+    setCopiedSql(true);
+    showToast('success', 'Código SQL copiado para a área de transferência!');
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
+
+  const handleSetupSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!setupUrl || !setupKey) {
+      showToast('error', 'Por favor, preencha todos os campos.');
+      return;
+    }
+    saveSupabaseConfig(setupUrl, setupKey);
+  };
+
+  if (isAuthenticated && !isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen bg-[#050505] text-slate-300 font-sans flex items-center justify-center overflow-y-auto selection:bg-amber-500/30 selection:text-amber-200 relative p-6">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-amber-600/5 rounded-full blur-[140px] pointer-events-none"></div>
+        
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-2xl bg-[#0a0a0c] border border-white/5 rounded-3xl p-8 relative z-10 shadow-2xl my-8"
+        >
+          <div className="flex items-center gap-4 mb-6 pb-6 border-b border-white/5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
+              <Database className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-display font-semibold text-white">Configuração do Supabase</h1>
+              <p className="text-xs text-slate-500 font-mono mt-0.5">ESTADO: CONEXÃO PENDENTE</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-amber-950/20 border border-amber-500/10 rounded-2xl p-4 flex gap-3 text-amber-300 text-xs leading-relaxed animate-pulse">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
+              <div>
+                <span className="font-bold">Atenção administrador:</span> Para usar as funções do painel, você deve configurar seu banco de dados Supabase abaixo. As credenciais serão salvas de forma segura no seu navegador.
+              </div>
+            </div>
+
+            <div className="bg-[#0f0f11] border border-white/5 rounded-2xl p-6">
+              <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-xs text-slate-400 font-mono">1</span>
+                Executar Script SQL no Supabase
+              </h2>
+              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                Antes de salvar as credenciais abaixo, certifique-se de executar o script de criação de tabelas. No painel do seu Supabase, acesse <span className="text-white font-medium">SQL Editor</span>, clique em <span className="text-white font-medium">New Query</span>, cole o código abaixo e clique em <span className="text-white font-medium">Run</span>:
+              </p>
+              <button 
+                type="button"
+                onClick={copySqlToClipboard}
+                className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-mono transition-all flex items-center justify-center gap-2 border border-white/10 shadow-inner group"
+              >
+                {copiedSql ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-400 font-bold">Copiado com Sucesso!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                    <span>Copiar Script SQL de Tabelas</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <form onSubmit={handleSetupSubmit} className="space-y-4">
+              <h2 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-xs text-slate-400 font-mono">2</span>
+                Informar Credenciais de Acesso
+              </h2>
+
+              <div className="space-y-4 bg-[#0f0f11] border border-white/5 p-6 rounded-2xl">
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-slate-400" />
+                    Supabase URL do Projeto (API URL)
+                  </label>
+                  <input 
+                    type="url"
+                    required
+                    placeholder="https://exemplo.supabase.co"
+                    value={setupUrl}
+                    onChange={e => setSetupUrl(e.target.value)}
+                    className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-xs text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono placeholder-slate-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-slate-400" />
+                    Supabase Anon (Public) Key
+                  </label>
+                  <input 
+                    type="password"
+                    required
+                    placeholder="Cole a chave pública anônima aqui"
+                    value={setupKey}
+                    onChange={e => setSetupKey(e.target.value)}
+                    className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-xs text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono placeholder-slate-700"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 text-black py-4 rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(245,158,11,0.2)] hover:shadow-[0_0_30px_rgba(245,158,11,0.4)] flex items-center justify-center gap-2 group"
+                >
+                  <span>Salvar e Iniciar Painel</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </form>
           </div>
         </motion.div>
       </div>
