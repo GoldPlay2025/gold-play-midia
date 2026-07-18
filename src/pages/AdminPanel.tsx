@@ -122,13 +122,6 @@ export default function AdminPanel() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      if (activeTab === 'dashboard') {
-        fetchDashboardData();
-      } else if (activeTab === 'nova-tela') {
-        fetchClientes();
-      } else if (activeTab === 'nova-midia') {
-  useEffect(() => {
     document.title = `${systemSettings.systemName} | Workspace`;
     let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
     if (!link) {
@@ -138,6 +131,14 @@ export default function AdminPanel() {
     }
     link.href = systemSettings.iconUrl || "/gpm.png";
   }, [systemSettings.systemName, systemSettings.iconUrl]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (activeTab === 'dashboard') {
+        fetchDashboardData();
+      } else if (activeTab === 'nova-tela') {
+        fetchClientes();
+      } else if (activeTab === 'nova-midia') {
         fetchDashboardData(); // Fetches both telas and clientes, which is needed for nova-midia dropdown
       }
     }
