@@ -36,7 +36,7 @@ const formatWhatsApp = (value: string) => {
 
 export const getClientIdsForTela = (tela: any): string[] => {
   if (!tela) return [];
-  const enderecoStr = tela.endereco || '';
+  const enderecoStr = typeof tela.endereco === 'string' ? tela.endereco : '';
   if (enderecoStr.includes('|||')) {
     const parts = enderecoStr.split('|||');
     try {
@@ -52,7 +52,7 @@ export const getClientIdsForTela = (tela: any): string[] => {
 };
 
 export const getCleanEndereco = (endereco?: string): string => {
-  if (!endereco) return '';
+  if (!endereco || typeof endereco !== 'string') return '';
   if (endereco.includes('|||')) {
     return endereco.split('|||')[0];
   }
@@ -60,7 +60,7 @@ export const getCleanEndereco = (endereco?: string): string => {
 };
 
 export const getResponsavel = (endereco?: string): string => {
-  if (!endereco) return '';
+  if (!endereco || typeof endereco !== 'string') return '';
   if (endereco.includes('|||')) {
     const parts = endereco.split('|||');
     return parts[2] || '';
@@ -138,27 +138,47 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
     fetchTelas();
     fetchClientes();
 
-    const channel = supabase
-      .channel('public:telas')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'telas' }, () => {
-        fetchTelas();
-      })
-      .subscribe();
+    let channel: any;
+    let presenceChannel: any;
 
-    // Presence Channel subscription for real-time online/offline status
-    const presenceChannel = supabase.channel('telas-presence');
-    presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        const state = presenceChannel.presenceState();
-        const onlineIds = Object.keys(state);
-        setOnlineScreenIds(onlineIds);
-        console.log('Realtime screen presence update:', onlineIds);
-      })
-      .subscribe();
+    try {
+      channel = supabase
+        .channel('public:telas')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'telas' }, () => {
+          fetchTelas();
+        })
+        .subscribe();
+    } catch (err) {
+      console.error('Error establishing public:telas channel:', err);
+    }
+
+    try {
+      presenceChannel = supabase.channel('telas-presence');
+      presenceChannel
+        .on('presence', { event: 'sync' }, () => {
+          try {
+            const state = (presenceChannel && typeof presenceChannel.presenceState === 'function') 
+              ? presenceChannel.presenceState() 
+              : {};
+            const onlineIds = Object.keys(state || {});
+            setOnlineScreenIds(onlineIds);
+            console.log('Realtime screen presence update:', onlineIds);
+          } catch (syncErr) {
+            console.error('Error parsing presence state:', syncErr);
+          }
+        })
+        .subscribe();
+    } catch (err) {
+      console.error('Error establishing presence channel:', err);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
-      supabase.removeChannel(presenceChannel);
+      try {
+        if (channel) supabase.removeChannel(channel);
+        if (presenceChannel) supabase.removeChannel(presenceChannel);
+      } catch (err) {
+        console.error('Error removing channels:', err);
+      }
     };
   }, []);
 
@@ -262,25 +282,30 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
     }
   };
 
-  const filteredTelas = telas.filter(t => {
+  const filteredTelas = (telas || []).filter(t => {
+    if (!t) return false;
     const cleanAddr = getCleanEndereco(t.endereco);
     const clientNames = getClientIdsForTela(t)
-      .map(id => clientes.find(c => c.id === id)?.nome_empresa)
+      .map(id => (clientes || []).find(c => c && c.id === id)?.nome_empresa)
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
 
-    return t.nome_local?.toLowerCase().includes(search.toLowerCase()) ||
-      cleanAddr.toLowerCase().includes(search.toLowerCase()) ||
-      t.identificador_unico?.toLowerCase().includes(search.toLowerCase()) ||
-      clientNames.includes(search.toLowerCase());
+    const nomeLocal = (t.nome_local || '').toLowerCase();
+    const identUnico = (t.identificador_unico || '').toLowerCase();
+    const searchLower = (search || '').toLowerCase();
+
+    return nomeLocal.includes(searchLower) ||
+      cleanAddr.toLowerCase().includes(searchLower) ||
+      identUnico.includes(searchLower) ||
+      clientNames.includes(searchLower);
   });
 
   const columns: Column<Tela>[] = [
     { 
       key: 'nome_local', 
       header: 'Nome do Local',
-      render: (row) => <span className="text-xs font-semibold text-slate-200">{row.nome_local}</span>
+      render: (row) => <span className="text-xs font-semibold text-slate-200">{row.nome_local || ''}</span>
     },
     { 
       key: 'identificador_unico', 
@@ -288,16 +313,44 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       render: (row) => {
         const handleCopy = () => {
           const url = `${window.location.origin}/player/${row.id}`;
-          navigator.clipboard.writeText(url);
-          setCopiedId(row.id);
-          showToast('success', `Link de reprodução copiado com sucesso!`);
-          setTimeout(() => setCopiedId(null), 2000);
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(url)
+              .then(() => {
+                setCopiedId(row.id);
+                showToast('success', `Link de reprodução copiado com sucesso!`);
+                setTimeout(() => setCopiedId(null), 2000);
+              })
+              .catch((err) => {
+                console.error('Failed to copy text using navigator.clipboard:', err);
+                fallbackCopy(url);
+              });
+          } else {
+            fallbackCopy(url);
+          }
+        };
+
+        const fallbackCopy = (textToCopy: string) => {
+          try {
+            const textarea = document.createElement('textarea');
+            textarea.value = textToCopy;
+            textarea.style.position = 'fixed'; // Avoid scrolling to bottom
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            setCopiedId(row.id);
+            showToast('success', `Link de reprodução copiado com sucesso!`);
+            setTimeout(() => setCopiedId(null), 2000);
+          } catch (err) {
+            console.error('Fallback copy failed:', err);
+            showToast('error', `Não foi possível copiar automaticamente.`);
+          }
         };
 
         return (
           <div className="flex items-center gap-2">
             <span className="font-mono text-[11px] text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">
-              {row.identificador_unico}
+              {row.identificador_unico || ''}
             </span>
             <button
               onClick={handleCopy}
@@ -345,15 +398,30 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
           return <span className="text-xs text-slate-500 italic">Sem mídia</span>;
         }
         const activePlaylist = playlists[0];
+        if (!activePlaylist) {
+          return <span className="text-xs text-slate-500 italic">Sem mídia</span>;
+        }
         const midia = activePlaylist.midias;
         if (!midia) {
           return <span className="text-xs text-slate-500 italic">Sem mídia</span>;
         }
+
+        let tituloVideo = '';
+        if (Array.isArray(midia)) {
+          tituloVideo = midia[0]?.titulo_video || '';
+        } else {
+          tituloVideo = (midia as any).titulo_video || '';
+        }
+
+        if (!tituloVideo) {
+          return <span className="text-xs text-slate-500 italic">Sem mídia</span>;
+        }
+
         return (
           <div className="flex items-center gap-1.5 max-w-[150px]">
             <span className="inline-block w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
-            <span className="text-xs text-slate-200 truncate font-medium" title={midia.titulo_video}>
-              {midia.titulo_video}
+            <span className="text-xs text-slate-200 truncate font-medium" title={tituloVideo}>
+              {tituloVideo}
             </span>
           </div>
         );
@@ -363,7 +431,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       key: 'status_online', 
       header: 'Status Online',
       render: (row) => {
-        const isOnline = onlineScreenIds.includes(row.id) || row.status_online;
+        const isOnline = (onlineScreenIds || []).includes(row.id) || row.status_online;
         return (
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`} />
@@ -396,7 +464,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
 
   const filteredSearchClientes = clientes.filter(c => 
     !linkedClientIds.includes(c.id) &&
-    c.nome_empresa?.toLowerCase().includes(searchClientQuery.toLowerCase())
+    (c.nome_empresa || '').toLowerCase().includes((searchClientQuery || '').toLowerCase())
   );
 
   return (
