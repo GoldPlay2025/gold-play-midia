@@ -1,0 +1,6 @@
+{
+  "name": "Gold Play Mídia Architect",
+  "description": "Plataforma de modelagem e arquitetura de banco de dados Supabase para o SaaS de Digital Signage Gold Play Mídia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
