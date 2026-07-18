@@ -15,6 +15,15 @@ export type Tela = {
   endereco?: string;
   whatsapp?: string;
   clientes?: { nome_empresa: string };
+  playlists?: {
+    id: string;
+    ordem_exibicao: number;
+    midias?: {
+      id: string;
+      titulo_video: string;
+      url_storage: string;
+    };
+  }[];
 };
 
 const formatWhatsApp = (value: string) => {
@@ -48,6 +57,15 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
           *,
           clientes (
             nome_empresa
+          ),
+          playlists (
+            id,
+            ordem_exibicao,
+            midias (
+              id,
+              titulo_video,
+              url_storage
+            )
           )
         `)
         .order('nome_local', { ascending: true });
@@ -191,6 +209,29 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       key: 'cliente_id', 
       header: 'Cliente Vinculado',
       render: (row) => row.clientes?.nome_empresa || '-'
+    },
+    {
+      key: 'playlists',
+      header: 'Mídia Veiculada',
+      render: (row) => {
+        const playlists = row.playlists || [];
+        if (playlists.length === 0) {
+          return <span className="text-xs text-slate-500 italic">Sem mídia</span>;
+        }
+        const activePlaylist = playlists[0];
+        const midia = activePlaylist.midias;
+        if (!midia) {
+          return <span className="text-xs text-slate-500 italic">Sem mídia</span>;
+        }
+        return (
+          <div className="flex items-center gap-1.5 max-w-[150px]">
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+            <span className="text-xs text-slate-200 truncate font-medium" title={midia.titulo_video}>
+              {midia.titulo_video}
+            </span>
+          </div>
+        );
+      }
     },
     { 
       key: 'status_online', 
