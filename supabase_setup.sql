@@ -16,7 +16,8 @@ drop table if exists clientes cascade;
 create table clientes (
   id uuid default gen_random_uuid() primary key,
   nome_empresa text not null,
-  contato text,
+  whatsapp text,
+  endereco_fisico text,
   criado_em timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
