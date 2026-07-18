@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Upload, Save, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Settings, Upload, Save, Loader2, Image as ImageIcon, Database, Link, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
+import { isSupabaseConfigured } from '../lib/supabase';
+
+const envUrl = import.meta.env.VITE_SUPABASE_URL;
+const localUrl = typeof window !== 'undefined' ? localStorage.getItem('gpm_supabase_url') : null;
+const supabaseUrl = envUrl && envUrl !== 'YOUR_SUPABASE_URL' ? envUrl : (localUrl || '');
+
+function clearSupabaseConfig() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('gpm_supabase_url');
+    localStorage.removeItem('gpm_supabase_anon_key');
+    window.location.reload();
+  }
+}
 
 export type SystemSettings = {
   systemName: string;
@@ -157,6 +170,76 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           </button>
         </div>
       </form>
+
+      {/* Supabase Connection Details */}
+      <div className="mt-8 bg-[#0f0f11] border border-white/5 p-8 rounded-3xl shadow-2xl shadow-black/50">
+        <div className="flex items-start justify-between pb-6 border-b border-white/5">
+          <div className="flex gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Banco de Dados Supabase</h3>
+              <p className="text-xs text-slate-500 mt-1">Status e detalhes da conexão ativa do Digital Signage.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`relative flex h-2.5 w-2.5`}>
+              {isSupabaseConfigured && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isSupabaseConfigured ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+            </span>
+            <span className="text-xs font-mono text-slate-400 uppercase">
+              {isSupabaseConfigured ? 'Conectado' : 'Desconectado'}
+            </span>
+          </div>
+        </div>
+
+        <div className="py-6 space-y-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest flex items-center gap-1">
+              <Link className="w-3.5 h-3.5 text-slate-400" />
+              URL do Projeto
+            </span>
+            <span className="font-mono text-xs text-slate-300 bg-[#050505] p-3 rounded-xl border border-white/5 break-all select-all">
+              {isSupabaseConfigured ? supabaseUrl : 'Nenhuma conexão ativa configurada'}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest flex items-center gap-1">
+              <Settings className="w-3.5 h-3.5 text-slate-400" />
+              Origem da Configuração
+            </span>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_URL !== 'YOUR_SUPABASE_URL' ? (
+                <span>Configurado através de <span className="text-white font-medium">Variáveis de Ambiente (.env / Vercel)</span>.</span>
+              ) : isSupabaseConfigured ? (
+                <span>Configurado localmente no navegador através do <span className="text-amber-500 font-medium">Assistente de Conexão</span>.</span>
+              ) : (
+                <span>Nenhum provedor de dados configurado no sistema.</span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {isSupabaseConfigured && (
+          <div className="pt-6 border-t border-white/5 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm('Deseja realmente desconectar este banco de dados? Você precisará configurar novamente para acessar os dados.')) {
+                  clearSupabaseConfig();
+                }
+              }}
+              className="px-6 py-2.5 border border-red-500/20 bg-red-950/20 hover:bg-red-950/40 text-red-200 hover:border-red-500/40 rounded-xl text-xs font-medium transition-all flex items-center gap-2"
+            >
+              Desconectar Banco de Dados
+            </button>
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2 } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export type Cliente = {
@@ -11,6 +11,8 @@ export type Cliente = {
   whatsapp: string;
   endereco_fisico: string;
   criado_em: string;
+  vencimento?: string;
+  valor?: number;
 };
 
 const formatWhatsApp = (value: string) => {
@@ -21,18 +23,60 @@ const formatWhatsApp = (value: string) => {
   return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
 };
 
+const getClientIdsForTela = (tela: any): string[] => {
+  if (!tela) return [];
+  const enderecoStr = tela.endereco || '';
+  if (enderecoStr.includes('|||')) {
+    const parts = enderecoStr.split('|||');
+    try {
+      const ids = JSON.parse(parts[1]);
+      if (Array.isArray(ids)) {
+        return ids;
+      }
+    } catch (e) {
+      console.error('Failed to parse client IDs from endereco:', e);
+    }
+  }
+  return tela.cliente_id ? [tela.cliente_id] : [];
+};
+
+const getCleanEndereco = (endereco?: string): string => {
+  if (!endereco) return '';
+  if (endereco.includes('|||')) {
+    return endereco.split('|||')[0];
+  }
+  return endereco;
+};
+
 export function ClientesList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [telas, setTelas] = useState<any[]>([]);
+  const [linkedTelaIds, setLinkedTelaIds] = useState<string[]>([]);
+  const [searchTelaQuery, setSearchTelaQuery] = useState('');
+  const [showTelaDropdown, setShowTelaDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ nome_empresa: '', whatsapp: '', endereco_fisico: '' });
+  const [form, setForm] = useState({ nome_empresa: '', whatsapp: '', endereco_fisico: '', vencimento: '', valor: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const fetchTelas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('telas')
+        .select('*')
+        .order('nome_local', { ascending: true });
+      if (error) throw error;
+      setTelas(data || []);
+    } catch (error: any) {
+      console.error('Erro ao carregar telas:', error);
+    }
+  };
 
   const fetchClientes = async () => {
     setIsLoading(true);
@@ -55,6 +99,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
 
   useEffect(() => {
     fetchClientes();
+    fetchTelas();
 
     const channel = supabase
       .channel('public:clientes')
@@ -63,8 +108,16 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       })
       .subscribe();
 
+    const screensChannel = supabase
+      .channel('public:telas_clientes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'telas' }, () => {
+        fetchTelas();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(screensChannel);
     };
   }, []);
 
@@ -74,12 +127,19 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       setForm({
         nome_empresa: cliente.nome_empresa || '',
         whatsapp: cliente.whatsapp || '',
-        endereco_fisico: cliente.endereco_fisico || ''
+        endereco_fisico: cliente.endereco_fisico || '',
+        vencimento: cliente.vencimento || '',
+        valor: cliente.valor ? cliente.valor.toString() : ''
       });
+      const clientTelas = telas.filter(t => getClientIdsForTela(t).includes(cliente.id));
+      setLinkedTelaIds(clientTelas.map(t => t.id));
     } else {
       setEditingId(null);
-      setForm({ nome_empresa: '', whatsapp: '', endereco_fisico: '' });
+      setForm({ nome_empresa: '', whatsapp: '', endereco_fisico: '', vencimento: '', valor: '' });
+      setLinkedTelaIds([]);
     }
+    setSearchTelaQuery('');
+    setShowTelaDropdown(false);
     setIsModalOpen(true);
   };
 
@@ -92,22 +152,79 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
 
     setIsSubmitting(true);
     try {
+      const payload = {
+        ...form,
+        valor: form.valor ? parseFloat(form.valor.replace(',', '.')) : null,
+        vencimento: form.vencimento || null
+      };
+
+      let clientId = editingId;
       if (editingId) {
         const { error } = await supabase
           .from('clientes')
-          .update(form)
+          .update(payload)
           .eq('id', editingId);
         if (error) throw error;
         showToast('success', 'Cliente atualizado com sucesso.');
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('clientes')
-          .insert([form]);
+          .insert([payload])
+          .select();
         if (error) throw error;
+        clientId = data?.[0]?.id || null;
         showToast('success', 'Cliente cadastrado com sucesso.');
       }
+
+      if (clientId) {
+        const currentlyLinkedDb = telas.filter(t => getClientIdsForTela(t).includes(clientId));
+        const currentlyLinkedDbIds = currentlyLinkedDb.map(t => t.id);
+
+        const toLink = linkedTelaIds.filter(id => !currentlyLinkedDbIds.includes(id));
+        const toUnlink = currentlyLinkedDbIds.filter(id => !currentlyLinkedDbIds.includes(id));
+
+        // Link new screens to this client
+        for (const screenId of toLink) {
+          const screen = telas.find(t => t.id === screenId);
+          if (screen) {
+            const currentIds = getClientIdsForTela(screen);
+            const newClientIds = Array.from(new Set([...currentIds, clientId]));
+            const cleanAddr = getCleanEndereco(screen.endereco);
+            const { error: linkErr } = await supabase
+              .from('telas')
+              .update({ 
+                cliente_id: newClientIds[0], 
+                endereco: cleanAddr + "|||" + JSON.stringify(newClientIds) 
+              })
+              .eq('id', screenId);
+            if (linkErr) throw linkErr;
+          }
+        }
+
+        // Unlink screens from this client
+        for (const screenId of toUnlink) {
+          const screen = telas.find(t => t.id === screenId);
+          if (screen) {
+            const currentIds = getClientIdsForTela(screen);
+            const newClientIds = currentIds.filter(id => id !== clientId);
+            const cleanAddr = getCleanEndereco(screen.endereco);
+            if (newClientIds.length > 0) {
+              const { error: unlinkErr } = await supabase
+                .from('telas')
+                .update({ 
+                  cliente_id: newClientIds[0], 
+                  endereco: cleanAddr + "|||" + JSON.stringify(newClientIds) 
+                })
+                .eq('id', screenId);
+              if (unlinkErr) throw unlinkErr;
+            }
+          }
+        }
+      }
+
       setIsModalOpen(false);
       fetchClientes();
+      fetchTelas();
     } catch (error: any) {
       console.error(error);
       showToast('error', 'Erro ao salvar cliente: ' + error.message);
@@ -136,19 +253,131 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
     }
   };
 
+  const handleSendManualSms = async (cliente: Cliente) => {
+    if (!cliente.whatsapp) {
+      showToast('error', 'Este cliente não possui um número de WhatsApp/SMS cadastrado.');
+      return;
+    }
+
+    const rawNum = cliente.whatsapp.replace(/\D/g, '');
+    const cleanPhone = rawNum.startsWith('55') ? rawNum : `55${rawNum}`;
+    
+    // Retrieve SMS Settings
+    const template = localStorage.getItem('gpm_sms_template') || 'Ola {nome}! Passando para lembrar que sua mensalidade de {valor} vence no dia {vencimento}. Pague em dia e evite a suspensao do sinal.';
+    const apiToken = localStorage.getItem('gpm_sms_api_token') || '361|sJEwdut5miNP42JgyvITZ2gYaCUAklKl0y1ZzOFR46f07813';
+
+    // Format text
+    const valorStr = cliente.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : 'R$ 0,00';
+    const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'N/A';
+    
+    let renderedMsg = template;
+    renderedMsg = renderedMsg.replace(/{nome}/g, cliente.nome_empresa);
+    renderedMsg = renderedMsg.replace(/{valor}/g, valorStr);
+    renderedMsg = renderedMsg.replace(/{vencimento}/g, vencStr);
+
+    try {
+      showToast('success', `Iniciando disparo SMS para ${cliente.nome_empresa}...`);
+      
+      const oauthEndpoint = localStorage.getItem('gpm_sms_oauth_endpoint') || 'https://sms.gtisms.com/api/v3/';
+      const httpEndpoint = localStorage.getItem('gpm_sms_http_endpoint') || 'https://sms.gtisms.com/api/http/';
+
+      const response = await fetch('/api/send-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          oauthEndpoint,
+          httpEndpoint,
+          apiToken,
+          to: cleanPhone,
+          message: renderedMsg
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro no gateway GetSMS');
+      }
+
+      // Append to SMS history logs
+      const savedLogsStr = localStorage.getItem('gpm_sms_sent_logs');
+      const savedLogs = savedLogsStr ? JSON.parse(savedLogsStr) : [];
+      const newLog = {
+        id: 'sms-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+        timestamp: new Date().toLocaleString('pt-BR'),
+        clientName: cliente.nome_empresa,
+        phone: cleanPhone,
+        message: renderedMsg,
+        status: 'sent',
+        type: 'manual'
+      };
+      localStorage.setItem('gpm_sms_sent_logs', JSON.stringify([newLog, ...savedLogs]));
+
+      showToast('success', `SMS entregue com sucesso para +${cleanPhone}!`);
+    } catch (err: any) {
+      showToast('error', `Falha ao enviar SMS: ${err.message}`);
+    }
+  };
+
   const filteredClientes = clientes.filter(c => 
     c.nome_empresa?.toLowerCase().includes(search.toLowerCase()) ||
     c.whatsapp?.includes(search)
   );
 
   const columns: Column<Cliente>[] = [
-    { key: 'nome_empresa', header: 'Nome da Empresa' },
-    { key: 'whatsapp', header: 'WhatsApp' },
-    { key: 'endereco_fisico', header: 'Endereço Físico' },
+    { 
+      key: 'nome_empresa', 
+      header: 'Nome da Empresa',
+      render: (row) => <span className="text-xs font-semibold text-slate-200">{row.nome_empresa}</span>
+    },
+    { 
+      key: 'whatsapp', 
+      header: 'WhatsApp / SMS',
+      render: (row) => {
+        if (!row.whatsapp) return '-';
+        const rawNumbers = row.whatsapp.replace(/\D/g, '');
+        const waLink = `https://wa.me/${rawNumbers.startsWith('55') ? rawNumbers : '55' + rawNumbers}`;
+        return (
+          <div className="flex items-center gap-2 text-xs text-slate-300">
+            <span>{row.whatsapp}</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <a 
+                href={waLink} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="p-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-all inline-flex items-center justify-center"
+                title="Iniciar conversa no WhatsApp"
+              >
+                <img 
+                  src="https://goldplaysky.com.br/whats.png" 
+                  alt="WhatsApp" 
+                  className="w-3.5 h-3.5 object-contain" 
+                  referrerPolicy="no-referrer" 
+                />
+              </a>
+              <button 
+                onClick={() => handleSendManualSms(row)}
+                className="p-1 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-all inline-flex items-center justify-center"
+                title="Enviar SMS de Cobrança"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        );
+      }
+    },
+    { 
+      key: 'endereco_fisico', 
+      header: 'Endereço Físico',
+      render: (row) => <span className="text-xs text-slate-400">{row.endereco_fisico || '-'}</span>
+    },
     { 
       key: 'criado_em', 
       header: 'Data de Criação', 
-      render: (row) => row.criado_em ? new Date(row.criado_em).toLocaleDateString('pt-BR') : '-'
+      render: (row) => <span className="text-xs text-slate-500 font-mono">{row.criado_em ? new Date(row.criado_em).toLocaleDateString('pt-BR') : '-'}</span>
     },
     {
       key: 'actions',
@@ -172,6 +401,12 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
     }
   ];
 
+  const availableTelas = telas.filter(t => 
+    !linkedTelaIds.includes(t.id) &&
+    (t.nome_local?.toLowerCase().includes(searchTelaQuery.toLowerCase()) ||
+     t.identificador_unico?.toLowerCase().includes(searchTelaQuery.toLowerCase()))
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -193,6 +428,22 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
         onAdd={() => handleOpenModal()}
         addActionLabel="Novo Cliente"
         onSearch={setSearch}
+        renderExpandedRow={(row) => (
+          <div className="px-6 py-6 bg-[#0a0a0c]/80 rounded-xl border border-white/5 flex flex-col sm:flex-row gap-8 sm:gap-16 text-sm mx-4 mb-4 mt-2">
+            <div className="flex flex-col gap-2">
+              <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Vencimento</span>
+              <span className="text-slate-300 font-medium">
+                {row.vencimento ? new Date(row.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Valor</span>
+              <span className="text-emerald-400 font-medium font-mono">
+                {row.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor) : '-'}
+              </span>
+            </div>
+          </div>
+        )}
       />
 
       <Modal 
@@ -232,6 +483,113 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
               className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700"
               placeholder="Rua, Número, Bairro, Cidade"
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Valor (R$)</label>
+              <input 
+                type="text"
+                value={form.valor}
+                onChange={e => setForm({...form, valor: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700"
+                placeholder="0,00"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Vencimento</label>
+              <div className="relative">
+                <input 
+                  type="date"
+                  value={form.vencimento}
+                  onChange={e => setForm({...form, vencimento: e.target.value})}
+                  className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                  <Calendar className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Vincular Telas</label>
+            <div className="relative">
+              <input 
+                type="text"
+                value={searchTelaQuery}
+                onChange={e => {
+                  setSearchTelaQuery(e.target.value);
+                  setShowTelaDropdown(true);
+                }}
+                onFocus={() => setShowTelaDropdown(true)}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl pl-10 pr-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-600"
+                placeholder="Pesquisa inteligente de telas por nome ou id..."
+              />
+              <Monitor className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              
+              {showTelaDropdown && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowTelaDropdown(false)}
+                  />
+                  <div className="absolute left-0 right-0 mt-1.5 max-h-52 overflow-y-auto bg-[#0a0a0c] border border-white/10 rounded-xl shadow-2xl z-50 divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/10">
+                    {availableTelas.length === 0 ? (
+                      <div className="p-4 text-xs text-slate-500 text-center">Nenhuma tela disponível encontrada</div>
+                    ) : (
+                      availableTelas.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setLinkedTelaIds(prev => [...prev, t.id]);
+                            setSearchTelaQuery('');
+                            setShowTelaDropdown(false);
+                          }}
+                          className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-between font-medium group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Monitor className="w-4 h-4 text-slate-500 group-hover:text-black" />
+                            <span>{t.nome_local}</span>
+                          </div>
+                          <span className="text-xs font-mono text-slate-500 group-hover:text-black/70">{t.identificador_unico}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Linked Screens Badges */}
+            {linkedTelaIds.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-2">Telas Vinculadas ({linkedTelaIds.length})</p>
+                <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-1 bg-white/[0.02] border border-white/5 rounded-xl">
+                  {linkedTelaIds.map(id => {
+                    const t = telas.find(screen => screen.id === id);
+                    if (!t) return null;
+                    return (
+                      <div 
+                        key={id} 
+                        className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-500 px-3 py-1.5 rounded-lg text-xs font-medium"
+                      >
+                        <span>{t.nome_local} ({t.identificador_unico})</span>
+                        <button
+                          type="button"
+                          onClick={() => setLinkedTelaIds(prev => prev.filter(item => item !== id))}
+                          className="text-amber-500/50 hover:text-amber-500 hover:bg-amber-500/20 p-0.5 rounded-full transition-colors"
+                          title="Desvincular tela"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="pt-4 border-t border-white/5 flex justify-end gap-3">

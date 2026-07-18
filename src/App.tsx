@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import AdminPanel from './pages/AdminPanel';
 import Player from './pages/Player';
+import AppView from './pages/AppView';
 
 export default function App() {
   return (
@@ -9,6 +10,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<AdminPanel />} />
         <Route path="/player/:screenId" element={<Player />} />
+        <Route path="/player" element={<AppView />} />
+        <Route path="/app-view" element={<AppView />} />
       </Routes>
     </BrowserRouter>
   );

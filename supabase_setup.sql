@@ -18,6 +18,8 @@ create table clientes (
   nome_empresa text not null,
   whatsapp text,
   endereco_fisico text,
+  valor numeric,
+  vencimento date,
   criado_em timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -53,13 +55,30 @@ create table playlists (
 );
 
 -- 6. CONFIGURAÇÃO DE SEGURANÇA (Row Level Security - RLS)
--- Para facilitar o desenvolvimento e integração direta pelo cliente Supabase,
--- vamos desativar o RLS das tabelas ou criar políticas de acesso público.
--- Escolhemos desativar o RLS para que todas as operações funcionem sem restrições de autenticação.
+-- Para garantir o funcionamento irrestrito do painel, desativamos o RLS por padrão.
 alter table clientes disable row level security;
 alter table telas disable row level security;
 alter table midias disable row level security;
 alter table playlists disable row level security;
+
+-- Caso o RLS seja reativado ou mantido ativo pelo Supabase, criamos políticas públicas irrestritas (CRUD completo)
+-- para permitir que as requisições anônimas funcionem normalmente.
+
+-- Políticas para Clientes
+drop policy if exists "Acesso público total clientes" on clientes;
+create policy "Acesso público total clientes" on clientes for all using (true) with check (true);
+
+-- Políticas para Telas
+drop policy if exists "Acesso público total telas" on telas;
+create policy "Acesso público total telas" on telas for all using (true) with check (true);
+
+-- Políticas para Mídias
+drop policy if exists "Acesso público total midias" on midias;
+create policy "Acesso público total midias" on midias for all using (true) with check (true);
+
+-- Políticas para Playlists
+drop policy if exists "Acesso público total playlists" on playlists;
+create policy "Acesso público total playlists" on playlists for all using (true) with check (true);
 
 -- 7. CONFIGURAÇÃO DO BUCKET DE ARMAZENAMENTO (Storage)
 -- Cria o bucket "midias" caso ele ainda não exista no Supabase.

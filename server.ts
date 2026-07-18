@@ -73,6 +73,123 @@ Pergunta ou solicitação do usuário:
     }
   });
 
+  // API Route for Sending SMS via GetSMS Gateway
+  app.post("/api/send-sms", async (req, res) => {
+    try {
+      const { oauthEndpoint, httpEndpoint, apiToken, to, message } = req.body;
+      if (!to || !message) {
+        return res.status(400).json({ error: "Campos 'to' e 'message' são obrigatórios." });
+      }
+
+      const cleanPhone = to.replace(/\D/g, '');
+      const cleanToken = apiToken || '';
+
+      // Intelligent instant conversion to strip accents, emojis, and special characters
+      const sanitizeSmsMessage = (msg: string): string => {
+        if (!msg) return "";
+        // Normalize to decompose accents (e.g. á -> a + ´) and strip the diacritics
+        let cleaned = msg.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        // Manual replacements for standard Portuguese edge cases
+        cleaned = cleaned.replace(/ç/g, "c").replace(/Ç/g, "C");
+        
+        // Retain only safe, standard printable ASCII characters (range 32 to 126)
+        let asciiOnly = "";
+        for (let i = 0; i < cleaned.length; i++) {
+          const code = cleaned.charCodeAt(i);
+          if (code >= 32 && code <= 126) {
+            asciiOnly += cleaned.charAt(i);
+          } else if (code === 160 || code === 8201 || code === 8202) {
+            // Replace common non-breaking space variants with normal space
+            asciiOnly += " ";
+          }
+        }
+        return asciiOnly.trim();
+      };
+
+      const cleanMessage = sanitizeSmsMessage(message);
+      console.log(`Original SMS message: "${message}"`);
+      console.log(`Sanitized SMS message: "${cleanMessage}"`);
+
+      const results: any[] = [];
+      let success = false;
+      let errorDetails = '';
+
+      // 1. Try OAuth v3 API standard POST request
+      const v3Url = `${oauthEndpoint?.replace(/\/$/, '') || 'https://sms.gtisms.com/api/v3'}/sms/send`;
+      try {
+        console.log(`Sending SMS via v3 endpoint: ${v3Url}`);
+        const response = await fetch(v3Url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${cleanToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            recipient: cleanPhone,
+            to: cleanPhone,
+            message: cleanMessage,
+            body: cleanMessage
+          })
+        });
+
+        const status = response.status;
+        const text = await response.text();
+        let json: any = null;
+        try {
+          json = JSON.parse(text);
+        } catch (_) {}
+
+        results.push({ endpoint: 'v3', status, data: json || text });
+        if (status >= 200 && status < 300) {
+          success = true;
+        } else {
+          errorDetails += `[V3 API returned status ${status}: ${text.substring(0, 200)}] `;
+        }
+      } catch (err: any) {
+        results.push({ endpoint: 'v3', error: err.message });
+        errorDetails += `[V3 API Connection failed: ${err.message}] `;
+      }
+
+      // 2. If OAuth v3 failed, try HTTP API standard GET/POST request as fallback
+      if (!success && httpEndpoint) {
+        const httpUrlBase = httpEndpoint.replace(/\/$/, '');
+        // We try common variants for HTTP API query sending
+        const httpUrlsToTry = [
+          `${httpUrlBase}?token=${encodeURIComponent(cleanToken)}&to=${cleanPhone}&message=${encodeURIComponent(cleanMessage)}`,
+          `${httpUrlBase}/send?token=${encodeURIComponent(cleanToken)}&to=${cleanPhone}&message=${encodeURIComponent(cleanMessage)}`,
+          `${httpUrlBase}?api_token=${encodeURIComponent(cleanToken)}&to=${cleanPhone}&message=${encodeURIComponent(cleanMessage)}`
+        ];
+
+        for (const url of httpUrlsToTry) {
+          if (success) break;
+          try {
+            console.log(`Trying fallback HTTP URL: ${url}`);
+            const response = await fetch(url, { method: 'GET' });
+            const status = response.status;
+            const text = await response.text();
+            results.push({ endpoint: 'http', status, data: text.substring(0, 200) });
+            if (status >= 200 && status < 300) {
+              success = true;
+            }
+          } catch (err: any) {
+            results.push({ endpoint: 'http', error: err.message });
+          }
+        }
+      }
+
+      if (success) {
+        return res.json({ success: true, results, sanitizedMessage: cleanMessage });
+      } else {
+        return res.status(500).json({ success: false, error: errorDetails || "Não foi possível entregar o SMS pelo gateway.", results });
+      }
+    } catch (error: any) {
+      console.error("Erro na rota de envio de SMS:", error);
+      res.status(500).json({ error: error.message || "Erro interno no processamento de SMS." });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

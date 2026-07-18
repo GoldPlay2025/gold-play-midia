@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Loader2, Monitor } from 'lucide-react';
+import { Loader2, Monitor, Settings } from 'lucide-react';
 
 type Midia = {
   id: string;
@@ -17,10 +17,12 @@ type PlaylistItem = {
 
 export default function Player() {
   const { screenId } = useParams<{ screenId: string }>();
+  const navigate = useNavigate();
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showConfirmDisconnect, setShowConfirmDisconnect] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -84,6 +86,28 @@ export default function Player() {
       )
       .subscribe();
 
+    // Presence Channel subscription for broadcasting screen player active state in real-time
+    const presenceChannel = supabase.channel('telas-presence', {
+      config: {
+        presence: {
+          key: screenId,
+        },
+      },
+    });
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        try {
+          await presenceChannel.track({
+            online_at: new Date().toISOString(),
+          });
+          console.log(`Presence tracked successfully for screen ID: ${screenId}`);
+        } catch (err) {
+          console.error('Error tracking presence:', err);
+        }
+      }
+    });
+
     // Setup ping interval to retry if playlist is empty or network error
     const retryInterval = setInterval(() => {
       fetchPlaylist();
@@ -91,6 +115,7 @@ export default function Player() {
 
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(presenceChannel);
       clearInterval(retryInterval);
     };
   }, [screenId]);
@@ -145,7 +170,7 @@ export default function Player() {
   const currentMedia = playlist[currentIndex]?.midias;
 
   return (
-    <div className="w-screen h-screen bg-black overflow-hidden flex items-center justify-center">
+    <div className="w-screen h-screen bg-black overflow-hidden flex items-center justify-center relative group">
       {currentMedia ? (
         <video
           key={currentMedia.id + '_' + currentIndex} // Force reload on source change
@@ -170,6 +195,42 @@ export default function Player() {
           {error}
         </div>
       )}
+
+      {/* Technician control panel overlay - only visible on hover/tap in the top-right corner */}
+      <div className="absolute top-4 right-4 z-50 opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300 flex items-center gap-2">
+        {showConfirmDisconnect ? (
+          <div className="bg-[#0f0f11]/95 border border-white/10 p-3.5 rounded-2xl shadow-2xl flex flex-col gap-2.5 backdrop-blur-md max-w-xs animate-fade-in text-left">
+            <p className="text-[10px] font-mono text-amber-500 uppercase tracking-widest">Desconectar tela?</p>
+            <p className="text-[9px] text-slate-400">Esta TV Box retornará à tela de emparelhamento do aplicativo.</p>
+            <div className="flex gap-2 justify-end mt-1">
+              <button 
+                onClick={() => setShowConfirmDisconnect(false)} 
+                className="px-2.5 py-1 text-[8px] font-mono uppercase bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors"
+              >
+                Não
+              </button>
+              <button 
+                onClick={() => {
+                  localStorage.removeItem('gpm_paired_screen_id');
+                  navigate('/app-view');
+                }} 
+                className="px-2.5 py-1 text-[8px] font-mono uppercase bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-medium"
+              >
+                Sim, Desconectar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowConfirmDisconnect(true)}
+            className="bg-black/70 hover:bg-[#0f0f11] border border-white/10 hover:border-amber-500/50 text-slate-400 hover:text-amber-500 px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-lg backdrop-blur-sm"
+            title="Configurar Emparelhamento"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            Configurar
+          </button>
+        )}
+      </div>
     </div>
   );
 }

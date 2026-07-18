@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured, saveSupabaseConfig, clearSupabaseConfig } from '../lib/supabase';
+import React, { useState, useEffect, useMemo } from 'react';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ClientesList } from '../components/ClientesList';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TelasList } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
+import { SmsSettings } from "../components/SmsSettings";
 import { 
   LayoutDashboard,
   Users, 
@@ -11,7 +13,10 @@ import {
   Search, 
   Bell, 
   LogOut,
+  ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Activity,
   CheckCircle2,
   XCircle,
@@ -35,9 +40,14 @@ import {
   Tv,
   Eye,
   Video,
-  ExternalLink
+  ExternalLink,
+  Menu,
+  MessageSquare,
+  Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+
 
 const envUrl = import.meta.env.VITE_SUPABASE_URL;
 const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -45,6 +55,14 @@ const localUrl = typeof window !== 'undefined' ? localStorage.getItem('gpm_supab
 const localKey = typeof window !== 'undefined' ? localStorage.getItem('gpm_supabase_anon_key') : null;
 const supabaseUrl = envUrl && envUrl !== 'YOUR_SUPABASE_URL' ? envUrl : (localUrl || '');
 const supabaseAnonKey = envKey && envKey !== 'YOUR_SUPABASE_ANON_KEY' ? envKey : (localKey || '');
+
+function saveSupabaseConfig(url: string, key: string) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('gpm_supabase_url', url.trim());
+    localStorage.setItem('gpm_supabase_anon_key', key.trim());
+    window.location.reload();
+  }
+}
 
 // Types
 type Cliente = {
@@ -70,12 +88,18 @@ type Toast = {
 };
 
 export default function AdminPanel() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('gpm_authenticated') === 'true';
+    }
+    return false;
+  });
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clientes' | 'telas' | 'nova-midia' | 'perfil'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'sms'>('dashboard');
   const [telas, setTelas] = useState<Tela[]>([]);
+  const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
     const saved = localStorage.getItem("gpm_system_settings");
     return saved ? JSON.parse(saved) : defaultSettings;
@@ -83,6 +107,46 @@ export default function AdminPanel() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const { crescimentoTelasData, crescimentoClientesData } = useMemo(() => {
+    const months: string[] = [];
+    const now = new Date();
+    
+    // Get last 6 months
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+
+    const formatMonth = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.toLocaleString('pt-BR', { month: 'short' });
+    };
+
+    let cumulativeTelas = telas.filter(t => t.criado_em < `${months[0]}-01`).length;
+    let cumulativeClientes = clientes.filter(c => c.criado_em < `${months[0]}-01`).length;
+
+    const telasData = months.map(m => {
+      const monthTelas = telas.filter(t => t.criado_em.startsWith(m)).length;
+      cumulativeTelas += monthTelas;
+      return {
+        name: formatMonth(`${m}-01T00:00:00`),
+        atual: cumulativeTelas,
+        anterior: 0 // Optional logic for previous year
+      };
+    });
+
+    const clientesData = months.map(m => {
+      const monthClientes = clientes.filter(c => c.criado_em.startsWith(m)).length;
+      cumulativeClientes += monthClientes;
+      return {
+        name: formatMonth(`${m}-01T00:00:00`),
+        ativos: cumulativeClientes
+      };
+    });
+
+    return { crescimentoTelasData: telasData, crescimentoClientesData: clientesData };
+  }, [telas, clientes]);
 
   // Setup States
   const [setupUrl, setSetupUrl] = useState(supabaseUrl || '');
@@ -99,14 +163,35 @@ export default function AdminPanel() {
   // Biblioteca de Mídias States
   const [midias, setMidias] = useState<any[]>([]);
   const [editingMidia, setEditingMidia] = useState<any | null>(null);
+  const [previewMidia, setPreviewMidia] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ titulo_video: '', tela_id: '' });
   const [editFile, setEditFile] = useState<File | null>(null);
   const [isUpdatingMidia, setIsUpdatingMidia] = useState(false);
+  const [currentMidiaPage, setCurrentMidiaPage] = useState(1);
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setCurrentMidiaPage(1);
+  }, [midias.length]);
+
+  // Handle window resize for sidebar
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === 'maestro5') {
       setIsAuthenticated(true);
+      localStorage.setItem('gpm_authenticated', 'true');
       setLoginError(false);
     } else {
       setLoginError(true);
@@ -360,6 +445,25 @@ export default function AdminPanel() {
     }
   }, [activeTab, isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Presence Channel subscription for real-time online/offline status
+    const presenceChannel = supabase.channel('telas-presence');
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const onlineIds = Object.keys(state);
+        setOnlineScreenIds(onlineIds);
+        console.log('Realtime screen presence update (AdminPanel):', onlineIds);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [isAuthenticated]);
+
   // Toast System
   const showToast = (type: 'success' | 'error', message: string) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -550,7 +654,7 @@ export default function AdminPanel() {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2, duration: 0.5 }}
-              className="w-[300px] h-[300px] mx-auto rounded-2xl flex items-center justify-center mb-6 overflow-hidden shadow-[0_0_40px_rgba(245,158,11,0.2)]"
+              className="w-48 h-48 sm:w-[300px] sm:h-[300px] mx-auto rounded-2xl flex items-center justify-center mb-6 overflow-hidden shadow-[0_0_40px_rgba(245,158,11,0.2)]"
             >
               <img src={systemSettings.logoUrl || "/gpm.png"} alt={`${systemSettings.systemName} Logo`} className="w-full h-full object-contain" />
             </motion.div>
@@ -620,6 +724,8 @@ create table clientes (
   nome_empresa text not null,
   whatsapp text,
   endereco_fisico text,
+  valor numeric,
+  vencimento date,
   criado_em timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -821,9 +927,23 @@ create policy "Permitir deletar midias" on storage.objects
   return (
     <div className="min-h-screen bg-[#050505] text-slate-300 font-sans flex overflow-hidden selection:bg-amber-500/30 selection:text-amber-200">
       
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 border-r border-white/5 bg-[#0a0a0a] flex flex-col relative z-20">
-        <div className="py-8 flex flex-col items-center px-4 border-b border-white/5 text-center">
+      <aside className={`fixed lg:static top-0 left-0 h-full w-64 border-r border-white/5 bg-[#0a0a0a] flex flex-col z-50 transition-transform duration-300 lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="py-8 flex flex-col items-center px-4 border-b border-white/5 text-center relative">
+          <button 
+            className="lg:hidden absolute top-4 right-4 text-slate-500 hover:text-white"
+            onClick={() => setIsSidebarOpen(false)}
+          >
+            <X className="w-5 h-5" />
+          </button>
           <div className="w-[150px] flex items-center justify-center overflow-hidden mb-4">
             <img src={systemSettings.iconUrl || "/gpm.png"} alt={`${systemSettings.systemName} Icon`} className="w-full h-auto object-contain" />
           </div>
@@ -833,11 +953,11 @@ create policy "Permitir deletar midias" on storage.objects
           </div>
         </div>
 
-        <div className="flex-1 py-8 px-4 flex flex-col gap-2">
+        <div className="flex-1 py-8 px-4 flex flex-col gap-2 overflow-y-auto">
           <p className="text-[10px] font-mono font-medium text-slate-600 uppercase tracking-widest px-4 mb-2">Operações</p>
           
           <button 
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
               activeTab === 'dashboard' 
                 ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
@@ -849,7 +969,7 @@ create policy "Permitir deletar midias" on storage.objects
           </button>
 
           <button 
-            onClick={() => setActiveTab('clientes')}
+            onClick={() => { setActiveTab('clientes'); setIsSidebarOpen(false); }}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
               activeTab === 'clientes' 
                 ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
@@ -861,7 +981,7 @@ create policy "Permitir deletar midias" on storage.objects
           </button>
 
           <button 
-            onClick={() => setActiveTab('telas')}
+            onClick={() => { setActiveTab('telas'); setIsSidebarOpen(false); }}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
               activeTab === 'telas' 
                 ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
@@ -873,7 +993,7 @@ create policy "Permitir deletar midias" on storage.objects
           </button>
 
           <button 
-            onClick={() => setActiveTab('nova-midia')}
+            onClick={() => { setActiveTab('nova-midia'); setIsSidebarOpen(false); }}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
               activeTab === 'nova-midia' 
                 ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
@@ -885,7 +1005,19 @@ create policy "Permitir deletar midias" on storage.objects
           </button>
 
           <button 
-            onClick={() => setActiveTab('perfil')}
+            onClick={() => { setActiveTab('sms'); setIsSidebarOpen(false); }}
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
+              activeTab === 'sms' 
+                ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
+                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            <Smartphone className="w-4 h-4" />
+            SMS GetSMS
+          </button>
+
+          <button 
+            onClick={() => { setActiveTab('perfil'); setIsSidebarOpen(false); }}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
               activeTab === 'perfil' 
                 ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
@@ -901,7 +1033,9 @@ create policy "Permitir deletar midias" on storage.objects
           <button 
             onClick={() => {
               setIsAuthenticated(false);
+              localStorage.removeItem('gpm_authenticated');
               setPassword('');
+              setIsSidebarOpen(false);
             }}
             className="flex items-center gap-3 text-sm font-medium text-slate-600 hover:text-slate-300 transition-colors"
           >
@@ -912,39 +1046,40 @@ create policy "Permitir deletar midias" on storage.objects
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#050505] via-[#0a0a0c] to-[#050505]">
+      <main className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#050505] via-[#0a0a0c] to-[#050505] w-full">
         
         {/* Top Header */}
-        <header className="h-20 flex items-center justify-between px-10 border-b border-white/5 bg-[#0a0a0a]/50 backdrop-blur-md z-10">
+        <header className="h-20 flex flex-shrink-0 items-center justify-between px-6 lg:px-10 border-b border-white/5 bg-[#0a0a0a]/50 backdrop-blur-md z-10">
           <div className="flex items-center gap-4">
+            <button 
+              className="lg:hidden text-slate-400 hover:text-white mr-2"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu className="w-6 h-6" />
+            </button>
             <div className="text-xs font-mono text-slate-500 flex items-center gap-2">
-              <span>ADMIN</span>
-              <ChevronRight className="w-3 h-3" />
-              <span className="text-slate-300 capitalize">
+              <span className="hidden sm:inline">ADMIN</span>
+              <ChevronRight className="w-3 h-3 hidden sm:block" />
+              <span className="text-slate-300 capitalize font-semibold">
                 {activeTab.replace('-', ' ')}
               </span>
             </div>
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="relative">
+            <div className="relative hidden md:block">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input 
                 type="text" 
                 placeholder="Buscar..." 
-                className="bg-white/5 border border-white/10 rounded-full py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-amber-500/50 focus:bg-white/10 transition-all w-64 text-white placeholder-slate-600"
+                className="bg-white/5 border border-white/10 rounded-full py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-amber-500/50 focus:bg-white/10 transition-all w-48 lg:w-64 text-white placeholder-slate-600"
               />
             </div>
-            <button className="relative text-slate-500 hover:text-white transition-colors">
-              <Bell className="w-4 h-4" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500"></span>
-            </button>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-white/10"></div>
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-10 relative z-0">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 relative z-0">
           <AnimatePresence mode="wait">
             
             {/* Dashboard Tab */}
@@ -957,14 +1092,14 @@ create policy "Permitir deletar midias" on storage.objects
                 transition={{ duration: 0.3 }}
                 className="max-w-6xl mx-auto"
               >
-                <div className="flex items-end justify-between mb-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-8">
                   <div>
                     <h2 className="text-3xl font-display font-light text-white mb-2 tracking-tight">Visão Geral</h2>
                     <p className="text-sm text-slate-500 font-light">Monitoramento da malha de telas em tempo real.</p>
                   </div>
                   <button 
-                    onClick={() => setActiveTab('nova-tela')}
-                    className="flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/10 text-white px-5 py-2.5 rounded-lg text-sm transition-all"
+                    onClick={() => setActiveTab('telas')}
+                    className="flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/10 text-white px-5 py-2.5 rounded-lg text-sm transition-all whitespace-nowrap"
                   >
                     <Plus className="w-4 h-4" />
                     Adicionar Tela
@@ -986,7 +1121,7 @@ create policy "Permitir deletar midias" on storage.objects
                     </div>
                     <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Telas Online</p>
                     <p className="text-4xl font-display font-light text-white">
-                      {telas.filter(t => t.status_online).length}
+                      {telas.filter(t => onlineScreenIds.includes(t.id) || t.status_online).length}
                     </p>
                   </div>
                   <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group">
@@ -998,84 +1133,112 @@ create policy "Permitir deletar midias" on storage.objects
                   </div>
                 </div>
 
-                {/* Data Table */}
-                <div className="bg-[#0f0f11] border border-white/5 rounded-2xl overflow-hidden shadow-2xl shadow-black/50">
-                  <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-white">Telas Registradas</h3>
-                    <button 
-                      onClick={fetchDashboardData}
-                      className="text-xs text-slate-500 hover:text-white transition-colors flex items-center gap-2"
-                    >
-                      {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Atualizar'}
-                    </button>
+                {/* Growth Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Chart 1: Crescimento de Telas */}
+                  <div className="bg-[#0f0f11] border border-white/5 rounded-2xl p-6 shadow-2xl shadow-black/50">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-sm font-medium text-white mb-1">Crescimento de Telas</h3>
+                        <p className="text-xs text-slate-500">Telas instaladas (Ano Atual vs Anterior)</p>
+                      </div>
+                      <Monitor className="w-5 h-5 text-amber-500 opacity-50" />
+                    </div>
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={crescimentoTelasData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis 
+                            dataKey="name" 
+                            stroke="rgba(255,255,255,0.2)" 
+                            fontSize={11}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis 
+                            stroke="rgba(255,255,255,0.2)" 
+                            fontSize={11}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#0a0a0c', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                            itemStyle={{ fontSize: '12px' }}
+                            labelStyle={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            name="Ano Atual"
+                            dataKey="atual" 
+                            stroke="#f59e0b" 
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2 }}
+                            activeDot={{ r: 6 }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            name="Ano Anterior"
+                            dataKey="anterior" 
+                            stroke="#f59e0b" 
+                            strokeOpacity={0.3}
+                            strokeWidth={2}
+                            strokeDasharray="4 4"
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                  
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-white/[0.02] border-b border-white/5 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-                          <th className="px-6 py-4 font-medium">Status</th>
-                          <th className="px-6 py-4 font-medium">Local / Identificador</th>
-                          <th className="px-6 py-4 font-medium">Cliente Vinculado</th>
-                          <th className="px-6 py-4 font-medium text-right">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {isLoading ? (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
-                              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 opacity-50" />
-                              <span className="text-xs">Carregando dados estruturais...</span>
-                            </td>
-                          </tr>
-                        ) : telas.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-12 text-center text-slate-500 text-sm">
-                              Nenhuma tela cadastrada no sistema.
-                            </td>
-                          </tr>
-                        ) : (
-                          telas.map((tela) => (
-                            <tr key={tela.id} className="hover:bg-white/[0.02] transition-colors group">
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <span className={`relative flex h-2.5 w-2.5`}>
-                                    {tela.status_online && (
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    )}
-                                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${tela.status_online ? 'bg-emerald-500' : 'bg-slate-700'}`}></span>
-                                  </span>
-                                  <span className="text-xs font-medium text-slate-400">
-                                    {tela.status_online ? 'Online' : 'Offline'}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-white">{tela.nome_local}</span>
-                                  <span className="text-xs font-mono text-slate-500 mt-0.5">{tela.identificador_unico}</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded bg-white/5 border border-white/10 flex items-center justify-center">
-                                    <span className="text-[10px] font-bold text-slate-400">
-                                      {tela.clientes?.nome_empresa?.charAt(0).toUpperCase() || '?'}
-                                    </span>
-                                  </div>
-                                  <span className="text-sm text-slate-300">{tela.clientes?.nome_empresa || 'Desconhecido'}</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <button className="text-xs text-amber-500/70 hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-all">
-                                  Configurar
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+
+                  {/* Chart 2: Crescimento de Clientes */}
+                  <div className="bg-[#0f0f11] border border-white/5 rounded-2xl p-6 shadow-2xl shadow-black/50">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-sm font-medium text-white mb-1">Crescimento de Clientes</h3>
+                        <p className="text-xs text-slate-500">Demanda de novos clientes</p>
+                      </div>
+                      <Users className="w-5 h-5 text-emerald-500 opacity-50" />
+                    </div>
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={crescimentoClientesData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
+                          <defs>
+                            <linearGradient id="colorAtivos" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis 
+                            dataKey="name" 
+                            stroke="rgba(255,255,255,0.2)" 
+                            fontSize={11}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis 
+                            stroke="rgba(255,255,255,0.2)" 
+                            fontSize={11}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#0a0a0c', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                            itemStyle={{ fontSize: '12px' }}
+                            labelStyle={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}
+                          />
+                          <Area 
+                            type="monotone" 
+                            name="Novos Clientes"
+                            dataKey="ativos" 
+                            stroke="#10b981" 
+                            strokeWidth={3}
+                            fillOpacity={1} 
+                            fill="url(#colorAtivos)" 
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -1085,6 +1248,13 @@ create policy "Permitir deletar midias" on storage.objects
             {activeTab === 'clientes' && (
               <motion.div key="clientes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
                 <ClientesList showToast={showToast} />
+              </motion.div>
+            )}
+
+            {/* SMS Tab */}
+            {activeTab === 'sms' && (
+              <motion.div key="sms" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
+                <SmsSettings showToast={showToast} />
               </motion.div>
             )}
 
@@ -1112,14 +1282,14 @@ create policy "Permitir deletar midias" on storage.objects
                 transition={{ duration: 0.3 }}
                 className="max-w-6xl mx-auto pt-6 animate-fade-in"
               >
-                <div className="mb-8 flex items-center justify-between">
+                <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
                     <h2 className="text-3xl font-display font-light text-white mb-2 tracking-tight">Gerenciar Mídias</h2>
                     <p className="text-sm text-slate-500 font-light">Envie, edite, exclua e mude o destino das mídias em sua rede.</p>
                   </div>
                   <button 
                     onClick={() => { fetchMidias(); fetchDashboardData(); }}
-                    className="text-xs text-amber-500 hover:text-amber-400 font-mono transition-colors border border-amber-500/20 hover:border-amber-500/50 px-3 py-1.5 rounded-lg bg-amber-500/5"
+                    className="text-xs text-amber-500 hover:text-amber-400 font-mono transition-colors border border-amber-500/20 hover:border-amber-500/50 px-3 py-1.5 rounded-lg bg-amber-500/5 whitespace-nowrap"
                   >
                     {isLoading ? 'Sincronizando...' : 'Sincronizar Biblioteca'}
                   </button>
@@ -1253,79 +1423,195 @@ create policy "Permitir deletar midias" on storage.objects
                           <p className="text-sm font-medium text-slate-400 mb-1">Nenhuma mídia registrada</p>
                           <p className="text-xs text-slate-600 max-w-sm">Os vídeos cadastrados e os vínculos das telas de exibição serão exibidos aqui.</p>
                         </div>
-                      ) : (
-                        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
-                          {midias.map((m: any) => {
-                            const playlistTela = m.playlists?.[0]?.telas;
-                            return (
-                              <div key={m.id} className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex gap-4 hover:border-white/10 transition-colors group relative">
-                                {/* Prévia do vídeo (reproduz com som desativado em hover) */}
-                                <div className="w-24 h-24 rounded-xl bg-[#0a0a0c] overflow-hidden flex-shrink-0 relative border border-white/5 flex items-center justify-center group-hover:border-amber-500/30 transition-colors">
-                                  {m.url_storage ? (
-                                    <video 
-                                      src={m.url_storage} 
-                                      className="w-full h-full object-cover" 
-                                      muted 
-                                      loop 
-                                      playsInline 
-                                      onMouseEnter={e => e.currentTarget.play()} 
-                                      onMouseLeave={e => {
-                                        e.currentTarget.pause();
-                                        e.currentTarget.currentTime = 0;
-                                      }}
-                                    />
-                                  ) : (
-                                    <FileVideo className="w-8 h-8 text-slate-600" />
-                                  )}
-                                  <div className="absolute top-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] font-mono text-slate-400">
-                                    {m.tamanho_mb ? `${m.tamanho_mb} MB` : '-'}
-                                  </div>
-                                </div>
+                      ) : (() => {
+                        const MIDIAS_PER_PAGE = 20;
+                        const totalMidias = midias.length;
+                        const totalMidiasPages = Math.ceil(totalMidias / MIDIAS_PER_PAGE) || 1;
+                        const startIndex = (currentMidiaPage - 1) * MIDIAS_PER_PAGE;
+                        const endIndex = Math.min(startIndex + MIDIAS_PER_PAGE, totalMidias);
+                        const paginatedMidias = midias.slice(startIndex, endIndex);
 
-                                {/* Detalhes */}
-                                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                                  <div>
-                                    <h4 className="text-sm font-medium text-white truncate" title={m.titulo_video}>
-                                      {m.titulo_video}
-                                    </h4>
-                                    <p className="text-[10px] font-mono text-slate-500 mt-1 uppercase tracking-wider">
-                                      Cliente: <span className="text-slate-300">{m.clientes?.nome_empresa || 'Sem Cliente'}</span>
-                                    </p>
-                                  </div>
+                        const getMidiasPageNumbers = () => {
+                          const pages: number[] = [];
+                          const maxVisiblePages = 5;
+                          let start = Math.max(1, currentMidiaPage - Math.floor(maxVisiblePages / 2));
+                          let end = Math.min(totalMidiasPages, start + maxVisiblePages - 1);
+                          if (end - start + 1 < maxVisiblePages) {
+                            start = Math.max(1, end - maxVisiblePages + 1);
+                          }
+                          for (let i = start; i <= end; i++) {
+                            pages.push(i);
+                          }
+                          return pages;
+                        };
 
-                                  <div className="mt-2 bg-[#0c0c0e] border border-white/5 rounded-xl p-2.5 flex items-center gap-2">
-                                    <Tv className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider mb-0.5">Veiculação Ativa</p>
-                                      <p className="text-xs text-slate-300 font-medium truncate">
-                                        {playlistTela ? `${playlistTela.nome_local} (${playlistTela.identificador_unico})` : 'Sem tela associada'}
-                                      </p>
+                        return (
+                          <div className="space-y-6">
+                            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                              {paginatedMidias.map((m: any) => {
+                                const playlistTela = m.playlists?.[0]?.telas;
+                                return (
+                                  <div key={m.id} className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex gap-4 hover:border-white/10 transition-colors group relative">
+                                    {/* Prévia do vídeo (reproduz com som desativado em hover) */}
+                                    <div 
+                                      onClick={() => setPreviewMidia(m)}
+                                      className="w-24 h-24 rounded-xl bg-[#0a0a0c] overflow-hidden flex-shrink-0 relative border border-white/5 flex items-center justify-center group/preview cursor-pointer group-hover:border-amber-500/50 transition-colors"
+                                      title="Clique para conferir com som e controles"
+                                    >
+                                      {m.url_storage ? (
+                                        <>
+                                          <video 
+                                            src={m.url_storage} 
+                                            className="w-full h-full object-cover group-hover/preview:scale-105 transition-transform duration-300" 
+                                            muted 
+                                            loop 
+                                            playsInline 
+                                            onMouseEnter={e => e.currentTarget.play()} 
+                                            onMouseLeave={e => {
+                                              e.currentTarget.pause();
+                                              e.currentTarget.currentTime = 0;
+                                            }}
+                                          />
+                                          <div className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity">
+                                            <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-black shadow-lg shadow-amber-500/20 transform scale-90 group-hover/preview:scale-100 transition-transform">
+                                              <Play className="w-4 h-4 fill-black text-black ml-0.5" />
+                                            </div>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <FileVideo className="w-8 h-8 text-slate-600" />
+                                      )}
+                                      <div className="absolute top-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] font-mono text-slate-400">
+                                        {m.tamanho_mb ? `${m.tamanho_mb} MB` : '-'}
+                                      </div>
+                                    </div>
+
+                                    {/* Detalhes */}
+                                    <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                                      <div className="cursor-pointer" onClick={() => setPreviewMidia(m)}>
+                                        <h4 className="text-sm font-medium text-white hover:text-amber-500 transition-colors truncate" title={m.titulo_video}>
+                                          {m.titulo_video}
+                                        </h4>
+                                        <p className="text-[10px] font-mono text-slate-500 mt-1 uppercase tracking-wider">
+                                          Cliente: <span className="text-slate-300">{m.clientes?.nome_empresa || 'Sem Cliente'}</span>
+                                        </p>
+                                      </div>
+
+                                      <div className="mt-2 bg-[#0c0c0e] border border-white/5 rounded-xl p-2.5 flex items-center gap-2">
+                                        <Tv className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider mb-0.5">Veiculação Ativa</p>
+                                          <p className="text-xs text-slate-300 font-medium truncate">
+                                            {playlistTela ? `${playlistTela.nome_local} (${playlistTela.identificador_unico})` : 'Sem tela associada'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Ações */}
+                                    <div className="flex items-center gap-1 self-start">
+                                      <button 
+                                        onClick={() => setPreviewMidia(m)}
+                                        className="p-2 text-slate-500 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
+                                        title="Conferir Player (Play/Pause/Progresso)"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </button>
+                                      <button 
+                                        onClick={() => handleOpenEditMidiaModal(m)}
+                                        className="p-2 text-slate-500 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
+                                        title="Editar Mídia"
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </button>
+                                      <button 
+                                        onClick={() => handleDeletarMidia(m.id, m.url_storage)}
+                                        className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                        title="Excluir Mídia"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
                                     </div>
                                   </div>
-                                </div>
+                                );
+                              })}
+                            </div>
 
-                                {/* Ações */}
-                                <div className="flex items-center gap-1 self-start">
-                                  <button 
-                                    onClick={() => handleOpenEditMidiaModal(m)}
-                                    className="p-2 text-slate-500 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
-                                    title="Editar Mídia"
+                            {/* Pagination controls */}
+                            <div className="pt-4 border-t border-white/5 bg-white/[0.01] flex flex-col sm:flex-row items-center justify-between gap-4">
+                              <div className="text-xs font-mono text-slate-500 uppercase tracking-wider">
+                                Mostrando <span className="text-slate-300 font-medium">{startIndex + 1}</span> a <span className="text-slate-300 font-medium">{endIndex}</span> de <span className="text-amber-500 font-medium">{totalMidias}</span> mídias
+                              </div>
+                              
+                              {totalMidiasPages > 1 && (
+                                <div className="flex items-center gap-1.5">
+                                  {/* First page */}
+                                  <button
+                                    onClick={() => setCurrentMidiaPage(1)}
+                                    disabled={currentMidiaPage === 1}
+                                    className="p-1.5 rounded-lg border border-white/5 bg-white/5 text-slate-400 hover:text-white hover:border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    title="Primeira página"
                                   >
-                                    <Edit className="w-4 h-4" />
+                                    <ChevronsLeft className="w-4 h-4" />
                                   </button>
-                                  <button 
-                                    onClick={() => handleDeletarMidia(m.id, m.url_storage)}
-                                    className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                    title="Excluir Mídia"
+                                  
+                                  {/* Previous page */}
+                                  <button
+                                    onClick={() => setCurrentMidiaPage(prev => Math.max(1, prev - 1))}
+                                    disabled={currentMidiaPage === 1}
+                                    className="p-1.5 rounded-lg border border-white/5 bg-white/5 text-slate-400 hover:text-white hover:border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    title="Página anterior"
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <ChevronLeft className="w-4 h-4" />
+                                  </button>
+
+                                  {/* Page numbers */}
+                                  <div className="hidden sm:flex items-center gap-1">
+                                    {getMidiasPageNumbers().map(page => (
+                                      <button
+                                        key={page}
+                                        onClick={() => setCurrentMidiaPage(page)}
+                                        className={`w-8 h-8 rounded-lg border text-xs font-medium font-mono transition-all ${
+                                          currentMidiaPage === page
+                                            ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)] font-semibold'
+                                            : 'border-white/5 bg-white/5 text-slate-400 hover:text-white hover:border-white/10'
+                                        }`}
+                                      >
+                                        {page}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {/* Mobile page indicator */}
+                                  <div className="sm:hidden text-xs font-mono text-slate-400 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+                                    {currentMidiaPage} / {totalMidiasPages}
+                                  </div>
+
+                                  {/* Next page */}
+                                  <button
+                                    onClick={() => setCurrentMidiaPage(prev => Math.min(totalMidiasPages, prev + 1))}
+                                    disabled={currentMidiaPage === totalMidiasPages}
+                                    className="p-1.5 rounded-lg border border-white/5 bg-white/5 text-slate-400 hover:text-white hover:border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    title="Próxima página"
+                                  >
+                                    <ChevronRight className="w-4 h-4" />
+                                  </button>
+
+                                  {/* Last page */}
+                                  <button
+                                    onClick={() => setCurrentMidiaPage(totalMidiasPages)}
+                                    disabled={currentMidiaPage === totalMidiasPages}
+                                    className="p-1.5 rounded-lg border border-white/5 bg-white/5 text-slate-400 hover:text-white hover:border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    title="Última página"
+                                  >
+                                    <ChevronsRight className="w-4 h-4" />
                                   </button>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1442,6 +1728,73 @@ create policy "Permitir deletar midias" on storage.objects
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Conferência / Visualização de Mídia */}
+      <AnimatePresence>
+        {previewMidia && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-[#0f0f11] border border-white/10 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl relative"
+            >
+              <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between bg-[#131317]">
+                <div className="flex items-center gap-2.5">
+                  <Play className="w-5 h-5 text-amber-500 fill-amber-500/20" />
+                  <div>
+                    <h3 className="text-base font-medium text-white truncate max-w-[400px]" title={previewMidia.titulo_video}>
+                      Conferência: {previewMidia.titulo_video}
+                    </h3>
+                    <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                      Cliente: {previewMidia.clientes?.nome_empresa || 'Sem Cliente'}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setPreviewMidia(null)}
+                  className="p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Player de Vídeo com controles completos habilitados */}
+              <div className="bg-black aspect-video flex items-center justify-center relative group">
+                {previewMidia.url_storage ? (
+                  <video 
+                    src={previewMidia.url_storage} 
+                    className="w-full h-full object-contain" 
+                    controls
+                    autoPlay
+                    playsInline
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-slate-600 gap-3">
+                    <FileVideo className="w-12 h-12 text-slate-700 animate-pulse" />
+                    <p className="text-xs font-mono uppercase tracking-widest">URL de vídeo inválida</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Informativo */}
+              <div className="px-6 py-4 border-t border-white/5 bg-[#131317] flex items-center justify-between text-xs text-slate-400">
+                <div className="flex items-center gap-2">
+                  <Tv className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>
+                    Destino: <span className="text-white font-medium">{previewMidia.playlists?.[0]?.telas ? `${previewMidia.playlists[0].telas.nome_local} (${previewMidia.playlists[0].telas.identificador_unico})` : 'Sem tela vinculada'}</span>
+                  </span>
+                </div>
+                {previewMidia.tamanho_mb && (
+                  <div className="font-mono text-[10px] text-slate-500 uppercase">
+                    Tamanho: {previewMidia.tamanho_mb} MB
+                  </div>
+                )}
+              </div>
             </motion.div>
           </div>
         )}
