@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey, saveSupabaseConfig, clearSupabaseConfig } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, saveSupabaseConfig, clearSupabaseConfig } from '../lib/supabase';
 import { ClientesList } from '../components/ClientesList';
 import { TelasList } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
@@ -38,6 +38,13 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+const envUrl = import.meta.env.VITE_SUPABASE_URL;
+const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const localUrl = typeof window !== 'undefined' ? localStorage.getItem('gpm_supabase_url') : null;
+const localKey = typeof window !== 'undefined' ? localStorage.getItem('gpm_supabase_anon_key') : null;
+const supabaseUrl = envUrl && envUrl !== 'YOUR_SUPABASE_URL' ? envUrl : (localUrl || '');
+const supabaseAnonKey = envKey && envKey !== 'YOUR_SUPABASE_ANON_KEY' ? envKey : (localKey || '');
 
 // Types
 type Cliente = {
