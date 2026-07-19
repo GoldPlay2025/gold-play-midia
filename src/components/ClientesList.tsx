@@ -281,7 +281,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       const oauthEndpoint = localStorage.getItem('gpm_sms_oauth_endpoint') || 'https://sms.gtisms.com/api/v3/';
       const httpEndpoint = localStorage.getItem('gpm_sms_http_endpoint') || 'https://sms.gtisms.com/api/http/';
 
-      const response = await fetch('/api/send-sms', {
+      const response = await fetch('/gateway/send-sms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

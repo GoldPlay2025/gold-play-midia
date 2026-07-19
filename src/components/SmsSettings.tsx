@@ -225,7 +225,7 @@ export const SmsSettings = ({ showToast }: { showToast: (type: 'success' | 'erro
     addConsoleLog('info', `Iniciando disparo para ${client.nome_empresa} (${cleanPhone})...`);
 
     try {
-      const response = await fetch('/api/send-sms', {
+      const response = await fetch('/gateway/send-sms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -242,12 +242,14 @@ export const SmsSettings = ({ showToast }: { showToast: (type: 'success' | 'erro
       const responseText = await response.text();
       
       if (!response.ok) {
-        let errorMsg = 'Erro no gateway GetSMS';
+        let errorMsg = `Erro no gateway GetSMS (Status: ${response.status})`;
         try {
           const responseData = JSON.parse(responseText);
           errorMsg = responseData.error || errorMsg;
         } catch (e) {
-          // Body not JSON, use default error message
+          if (responseText) {
+            errorMsg += `: ${responseText.substring(0, 100)}`;
+          }
         }
         throw new Error(errorMsg);
       }
