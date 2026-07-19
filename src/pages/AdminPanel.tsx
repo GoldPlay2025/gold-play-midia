@@ -1350,7 +1350,7 @@ create policy "Permitir deletar midias" on storage.objects
                               {paginatedMidias.map((m: any) => {
                                 const playlistTela = m.playlists?.[0]?.telas;
                                 return (
-                                  <div key={m.id} className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex gap-4 hover:border-white/10 transition-colors group relative">
+                                  <div key={m.id} className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex flex-col md:flex-row gap-4 hover:border-white/10 transition-colors group relative">
                                     {/* Prévia do vídeo (reproduz com som desativado em hover) */}
                                     <div 
                                       onClick={() => setPreviewMidia(m)}
@@ -1396,7 +1396,7 @@ create policy "Permitir deletar midias" on storage.objects
                                         </p>
                                       </div>
 
-                                      <div className="mt-2 bg-[#0c0c0e] border border-white/5 rounded-xl p-2.5 flex items-center gap-2">
+                                      <div className="hidden lg:flex mt-2 bg-[#0c0c0e] border border-white/5 rounded-xl p-2.5 items-center gap-2">
                                         <Tv className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                                         <div className="min-w-0 flex-1">
                                           <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider mb-0.5">Veiculação Ativa</p>
