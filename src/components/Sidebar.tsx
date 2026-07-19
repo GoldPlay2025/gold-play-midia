@@ -28,7 +28,7 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
       initial={false}
       animate={{ width: isOpen ? 256 : 80 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className={`${isOpen ? 'flex fixed inset-0 z-50 w-full' : 'hidden'} lg:flex flex-col h-full bg-[#111111] border-r border-white/10 overflow-hidden`}
+      className={`flex-col h-full bg-[#111111] border-r border-white/10 overflow-hidden ${isOpen ? 'fixed inset-0 z-50 w-full lg:static lg:w-64' : 'hidden lg:flex lg:w-20'}`}
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
