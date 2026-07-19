@@ -43,7 +43,8 @@ import {
   ExternalLink,
   Menu,
   MessageSquare,
-  Smartphone
+  Smartphone,
+  Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -1020,14 +1021,23 @@ create policy "Permitir deletar midias" on storage.objects
                     <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Total de Telas</p>
                     <p className="text-4xl font-display font-light text-white">{telas.length}</p>
                   </div>
-                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group">
+                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-between">
                     <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Activity className="w-16 h-16 text-emerald-500" />
+                      <Link2 className="w-16 h-16 text-emerald-500" />
                     </div>
-                    <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Telas Online</p>
-                    <p className="text-4xl font-display font-light text-white">
-                      {telas.filter(t => onlineScreenIds.includes(t.id) || t.status_online).length}
-                    </p>
+                    <div className="mb-4">
+                      <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">Link de Transmissão</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/player/master`);
+                        showToast('success', 'Link copiado com sucesso!');
+                      }}
+                      className="self-start flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 px-4 py-2 rounded-xl transition-colors text-sm font-medium relative z-10 group/btn"
+                    >
+                      <Copy className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
+                      COPIAR ID
+                    </button>
                   </div>
                   <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
