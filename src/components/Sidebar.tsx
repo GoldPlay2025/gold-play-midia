@@ -28,11 +28,14 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
       initial={false}
       animate={{ width: isOpen ? 256 : 80 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="hidden lg:flex flex-col h-full bg-[#111111] border-r border-white/10 overflow-hidden"
+      className={`${isOpen ? 'flex fixed inset-0 z-50 w-full' : 'hidden'} lg:flex flex-col h-full bg-[#111111] border-r border-white/10 overflow-hidden`}
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
       <div className="py-6 flex flex-col items-center px-4 border-b border-white/10 text-center relative">
+        <button className="lg:hidden absolute top-4 right-4" onClick={() => setIsOpen(false)}>
+            <X className="w-6 h-6 text-white"/>
+        </button>
         <div className="w-28 h-28 flex items-center justify-center overflow-hidden mb-2">
           <img src={iconUrl || "/gpm.png"} alt="Logo" className="w-full h-auto object-contain" />
         </div>
