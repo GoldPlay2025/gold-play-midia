@@ -239,7 +239,13 @@ export const SmsSettings = ({ showToast }: { showToast: (type: 'success' | 'erro
         })
       });
 
-      const responseData = await response.json();
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Resposta do servidor inválida (não é JSON): "${responseText.substring(0, 100)}"`);
+      }
 
       if (!response.ok) {
         throw new Error(responseData.error || 'Erro no gateway GetSMS');
