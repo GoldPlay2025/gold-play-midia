@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Smartphone } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, X, Calendar } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export type Cliente = {
@@ -253,79 +253,6 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
     }
   };
 
-  const handleSendManualSms = async (cliente: Cliente) => {
-    if (!cliente.whatsapp) {
-      showToast('error', 'Este cliente não possui um número de WhatsApp/SMS cadastrado.');
-      return;
-    }
-
-    const rawNum = cliente.whatsapp.replace(/\D/g, '');
-    const cleanPhone = rawNum.startsWith('55') ? rawNum : `55${rawNum}`;
-    
-    // Retrieve SMS Settings
-    const template = localStorage.getItem('gpm_sms_template') || 'Ola {nome}! Passando para lembrar que sua mensalidade de {valor} vence no dia {vencimento}. Pague em dia e evite a suspensao do sinal.';
-    const apiToken = localStorage.getItem('gpm_sms_api_token') || '361|sJEwdut5miNP42JgyvITZ2gYaCUAklKl0y1ZzOFR46f07813';
-
-    // Format text
-    const valorStr = cliente.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : 'R$ 0,00';
-    const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'N/A';
-    
-    let renderedMsg = template;
-    renderedMsg = renderedMsg.replace(/{nome}/g, cliente.nome_empresa);
-    renderedMsg = renderedMsg.replace(/{valor}/g, valorStr);
-    renderedMsg = renderedMsg.replace(/{vencimento}/g, vencStr);
-
-    try {
-      showToast('success', `Iniciando disparo SMS para ${cliente.nome_empresa}...`);
-      
-      const oauthEndpoint = localStorage.getItem('gpm_sms_oauth_endpoint') || 'https://sms.gtisms.com/api/v3/';
-      const httpEndpoint = localStorage.getItem('gpm_sms_http_endpoint') || 'https://sms.gtisms.com/api/http/';
-
-      const response = await fetch('/gateway/send-sms', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          oauthEndpoint,
-          httpEndpoint,
-          apiToken,
-          to: cleanPhone,
-          message: renderedMsg
-        })
-      });
-
-      const responseText = await response.text();
-      let data;
-      try {
-        data = responseText ? JSON.parse(responseText) : {};
-      } catch (e) {
-        throw new Error(`Resposta do servidor inválida (não é JSON): "${responseText.substring(0, 100)}"`);
-      }
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro no gateway GetSMS');
-      }
-
-      // Append to SMS history logs
-      const savedLogsStr = localStorage.getItem('gpm_sms_sent_logs');
-      const savedLogs = savedLogsStr ? JSON.parse(savedLogsStr) : [];
-      const newLog = {
-        id: 'sms-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
-        timestamp: new Date().toLocaleString('pt-BR'),
-        clientName: cliente.nome_empresa,
-        phone: cleanPhone,
-        message: renderedMsg,
-        status: 'sent',
-        type: 'manual'
-      };
-      localStorage.setItem('gpm_sms_sent_logs', JSON.stringify([newLog, ...savedLogs]));
-
-      showToast('success', `SMS entregue com sucesso para +${cleanPhone}!`);
-    } catch (err: any) {
-      showToast('error', `Falha ao enviar SMS: ${err.message}`);
-    }
-  };
 
   const filteredClientes = clientes.filter(c => 
     (c.nome_empresa || '').toLowerCase().includes((search || '').toLowerCase()) ||
@@ -363,13 +290,6 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                   referrerPolicy="no-referrer" 
                 />
               </a>
-              <button 
-                onClick={() => handleSendManualSms(row)}
-                className="p-1 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-all inline-flex items-center justify-center"
-                title="Enviar SMS de Cobrança"
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
         );
