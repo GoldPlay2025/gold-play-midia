@@ -33,7 +33,7 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
       onMouseLeave={() => setIsOpen(false)}
     >
       <div className="py-6 flex flex-col items-center px-4 border-b border-white/10 text-center relative">
-        <div className="w-12 h-12 flex items-center justify-center overflow-hidden mb-2">
+        <div className="w-28 h-28 flex items-center justify-center overflow-hidden mb-2">
           <img src={iconUrl || "/gpm.png"} alt="Logo" className="w-full h-auto object-contain" />
         </div>
         {isOpen && (
