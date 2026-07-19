@@ -5,6 +5,7 @@ import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 import { TelasList } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
 import { SmsSettings } from "../components/SmsSettings";
+import { Sidebar } from "../components/Sidebar";
 import { 
   LayoutDashboard,
   Users, 
@@ -169,7 +170,7 @@ export default function AdminPanel() {
   const [isUpdatingMidia, setIsUpdatingMidia] = useState(false);
   const [currentMidiaPage, setCurrentMidiaPage] = useState(1);
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   useEffect(() => {
     setCurrentMidiaPage(1);
@@ -179,7 +180,7 @@ export default function AdminPanel() {
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
-        setIsSidebarOpen(false);
+        // setIsSidebarOpen(false); // Removed as we use the new Sidebar
       }
     };
     window.addEventListener('resize', handleResize);
@@ -452,7 +453,7 @@ export default function AdminPanel() {
     const presenceChannel = supabase.channel('telas-presence');
     presenceChannel
       .on('presence', { event: 'sync' }, () => {
-        const state = presenceChannel.presenceState();
+        const state = presenceChannel.presenceState() || {};
         const onlineIds = Object.keys(state);
         setOnlineScreenIds(onlineIds);
         console.log('Realtime screen presence update (AdminPanel):', onlineIds);
@@ -927,136 +928,26 @@ create policy "Permitir deletar midias" on storage.objects
   return (
     <div className="min-h-screen bg-[#050505] text-slate-300 font-sans flex overflow-hidden selection:bg-amber-500/30 selection:text-amber-200">
       
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`fixed lg:static top-0 left-0 h-full w-64 border-r border-white/5 bg-[#0a0a0a] flex flex-col z-50 transition-transform duration-300 lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="py-8 flex flex-col items-center px-4 border-b border-white/5 text-center relative">
-          <button 
-            className="lg:hidden absolute top-4 right-4 text-slate-500 hover:text-white"
-            onClick={() => setIsSidebarOpen(false)}
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <div className="w-[150px] flex items-center justify-center overflow-hidden mb-4">
-            <img src={systemSettings.iconUrl || "/gpm.png"} alt={`${systemSettings.systemName} Icon`} className="w-full h-auto object-contain" />
-          </div>
-          <div>
-            <h1 className="text-sm font-display font-bold text-white tracking-widest uppercase">{systemSettings.systemName}</h1>
-            <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest mt-0.5">Mídia Workspace</p>
-          </div>
-        </div>
-
-        <div className="flex-1 py-8 px-4 flex flex-col gap-2 overflow-y-auto">
-          <p className="text-[10px] font-mono font-medium text-slate-600 uppercase tracking-widest px-4 mb-2">Operações</p>
-          
-          <button 
-            onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
-              activeTab === 'dashboard' 
-                ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            Dashboard
-          </button>
-
-          <button 
-            onClick={() => { setActiveTab('clientes'); setIsSidebarOpen(false); }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
-              activeTab === 'clientes' 
-                ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            Clientes
-          </button>
-
-          <button 
-            onClick={() => { setActiveTab('telas'); setIsSidebarOpen(false); }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
-              activeTab === 'telas' 
-                ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <Monitor className="w-4 h-4" />
-            Telas
-          </button>
-
-          <button 
-            onClick={() => { setActiveTab('nova-midia'); setIsSidebarOpen(false); }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
-              activeTab === 'nova-midia' 
-                ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <Film className="w-4 h-4" />
-            Gerenciar Mídias
-          </button>
-
-          <button 
-            onClick={() => { setActiveTab('sms'); setIsSidebarOpen(false); }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
-              activeTab === 'sms' 
-                ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <Smartphone className="w-4 h-4" />
-            SMS GetSMS
-          </button>
-
-          <button 
-            onClick={() => { setActiveTab('perfil'); setIsSidebarOpen(false); }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
-              activeTab === 'perfil' 
-                ? 'bg-white/10 text-white shadow-[inset_1px_0_0_rgba(245,158,11,1)]' 
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            Perfil
-          </button>
-        </div>
-
-        <div className="p-6 border-t border-white/5">
-          <button 
-            onClick={() => {
-              setIsAuthenticated(false);
-              localStorage.removeItem('gpm_authenticated');
-              setPassword('');
-              setIsSidebarOpen(false);
-            }}
-            className="flex items-center gap-3 text-sm font-medium text-slate-600 hover:text-slate-300 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sair da Sessão
-          </button>
-        </div>
-      </aside>
+      <Sidebar 
+        isOpen={isSidebarExpanded} 
+        setIsOpen={setIsSidebarExpanded}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onLogout={() => {
+          setIsAuthenticated(false);
+          localStorage.removeItem('gpm_authenticated');
+          setPassword('');
+        }}
+        systemName={systemSettings.systemName}
+        iconUrl={systemSettings.iconUrl}
+      />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#050505] via-[#0a0a0c] to-[#050505] w-full">
+      <main className={`flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#050505] via-[#0a0a0c] to-[#050505] w-full transition-all duration-300 ${isSidebarExpanded ? 'pl-72' : 'pl-28'}`}>
         
         {/* Top Header */}
         <header className="h-20 flex flex-shrink-0 items-center justify-between px-6 lg:px-10 border-b border-white/5 bg-[#0a0a0a]/50 backdrop-blur-md z-10">
           <div className="flex items-center gap-4">
-            <button 
-              className="lg:hidden text-slate-400 hover:text-white mr-2"
-              onClick={() => setIsSidebarOpen(true)}
-            >
-              <Menu className="w-6 h-6" />
-            </button>
             <div className="text-xs font-mono text-slate-500 flex items-center gap-2">
               <span className="hidden sm:inline">ADMIN</span>
               <ChevronRight className="w-3 h-3 hidden sm:block" />
