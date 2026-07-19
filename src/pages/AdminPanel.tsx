@@ -1014,32 +1014,53 @@ create policy "Permitir deletar midias" on storage.objects
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group">
+                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group min-h-[200px]">
                     <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                       <Monitor className="w-16 h-16 text-amber-500" />
                     </div>
                     <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Total de Telas</p>
                     <p className="text-4xl font-display font-light text-white">{telas.length}</p>
                   </div>
-                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-between">
+                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px]">
                     <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                       <Link2 className="w-16 h-16 text-emerald-500" />
                     </div>
-                    <div className="mb-4">
-                      <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">Link de Transmissão</p>
+                    <div className="mb-4 relative z-10">
+                      <p className="text-xs font-mono text-emerald-500 uppercase tracking-widest font-bold mb-4">Link de Transmissão</p>
+                      <div className="space-y-3 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
+                        {midias.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">Nenhuma mídia ativa</p>
+                        ) : (
+                          midias.map(midia => (
+                            <div key={midia.id} className="flex items-center gap-3 bg-black/40 border border-white/5 p-2 rounded-xl">
+                              <div className="w-16 h-12 rounded overflow-hidden bg-white/5 shrink-0 flex items-center justify-center relative group/vid">
+                                {midia.url_storage ? (
+                                  <video src={midia.url_storage} className="w-full h-full object-cover opacity-70 group-hover/vid:opacity-100 transition-opacity" />
+                                ) : (
+                                  <Video className="w-4 h-4 text-slate-600" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-mono text-slate-300 truncate font-semibold uppercase">{midia.titulo_video || 'Campanha'}</p>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${window.location.origin}/campanha/${midia.id}`);
+                                  showToast('success', 'Link copiado!');
+                                }}
+                                className="shrink-0 flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg transition-colors text-[9px] font-mono relative z-10"
+                                title="Copiar ID"
+                              >
+                                <Copy className="w-3 h-3" />
+                                COPIAR ID
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/player/master`);
-                        showToast('success', 'Link copiado com sucesso!');
-                      }}
-                      className="self-start flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 px-4 py-2 rounded-xl transition-colors text-sm font-medium relative z-10 group/btn"
-                    >
-                      <Copy className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
-                      COPIAR ID
-                    </button>
                   </div>
-                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group">
+                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group min-h-[200px]">
                     <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                       <Users className="w-16 h-16 text-blue-500" />
                     </div>
