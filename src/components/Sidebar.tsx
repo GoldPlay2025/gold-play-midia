@@ -28,7 +28,7 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
       initial={false}
       animate={{ width: isOpen ? 256 : 80 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className={`flex-col h-full bg-[#111111] border-r border-white/10 overflow-hidden ${isOpen ? 'fixed inset-0 z-50 w-full lg:static lg:w-64' : 'hidden lg:flex lg:w-20'}`}
+      className={`flex-col h-full bg-[#111111] border-r border-white/10 overflow-hidden ${isOpen ? 'fixed inset-0 z-50 w-full lg:static lg:w-64 backdrop-blur-md bg-[#111111]/80' : 'hidden lg:flex lg:w-20'}`}
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
@@ -48,11 +48,11 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
       </div>
 
       <div className="flex-1 py-6 px-3 flex flex-col gap-2 overflow-y-auto">
-        <MenuButton icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} isOpen={isOpen} />
-        <MenuButton icon={Users} label="Clientes" active={activeTab === 'clientes'} onClick={() => setActiveTab('clientes')} isOpen={isOpen} />
-        <MenuButton icon={Monitor} label="Telas" active={activeTab === 'telas'} onClick={() => setActiveTab('telas')} isOpen={isOpen} />
-        <MenuButton icon={Film} label="Gerenciar Mídias" active={activeTab === 'nova-midia'} onClick={() => setActiveTab('nova-midia')} isOpen={isOpen} />
-        <MenuButton icon={Settings} label="Perfil" active={activeTab === 'perfil'} onClick={() => setActiveTab('perfil')} isOpen={isOpen} />
+        <MenuButton icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsOpen(false); }} isOpen={isOpen} />
+        <MenuButton icon={Users} label="Clientes" active={activeTab === 'clientes'} onClick={() => { setActiveTab('clientes'); setIsOpen(false); }} isOpen={isOpen} />
+        <MenuButton icon={Monitor} label="Telas" active={activeTab === 'telas'} onClick={() => { setActiveTab('telas'); setIsOpen(false); }} isOpen={isOpen} />
+        <MenuButton icon={Film} label="Gerenciar Mídias" active={activeTab === 'nova-midia'} onClick={() => { setActiveTab('nova-midia'); setIsOpen(false); }} isOpen={isOpen} />
+        <MenuButton icon={Settings} label="Perfil" active={activeTab === 'perfil'} onClick={() => { setActiveTab('perfil'); setIsOpen(false); }} isOpen={isOpen} />
       </div>
 
       <div className="p-4 border-t border-white/10">

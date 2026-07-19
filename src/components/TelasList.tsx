@@ -436,13 +436,13 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
     },
     { 
       key: 'status_online', 
-      header: 'Status Online',
+      header: 'STATUS',
       render: (row) => {
         const isOnline = (onlineScreenIds || []).includes(row.id) || row.status_online;
         return (
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`} />
-            <span className="text-xs text-slate-300">{isOnline ? 'Online' : 'Offline'}</span>
+            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]'}`} />
+            <span className="text-xs text-slate-300">{isOnline ? 'Online' : 'PUBLICADO'}</span>
           </div>
         );
       }
