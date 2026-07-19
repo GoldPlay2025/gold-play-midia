@@ -926,7 +926,21 @@ create policy "Permitir deletar midias" on storage.objects
 
   return (
     <div className="min-h-screen bg-[#020202] text-slate-300 font-sans flex items-center justify-center p-6 selection:bg-amber-500/30 selection:text-amber-200">
-      <div className="w-full max-w-[1400px] h-[90vh] bg-[#050505] rounded-3xl border border-white/10 flex overflow-hidden shadow-2xl">
+      
+      {/* Mobile Top Header Menu */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 px-4 py-3">
+        <div className="bg-[#111111]/90 backdrop-blur-md rounded-xl border border-orange-200/30 shadow-lg p-3 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+                <img src={systemSettings.iconUrl || "/gpm.png"} alt="Logo" className="w-8 h-8 object-contain" />
+                <span className="text-sm font-semibold text-white tracking-widest">{systemSettings.systemName}</span>
+            </div>
+            <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="text-white p-2">
+                <Menu className="w-6 h-6" />
+            </button>
+        </div>
+      </div>
+
+      <div className="w-full max-w-[1400px] h-[90vh] bg-[#050505] rounded-3xl border border-white/10 flex overflow-hidden shadow-2xl mt-16 lg:mt-0">
         
         <Sidebar 
           isOpen={isSidebarExpanded} 
@@ -1709,8 +1723,8 @@ create policy "Permitir deletar midias" on storage.objects
             </motion.div>
           ))}
         </AnimatePresence>
+        </div>
       </div>
     </div>
-  </div>
   );
 }
