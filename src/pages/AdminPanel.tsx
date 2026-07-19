@@ -925,24 +925,25 @@ create policy "Permitir deletar midias" on storage.objects
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-slate-300 font-sans flex overflow-hidden selection:bg-amber-500/30 selection:text-amber-200">
-      
-      <Sidebar 
-        isOpen={isSidebarExpanded} 
-        setIsOpen={setIsSidebarExpanded}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onLogout={() => {
-          setIsAuthenticated(false);
-          localStorage.removeItem('gpm_authenticated');
-          setPassword('');
-        }}
-        systemName={systemSettings.systemName}
-        iconUrl={systemSettings.iconUrl}
-      />
+    <div className="min-h-screen bg-[#020202] text-slate-300 font-sans flex items-center justify-center p-6 selection:bg-amber-500/30 selection:text-amber-200">
+      <div className="w-full max-w-[1400px] h-[90vh] bg-[#050505] rounded-3xl border border-white/10 flex overflow-hidden shadow-2xl">
+        
+        <Sidebar 
+          isOpen={isSidebarExpanded} 
+          setIsOpen={setIsSidebarExpanded}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onLogout={() => {
+            setIsAuthenticated(false);
+            localStorage.removeItem('gpm_authenticated');
+            setPassword('');
+          }}
+          systemName={systemSettings.systemName}
+          iconUrl={systemSettings.iconUrl}
+        />
 
-      {/* Main Content */}
-      <main className={`flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#050505] via-[#0a0a0c] to-[#050505] w-full transition-all duration-300 ${isSidebarExpanded ? 'pl-72' : 'pl-28'}`}>
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#050505] via-[#0a0a0c] to-[#050505] w-full">
         
         {/* Top Header */}
         <header className="h-20 flex flex-shrink-0 items-center justify-between px-6 lg:px-10 border-b border-white/5 bg-[#0a0a0a]/50 backdrop-blur-md z-10">
@@ -1709,7 +1710,7 @@ create policy "Permitir deletar midias" on storage.objects
           ))}
         </AnimatePresence>
       </div>
-
     </div>
+  </div>
   );
 }
