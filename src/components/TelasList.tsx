@@ -548,22 +548,27 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
               <div className="flex flex-col gap-2">
                 <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Mídia Vinculada</span>
                 {tituloVideo ? (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-amber-500 font-medium">{tituloVideo}</span>
-                    {urlStorage && (
-                      <a 
-                        href={urlStorage}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-slate-400 hover:text-white underline transition-colors w-fit"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Visualizar Mídia
-                      </a>
-                    )}
+                  <div className="relative group w-32 h-20 rounded-lg overflow-hidden border border-white/10 shadow-lg cursor-pointer transition-all hover:scale-[1.02] hover:border-amber-500/30"
+                    onClick={(e) => { e.stopPropagation(); window.open(urlStorage, '_blank'); }}
+                  >
+                    <video 
+                      src={urlStorage}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onLoadedMetadata={(e) => {
+                        (e.target as HTMLVideoElement).currentTime = 1;
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-white text-xs font-medium px-2 py-1 bg-black/50 rounded">Visualizar</span>
+                    </div>
                   </div>
                 ) : (
-                  <span className="text-slate-500 italic">Nenhuma mídia vinculada</span>
+                  <div className="w-32 h-20 rounded-lg border border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center gap-1">
+                    <span className="text-slate-600 text-[10px]">Nenhuma</span>
+                  </div>
                 )}
               </div>
             </div>
