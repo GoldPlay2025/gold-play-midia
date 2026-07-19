@@ -354,6 +354,50 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
         onAdd={() => handleOpenModal()}
         addActionLabel="Novo Cliente"
         onSearch={setSearch}
+        renderMobileCard={(row) => (
+          <div className="bg-[#0a0a0c] border border-white/5 p-4 rounded-xl space-y-3">
+            <div className="flex justify-between items-start">
+              <h3 className="font-semibold text-white">{row.nome_empresa}</h3>
+              <div className="flex items-center gap-2">
+                {row.whatsapp && (
+                  <a 
+                    href={`https://wa.me/${row.whatsapp.replace(/\D/g, '').startsWith('55') ? row.whatsapp.replace(/\D/g, '') : '55' + row.whatsapp.replace(/\D/g, '')}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg"
+                    title="WhatsApp"
+                  >
+                    <img 
+                      src="https://goldplaysky.com.br/whats.png" 
+                      alt="WhatsApp" 
+                      className="w-4 h-4 object-contain" 
+                      referrerPolicy="no-referrer" 
+                    />
+                  </a>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="text-xs text-slate-500">
+                {telas.filter(t => getClientIdsForTela(t).includes(row.id)).length} Telas Vinculadas
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => handleOpenModal(row)}
+                  className="p-2 text-slate-400 hover:text-amber-500 rounded-lg"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setDeleteConfirmId(row.id)}
+                  className="p-2 text-slate-400 hover:text-red-500 rounded-lg"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         renderExpandedRow={(row) => (
           <div className="px-6 py-6 bg-[#0a0a0c]/80 rounded-xl border border-white/5 flex flex-col sm:flex-row gap-8 sm:gap-16 text-sm mx-4 mb-4 mt-2">
             <div className="flex flex-col gap-2">

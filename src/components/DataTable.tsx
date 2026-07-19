@@ -18,6 +18,7 @@ interface DataTableProps<T> {
   addActionLabel?: string;
   onSearch?: (term: string) => void;
   renderExpandedRow?: (row: T) => React.ReactNode;
+  renderMobileCard?: (row: T) => React.ReactNode;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -31,7 +32,8 @@ export function DataTable<T extends { id: string }>({
   onAdd,
   addActionLabel = 'Novo',
   onSearch,
-  renderExpandedRow
+  renderExpandedRow,
+  renderMobileCard
 }: DataTableProps<T>) {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -94,7 +96,30 @@ export function DataTable<T extends { id: string }>({
         </div>
       </div>
       
-      <div className="overflow-x-auto">
+      {/* Mobile Card View */}
+      {renderMobileCard && (
+        <div className="lg:hidden p-4 space-y-4">
+          {isLoading ? (
+            <div className="text-center text-slate-500 py-12">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 opacity-50" />
+              <span className="text-xs">Carregando dados...</span>
+            </div>
+          ) : paginatedData.length === 0 ? (
+            <div className="text-center text-slate-500 text-sm py-12">
+              {emptyMessage}
+            </div>
+          ) : (
+            paginatedData.map((row) => (
+              <div key={row.id}>
+                {renderMobileCard(row)}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Desktop Table View */}
+      <div className={`overflow-x-auto ${renderMobileCard ? 'hidden lg:block' : ''}`}>
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-white/[0.02] border-b border-white/5 text-[10px] font-mono text-slate-500 uppercase tracking-wider">

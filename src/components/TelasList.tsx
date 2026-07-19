@@ -495,6 +495,40 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
         onAdd={() => handleOpenModal()}
         addActionLabel="Nova Tela"
         onSearch={setSearch}
+        renderMobileCard={(row) => {
+          const isOnline = (onlineScreenIds || []).includes(row.id) || row.status_online;
+          return (
+            <div className="bg-[#0a0a0c] border border-white/5 p-4 rounded-xl space-y-3">
+              <div className="flex justify-between items-start">
+                <h3 className="font-semibold text-white">{row.nome_local}</h3>
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]'}`} />
+                  <span className="text-[10px] text-slate-400 uppercase font-mono">{isOnline ? 'Online' : 'PUBLICADO'}</span>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 font-mono">ID: {row.identificador_unico}</div>
+              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                <div className="text-xs text-slate-400">
+                  {getClientIdsForTela(row).length} Clientes | {row.playlists?.length || 0} Mídias
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleOpenModal(row)}
+                    className="p-2 text-slate-400 hover:text-amber-500 rounded-lg"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setDeleteConfirmId(row.id)}
+                    className="p-2 text-slate-400 hover:text-red-500 rounded-lg"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }}
         renderExpandedRow={(row) => {
           const playlists = row.playlists || [];
           const activePlaylist = playlists[0];
