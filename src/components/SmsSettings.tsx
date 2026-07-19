@@ -240,15 +240,23 @@ export const SmsSettings = ({ showToast }: { showToast: (type: 'success' | 'erro
       });
 
       const responseText = await response.text();
+      
+      if (!response.ok) {
+        let errorMsg = 'Erro no gateway GetSMS';
+        try {
+          const responseData = JSON.parse(responseText);
+          errorMsg = responseData.error || errorMsg;
+        } catch (e) {
+          // Body not JSON, use default error message
+        }
+        throw new Error(errorMsg);
+      }
+
       let responseData;
       try {
         responseData = JSON.parse(responseText);
       } catch (e) {
         throw new Error(`Resposta do servidor inválida (não é JSON): "${responseText.substring(0, 100)}"`);
-      }
-
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Erro no gateway GetSMS');
       }
 
       const newLog: SmsLog = {
