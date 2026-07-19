@@ -27,7 +27,7 @@ async function startServer() {
   }
 
   // API Route for Architect queries
-  app.post("/api/architect/ask", async (req, res) => {
+  app.post("/gateway/architect/ask", async (req, res) => {
     try {
       const { prompt, currentSchema, context } = req.body;
       if (!prompt) {
@@ -74,7 +74,7 @@ Pergunta ou solicitação do usuário:
   });
 
   // API Route for Sending SMS via GetSMS Gateway
-  app.post("/api/send-sms", async (req, res) => {
+  app.post("/gateway/send-sms", async (req, res) => {
     try {
       const { oauthEndpoint, httpEndpoint, apiToken, to, message } = req.body;
       if (!to || !message) {
