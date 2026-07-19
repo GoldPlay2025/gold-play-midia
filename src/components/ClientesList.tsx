@@ -295,7 +295,13 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
         })
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (e) {
+        throw new Error(`Resposta do servidor inválida (não é JSON): "${responseText.substring(0, 100)}"`);
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Erro no gateway GetSMS');
@@ -322,8 +328,8 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
   };
 
   const filteredClientes = clientes.filter(c => 
-    c.nome_empresa?.toLowerCase().includes(search.toLowerCase()) ||
-    c.whatsapp?.includes(search)
+    (c.nome_empresa || '').toLowerCase().includes((search || '').toLowerCase()) ||
+    (c.whatsapp || '').includes(search || '')
   );
 
   const columns: Column<Cliente>[] = [
@@ -403,8 +409,8 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
 
   const availableTelas = telas.filter(t => 
     !linkedTelaIds.includes(t.id) &&
-    (t.nome_local?.toLowerCase().includes(searchTelaQuery.toLowerCase()) ||
-     t.identificador_unico?.toLowerCase().includes(searchTelaQuery.toLowerCase()))
+    ((t.nome_local || '').toLowerCase().includes((searchTelaQuery || '').toLowerCase()) ||
+     (t.identificador_unico || '').toLowerCase().includes((searchTelaQuery || '').toLowerCase()))
   );
 
   return (

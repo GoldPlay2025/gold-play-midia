@@ -254,7 +254,7 @@ export const SmsSettings = ({ showToast }: { showToast: (type: 'success' | 'erro
 
       let responseData;
       try {
-        responseData = JSON.parse(responseText);
+        responseData = responseText ? JSON.parse(responseText) : {};
       } catch (e) {
         throw new Error(`Resposta do servidor inválida (não é JSON): "${responseText.substring(0, 100)}"`);
       }
