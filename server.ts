@@ -141,11 +141,11 @@ Pergunta ou solicitação do usuário:
           json = JSON.parse(text);
         } catch (_) {}
 
-        results.push({ endpoint: 'v3', status, data: json || text });
+        results.push({ endpoint: 'v3', status, data: json || text || "Resposta vazia do gateway" });
         if (status >= 200 && status < 300) {
           success = true;
         } else {
-          errorDetails += `[V3 API returned status ${status}: ${text.substring(0, 200)}] `;
+          errorDetails += `[V3 API returned status ${status}: ${text.substring(0, 200) || "Empty body"}] `;
         }
       } catch (err: any) {
         results.push({ endpoint: 'v3', error: err.message });
@@ -169,7 +169,7 @@ Pergunta ou solicitação do usuário:
             const response = await fetch(url, { method: 'GET' });
             const status = response.status;
             const text = await response.text();
-            results.push({ endpoint: 'http', status, data: text.substring(0, 200) });
+            results.push({ endpoint: 'http', status, data: text.substring(0, 200) || "Resposta vazia do gateway" });
             if (status >= 200 && status < 300) {
               success = true;
             }
@@ -180,12 +180,14 @@ Pergunta ou solicitação do usuário:
       }
 
       if (success) {
+        console.log("SMS enviado com sucesso, enviando resposta JSON.");
         return res.json({ success: true, results, sanitizedMessage: cleanMessage });
       } else {
+        console.log("Falha ao enviar SMS, enviando resposta 500.");
         return res.status(500).json({ success: false, error: errorDetails || "Não foi possível entregar o SMS pelo gateway.", results });
       }
     } catch (error: any) {
-      console.error("Erro na rota de envio de SMS:", error);
+      console.error("Erro CRÍTICO na rota de envio de SMS:", error);
       res.status(500).json({ error: error.message || "Erro interno no processamento de SMS." });
     }
   });
