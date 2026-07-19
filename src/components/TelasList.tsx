@@ -75,6 +75,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
   const [search, setSearch] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
+  const [showCopyModal, setShowCopyModal] = useState(false);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -317,7 +318,10 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
             navigator.clipboard.writeText(url)
               .then(() => {
                 setCopiedId(row.id);
-                showToast('success', `Link de reprodução copiado com sucesso!`);
+                setShowCopyModal(true);
+                setTimeout(() => {
+                  setShowCopyModal(false);
+                }, 3000);
                 setTimeout(() => setCopiedId(null), 2000);
               })
               .catch((err) => {
@@ -339,7 +343,10 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
             document.execCommand('copy');
             document.body.removeChild(textarea);
             setCopiedId(row.id);
-            showToast('success', `Link de reprodução copiado com sucesso!`);
+            setShowCopyModal(true);
+            setTimeout(() => {
+              setShowCopyModal(false);
+            }, 3000);
             setTimeout(() => setCopiedId(null), 2000);
           } catch (err) {
             console.error('Fallback copy failed:', err);
@@ -359,7 +366,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
                   ? 'bg-green-500/10 border-green-500/30 text-green-400'
                   : 'bg-white/5 border-white/5 text-slate-400 hover:text-amber-500 hover:border-amber-500/30'
               }`}
-              title="Copiar URL direta para Fully Kiosk (Start URL)"
+              title="Copiar para ID do Dispositivo"
             >
               {copiedId === row.id ? (
                 <Check className="w-3 h-3 animate-pulse" />
@@ -488,41 +495,80 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
         onAdd={() => handleOpenModal()}
         addActionLabel="Nova Tela"
         onSearch={setSearch}
-        renderExpandedRow={(row) => (
-          <div className="px-6 py-6 bg-[#0a0a0c]/80 rounded-xl border border-white/5 flex flex-col sm:flex-row gap-8 sm:gap-16 text-sm mx-4 mb-4 mt-2">
-            <div className="flex flex-col gap-2">
-              <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Endereço</span>
-              <span className="text-slate-300 font-medium">{getCleanEndereco(row.endereco) || '-'}</span>
-            </div>
-            <div className="flex flex-col gap-2">
-              <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">WhatsApp</span>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-300 font-medium">{row.whatsapp || '-'}</span>
-                {row.whatsapp && (
-                  <a 
-                    href={`https://wa.me/${row.whatsapp.replace(/\D/g, '').startsWith('55') ? row.whatsapp.replace(/\D/g, '') : '55' + row.whatsapp.replace(/\D/g, '')}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="p-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-all inline-flex items-center justify-center shrink-0"
-                    title="Iniciar conversa no WhatsApp"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <img 
-                      src="https://goldplaysky.com.br/whats.png" 
-                      alt="WhatsApp" 
-                      className="w-4 h-4 object-contain" 
-                      referrerPolicy="no-referrer" 
-                    />
-                  </a>
+        renderExpandedRow={(row) => {
+          const playlists = row.playlists || [];
+          const activePlaylist = playlists[0];
+          const midia = activePlaylist?.midias;
+          
+          let tituloVideo = '';
+          let urlStorage = '';
+          if (midia) {
+            if (Array.isArray(midia)) {
+              tituloVideo = midia[0]?.titulo_video || '';
+              urlStorage = midia[0]?.url_storage || '';
+            } else {
+              tituloVideo = (midia as any).titulo_video || '';
+              urlStorage = (midia as any).url_storage || '';
+            }
+          }
+
+          return (
+            <div className="px-6 py-6 bg-[#0a0a0c]/80 rounded-xl border border-white/5 flex flex-col sm:flex-row gap-8 sm:gap-16 text-sm mx-4 mb-4 mt-2">
+              <div className="flex flex-col gap-2">
+                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Endereço</span>
+                <span className="text-slate-300 font-medium">{getCleanEndereco(row.endereco) || '-'}</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">WhatsApp</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-300 font-medium">{row.whatsapp || '-'}</span>
+                  {row.whatsapp && (
+                    <a 
+                      href={`https://wa.me/${row.whatsapp.replace(/\D/g, '').startsWith('55') ? row.whatsapp.replace(/\D/g, '') : '55' + row.whatsapp.replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="p-1 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-all inline-flex items-center justify-center shrink-0"
+                      title="Iniciar conversa no WhatsApp"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <img 
+                        src="https://goldplaysky.com.br/whats.png" 
+                        alt="WhatsApp" 
+                        className="w-4 h-4 object-contain" 
+                        referrerPolicy="no-referrer" 
+                      />
+                    </a>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Responsável / Proprietário</span>
+                <span className="text-slate-300 font-medium">{getResponsavel(row.endereco) || '-'}</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Mídia Vinculada</span>
+                {tituloVideo ? (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-amber-500 font-medium">{tituloVideo}</span>
+                    {urlStorage && (
+                      <a 
+                        href={urlStorage}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-slate-400 hover:text-white underline transition-colors w-fit"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Visualizar Mídia
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-slate-500 italic">Nenhuma mídia vinculada</span>
                 )}
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Responsável / Proprietário</span>
-              <span className="text-slate-300 font-medium">{getResponsavel(row.endereco) || '-'}</span>
-            </div>
-          </div>
-        )}
+          );
+        }}
       />
 
       <Modal 
@@ -727,6 +773,22 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
               Excluir Tela
             </button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal 
+        isOpen={showCopyModal} 
+        onClose={() => setShowCopyModal(false)} 
+        title="Link Copiado!"
+      >
+        <div className="flex flex-col items-center justify-center text-center py-6 space-y-4">
+          <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+            <Check className="w-8 h-8" />
+          </div>
+          <h4 className="text-xl font-display font-light text-white">Pronto! Cole o link no App de Mídia!</h4>
+          <p className="text-sm text-slate-400 font-light max-w-sm">
+            O link de reprodução para esta tela foi copiado para sua área de transferência. Agora você pode colá-lo no seu player.
+          </p>
         </div>
       </Modal>
     </motion.div>
