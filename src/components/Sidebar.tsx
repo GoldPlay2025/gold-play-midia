@@ -6,7 +6,6 @@ import {
   LogOut,
   Settings,
   Film,
-  Smartphone,
   ChevronLeft,
   ChevronRight,
   X
@@ -50,7 +49,6 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
         <MenuButton icon={Users} label="Clientes" active={activeTab === 'clientes'} onClick={() => setActiveTab('clientes')} isOpen={isOpen} />
         <MenuButton icon={Monitor} label="Telas" active={activeTab === 'telas'} onClick={() => setActiveTab('telas')} isOpen={isOpen} />
         <MenuButton icon={Film} label="Gerenciar Mídias" active={activeTab === 'nova-midia'} onClick={() => setActiveTab('nova-midia')} isOpen={isOpen} />
-        <MenuButton icon={Smartphone} label="SMS GetSMS" active={activeTab === 'sms'} onClick={() => setActiveTab('sms')} isOpen={isOpen} />
         <MenuButton icon={Settings} label="Perfil" active={activeTab === 'perfil'} onClick={() => setActiveTab('perfil')} isOpen={isOpen} />
       </div>
 
