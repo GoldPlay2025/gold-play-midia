@@ -107,6 +107,19 @@ export default function AdminPanel() {
     return saved ? JSON.parse(saved) : defaultSettings;
   });
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [waStatus, setWaStatus] = useState<'connecting' | 'open' | 'close'>('close');
+
+  const checkWaStatus = async () => {
+    try {
+      const res = await fetch('/api/whatsapp/status');
+      if (res.ok) {
+        const data = await res.json();
+        setWaStatus(data.status);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -439,6 +452,9 @@ export default function AdminPanel() {
       if (activeTab === 'dashboard') {
         fetchDashboardData();
         fetchMidias();
+        checkWaStatus();
+        const interval = setInterval(checkWaStatus, 5000);
+        return () => clearInterval(interval);
       } else if (activeTab === 'nova-tela') {
         fetchClientes();
       } else if (activeTab === 'nova-midia') {
@@ -1016,12 +1032,36 @@ create policy "Permitir deletar midias" on storage.objects
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group min-h-[200px]">
-                    <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Monitor className="w-16 h-16 text-amber-500" />
+                  <div className="flex flex-col gap-4 min-h-[200px]">
+                    <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Monitor className="w-12 h-12 text-amber-500" />
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Total de Telas</p>
+                      <p className="text-3xl font-display font-light text-white">{telas.length}</p>
                     </div>
-                    <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Total de Telas</p>
-                    <p className="text-4xl font-display font-light text-white">{telas.length}</p>
+                    
+                    <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Smartphone className="w-12 h-12 text-emerald-500" />
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Status WhatsApp</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="relative flex h-2.5 w-2.5">
+                          {waStatus === 'open' ? (
+                            <>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                            </>
+                          ) : (
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                          )}
+                        </div>
+                        <p className={`text-base font-display font-medium tracking-wide ${waStatus === 'open' ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {waStatus === 'open' ? 'ON-LINE' : 'OFF-LINE'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                   <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px]">
                     <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
