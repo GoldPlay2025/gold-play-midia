@@ -83,32 +83,29 @@ async function startServer() {
         return res.status(400).json({ error: "O deviceId e a action são obrigatórios." });
       }
 
-      // Conforme documentação e URL padrão fornecida
-      const url = `https://cloud.fully-kiosk.com/api/v2/device/runCommand?token=${apiToken}`;
-      
-      const payload: any = {
-        cmd: action,
-        deviceId: deviceId
-      };
-      
-      const response = await fetch(url, {
-        method: "POST",
+      // A URL no formato exato exigido pela documentação do Fully Cloud
+      const fullyUrl = `https://cloud.fully-kiosk.com/?cmd=${action}&deviceId=${deviceId}&token=${apiToken}&type=json`;
+
+      // Dispara a ordem para o servidor deles
+      const response = await fetch(fullyUrl, {
+        method: 'POST', 
         headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
+          'Accept': 'application/json',
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Erro na API do Fully Cloud (${response.status}): ${errorText}`);
+      // Pega a resposta em JSON
+      const data = await response.json();
+
+      // Se o Fully Cloud retornar erro, repassa para o painel
+      if (data.status === 'Error') {
+         return res.status(400).json({ error: data.statustext });
       }
 
-      const data = await response.json();
-      res.json({ success: true, data });
+      res.json(data);
     } catch (err: any) {
       console.error("Erro no comando Fully Cloud:", err);
-      res.status(500).json({ error: err.message || "Erro interno ao comandar o dispositivo." });
+      res.status(500).json({ error: 'Falha de comunicação com o Fully Cloud' });
     }
   });
 
