@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { QrCode, Smartphone, LogOut, Send, AlertTriangle, Loader2, MessageCircle, HeartPulse, CheckCircle2 } from 'lucide-react';
+import { QrCode, Smartphone, LogOut, Send, AlertTriangle, Loader2, MessageCircle, HeartPulse, CheckCircle2, Link2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { fetchApi } from '../lib/api';
 
@@ -15,25 +15,61 @@ export function WhatsappPanel({ clientes, showToast, setActiveTab }: any) {
   const [manualMessage, setManualMessage] = useState('');
   const [isSendingManual, setIsSendingManual] = useState(false);
 
+  // Debug Logs State
+  const [logs, setLogs] = useState<string[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+
+  // Backend URL config state
+  const [backendUrl, setBackendUrl] = useState(() => {
+    try {
+      const localSettings = typeof window !== 'undefined' ? localStorage.getItem('gpm_system_settings') : null;
+      if (localSettings) {
+        const parsed = JSON.parse(localSettings);
+        return parsed?.backendUrl || '';
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return '';
+  });
+
+  const handleSaveBackendUrl = () => {
+    try {
+      const localSettings = localStorage.getItem('gpm_system_settings');
+      let parsed = {};
+      if (localSettings) {
+        parsed = JSON.parse(localSettings);
+      }
+      const updated = { ...parsed, backendUrl: backendUrl.trim() };
+      localStorage.setItem('gpm_system_settings', JSON.stringify(updated));
+      showToast?.('success', 'URL do servidor backend salva com sucesso! Atualizando conexão...');
+      
+      // Reload page to apply the new URL immediately
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (e) {
+      console.error(e);
+      showToast?.('error', 'Erro ao salvar URL do backend.');
+    }
+  };
+
   // Vercel Environment Check
   const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
-  let hasBackendUrl = false;
-  try {
-    const localSettings = typeof window !== 'undefined' ? localStorage.getItem('gpm_system_settings') : null;
-    if (localSettings) {
-      const parsed = JSON.parse(localSettings);
-      hasBackendUrl = !!parsed?.backendUrl;
-    }
-  } catch (e) {
-    console.error(e);
-  }
+  const hasBackendUrl = !!backendUrl;
   const showVercelAlert = isVercel && !hasBackendUrl;
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 3000);
+    fetchLogs();
+    const interval = setInterval(() => {
+      fetchStatus();
+      if (showLogs) {
+        fetchLogs();
+      }
+    }, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showLogs]);
 
   const fetchStatus = async () => {
     try {
@@ -44,7 +80,20 @@ export function WhatsappPanel({ clientes, showToast, setActiveTab }: any) {
       setLoading(false);
     } catch (err) {
       console.error(err);
+      setStatus('close');
       setLoading(false);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetchApi('/api/whatsapp/debug');
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs || []);
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -134,30 +183,54 @@ export function WhatsappPanel({ clientes, showToast, setActiveTab }: any) {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-5xl mx-auto pt-6">
-      {showVercelAlert && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-3xl p-6 flex flex-col sm:flex-row gap-4 items-start text-red-200">
-          <AlertTriangle className="w-8 h-8 text-red-500 shrink-0 mt-0.5" />
-          <div className="space-y-2">
-            <h4 className="text-base font-semibold text-white">Ambiente Serverless Detectado (Vercel)</h4>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              O WhatsApp requer um servidor persistente (Node.js) para manter as conexões WebSocket e gerar o QR Code. 
-              Como esta página está sendo servida na Vercel, você deve configurar a <span className="text-amber-500 font-medium">URL do seu servidor persistente do AI Studio (Shared App URL)</span> nas configurações de perfil para que o WhatsApp funcione normalmente.
-            </p>
-            <div className="flex flex-wrap gap-3 pt-2">
-              <button
-                onClick={() => setActiveTab && setActiveTab('perfil')}
-                className="bg-amber-500 hover:bg-amber-400 text-black px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-              >
-                Configurar Servidor Backend
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div>
         <h2 className="text-3xl font-display font-light text-white mb-2 tracking-tight">WhatsApp Manager</h2>
         <p className="text-sm text-slate-500 font-light">Conecte seu WhatsApp para automatizar envios e realizar disparos manuais.</p>
+      </div>
+
+      {/* Card de Configuração de Servidor Backend (APIs / WhatsApp) */}
+      <div className="bg-[#0f0f11] border border-white/5 rounded-3xl p-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-500/10 rounded-full flex items-center justify-center border border-amber-500/20">
+              <Link2 className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Servidor Backend de Integração (APIs / WhatsApp)</h3>
+              <p className="text-[11px] text-slate-500 max-w-xl">
+                Se o seu painel estiver hospedado na <b>Vercel</b> ou em outro ambiente serverless, cole aqui a <b>Shared App URL</b> do seu container persistente no AI Studio (ou VPS) para que a conexão do WhatsApp funcione normalmente de qualquer lugar.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:min-w-[400px]">
+            <input
+              type="url"
+              value={backendUrl}
+              onChange={(e) => setBackendUrl(e.target.value)}
+              placeholder="Ex: https://ais-pre-v3o4yftcg3lues4kuk7y24-213224961605.us-west2.run.app"
+              className="flex-1 bg-[#050505] border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500/50"
+            />
+            <button
+              onClick={handleSaveBackendUrl}
+              className="bg-amber-500 hover:bg-amber-400 text-black rounded-xl px-5 py-2.5 text-xs font-semibold transition-all whitespace-nowrap active:scale-95"
+            >
+              Salvar Servidor
+            </button>
+          </div>
+        </div>
+        
+        {backendUrl ? (
+          <div className="mt-3 text-[11px] text-emerald-400/80 font-mono leading-none flex items-center gap-1.5 sm:ml-13">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Conectado ao servidor persistente: <span className="underline select-all">{backendUrl}</span>
+          </div>
+        ) : (
+          <div className="mt-3 text-[11px] text-amber-500/80 leading-none flex items-center gap-1.5 sm:ml-13">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+            Usando backend local por padrão (se estiver hospedado na Vercel, o status do WhatsApp resultará em 404).
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -343,6 +416,65 @@ export function WhatsappPanel({ clientes, showToast, setActiveTab }: any) {
           </div>
           
         </div>
+      </div>
+
+      {/* Seção de Logs de Depuração */}
+      <div className="bg-[#0f0f11] border border-white/5 rounded-3xl p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-500/10 rounded-full flex items-center justify-center border border-amber-500/20 animate-pulse">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-lg font-medium text-white">Logs de Depuração do WhatsApp</h3>
+              <p className="text-xs text-slate-500">Histórico de inicialização e erros de conexão em tempo real (Baileys)</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                fetchLogs();
+                showToast?.('success', 'Logs atualizados.');
+              }}
+              className="bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-xl px-4 py-2 text-xs font-semibold transition-all"
+            >
+              Atualizar Logs
+            </button>
+            <button
+              onClick={() => setShowLogs(!showLogs)}
+              className="bg-amber-500 hover:bg-amber-400 text-black rounded-xl px-4 py-2 text-xs font-semibold transition-all"
+            >
+              {showLogs ? 'Ocultar Logs' : 'Exibir Logs'}
+            </button>
+          </div>
+        </div>
+
+        {showLogs && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="mt-6 space-y-4"
+          >
+            <div className="bg-[#050505] border border-white/10 rounded-2xl p-4 max-h-64 overflow-y-auto font-mono text-xs text-slate-400 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10">
+              {logs.length === 0 ? (
+                <p className="text-slate-600 text-center py-4">Nenhum log registrado ainda. Clique em "Gerar QR Code" acima para iniciar a conexão.</p>
+              ) : (
+                logs.map((log, idx) => (
+                  <div key={idx} className="border-b border-white/5 pb-1 last:border-0 leading-relaxed break-all">
+                    {log}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="text-[11px] text-slate-500 leading-relaxed flex items-start gap-1.5">
+              <span className="text-amber-500 font-bold">Dica Técnica:</span>
+              <span>
+                Caso o WhatsApp fique travado, clique no botão "Desconectar Dispositivo" acima para limpar a pasta de sessão antiga em disco e forçar uma nova inicialização limpa.
+              </span>
+            </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );
