@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Configura CORS (caso precise)
+  // Configure CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -22,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { deviceId, action } = req.body;
     
-    // Puxa a chave mestra escondida na Vercel
+    // Get Fully API Token from Vercel environment variables
     const token = process.env.FULLY_API_TOKEN;
 
     if (!token) {
@@ -33,10 +33,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        return res.status(400).json({ error: 'O deviceId e a action são obrigatórios.' });
     }
 
-    // A URL no formato exato exigido pela documentação do Fully Cloud
+    // URL format as required by the Fully Cloud API
     const fullyUrl = `https://cloud.fully-kiosk.com/?cmd=${action}&deviceId=${deviceId}&token=${token}&type=json`;
 
-    // Dispara a ordem para o servidor do Fully Cloud
+    // Fetch from Fully Cloud API
     const response = await fetch(fullyUrl, {
       method: 'POST', 
       headers: {
@@ -44,7 +44,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
-    // Pega a resposta como texto primeiro para evitar erro de JSON vazio
+    // Check if response is HTML (redirects, login page, etc.)
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("text/html")) {
+       return res.status(502).json({ error: "A API do Fully Cloud retornou uma página HTML. Verifique se o FULLY_API_TOKEN e o Device ID estão corretos." });
+    }
+
+    // Get response body as text first to handle empty body
     const responseText = await response.text();
     
     let data;
@@ -52,7 +58,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado, mas sem resposta no corpo' };
     } catch (e) {
       console.warn("Resposta não é um JSON válido:", responseText);
-      // Retornar um JSON genérico para não quebrar o frontend
       return res.status(200).json({ 
         status: 'Success', 
         statustext: 'Comando enviado (resposta não-JSON)', 
@@ -60,12 +65,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Se o Fully Cloud retornar erro, repassa para o painel
+    // If Fully Cloud returns error
     if (data && data.status === 'Error') {
-       return res.status(400).json({ error: data.statustext || 'Erro desconhecido retornado pelo Fully Cloud' });
+       return res.status(400).json({ error: data.statustext || 'Erro retornado pelo Fully Cloud' });
     }
 
-    // Sucesso
+    // Success
     return res.status(200).json(data);
 
   } catch (error) {
