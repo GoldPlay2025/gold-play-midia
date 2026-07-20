@@ -69,6 +69,49 @@ async function startServer() {
     }
   });
 
+  // Fully Cloud API Routes
+  app.post("/api/fully/command", async (req, res) => {
+    try {
+      const { deviceId, action } = req.body;
+      const apiToken = process.env.FULLY_API_TOKEN;
+
+      if (!apiToken) {
+        return res.status(503).json({ error: "FULLY_API_TOKEN não configurado no servidor." });
+      }
+      
+      if (!deviceId || !action) {
+        return res.status(400).json({ error: "O deviceId e a action são obrigatórios." });
+      }
+
+      // Conforme documentação e URL padrão fornecida
+      const url = `https://cloud.fully-kiosk.com/api/v2/device/runCommand?token=${apiToken}`;
+      
+      const payload: any = {
+        cmd: action,
+        deviceId: deviceId
+      };
+      
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Erro na API do Fully Cloud (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      res.json({ success: true, data });
+    } catch (err: any) {
+      console.error("Erro no comando Fully Cloud:", err);
+      res.status(500).json({ error: err.message || "Erro interno ao comandar o dispositivo." });
+    }
+  });
+
   // API Route for Architect queries
   app.post("/gateway/architect/ask", async (req, res) => {
     try {
