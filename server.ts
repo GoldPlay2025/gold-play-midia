@@ -100,11 +100,23 @@ async function startServer() {
          return res.status(502).json({ error: "A API do Fully Cloud retornou uma página HTML (possivelmente página de Login). A URL ou o Token estão incorretos e causaram um redirecionamento." });
       }
 
-      // Pega a resposta em JSON
-      const data = await response.json();
+      // Pega a resposta como texto primeiro para evitar erro de JSON vazio
+      const responseText = await response.text();
+      
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado, mas sem resposta no corpo' };
+      } catch (e) {
+        console.warn("Resposta não é um JSON válido:", responseText);
+        return res.status(200).json({ 
+          status: 'Success', 
+          statustext: 'Comando enviado (resposta não-JSON)', 
+          rawResponse: responseText 
+        });
+      }
 
       // Se o Fully Cloud retornar erro, repassa para o painel
-      if (data.status === 'Error') {
+      if (data && data.status === 'Error') {
          return res.status(400).json({ error: data.statustext });
       }
 
