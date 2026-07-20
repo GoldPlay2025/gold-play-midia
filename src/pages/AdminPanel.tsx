@@ -1110,12 +1110,30 @@ create policy "Permitir deletar midias" on storage.objects
                       </div>
                     </div>
                   </div>
-                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group min-h-[200px]">
-                    <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Users className="w-16 h-16 text-blue-500" />
+                  <div className="flex flex-col gap-4 min-h-[200px]">
+                    <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Users className="w-12 h-12 text-blue-500" />
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Clientes Ativos</p>
+                      <p className="text-3xl font-display font-light text-white">{clientes.length}</p>
                     </div>
-                    <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Clientes Ativos</p>
-                    <p className="text-4xl font-display font-light text-white">{clientes.length}</p>
+
+                    <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Cloud className="w-12 h-12 text-sky-500" />
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Fully Status</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+                        </div>
+                        <p className="text-base font-display font-medium tracking-wide text-sky-500">
+                          ON-LINE
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
