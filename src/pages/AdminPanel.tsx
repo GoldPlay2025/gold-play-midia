@@ -6,6 +6,7 @@ import { TelasList } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
 import { Sidebar } from "../components/Sidebar";
 import { WhatsappPanel } from "../components/WhatsappPanel";
+import { CloudPanel } from "../components/CloudPanel";
 import { 
   LayoutDashboard,
   Users, 
@@ -45,7 +46,8 @@ import {
   Menu,
   MessageSquare,
   Smartphone,
-  Link2
+  Link2,
+  Cloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -80,6 +82,7 @@ type Tela = {
   identificador_unico: string;
   status_online: boolean;
   cliente_id: string;
+  fully_device_id?: string;
   clientes?: { nome_empresa: string };
 };
 
@@ -99,7 +102,7 @@ export default function AdminPanel() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'whatsapp'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'whatsapp' | 'cloud'>('dashboard');
   const [telas, setTelas] = useState<Tela[]>([]);
   const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -1253,6 +1256,13 @@ create policy "Permitir deletar midias" on storage.objects
             {activeTab === 'whatsapp' && (
               <motion.div key="whatsapp" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
                 <WhatsappPanel clientes={clientes} showToast={showToast} />
+              </motion.div>
+            )}
+
+            {/* Cloud Manager Tab */}
+            {activeTab === 'cloud' && (
+              <motion.div key="cloud" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
+                <CloudPanel telas={telas} showToast={showToast} fetchDashboardData={fetchDashboardData} />
               </motion.div>
             )}
 
