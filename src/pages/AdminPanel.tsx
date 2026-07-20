@@ -7,6 +7,7 @@ import { PerfilSettings, SystemSettings, defaultSettings } from "../components/P
 import { Sidebar } from "../components/Sidebar";
 import { WhatsappPanel } from "../components/WhatsappPanel";
 import { CloudPanel } from "../components/CloudPanel";
+import { fetchApi } from '../lib/api';
 import { 
   LayoutDashboard,
   Users, 
@@ -114,7 +115,7 @@ export default function AdminPanel() {
 
   const checkWaStatus = async () => {
     try {
-      const res = await fetch('/api/whatsapp/status');
+      const res = await fetchApi('/api/whatsapp/status');
       if (res.ok) {
         const data = await res.json();
         setWaStatus(data.status);
@@ -1273,7 +1274,7 @@ create policy "Permitir deletar midias" on storage.objects
             {/* WhatsApp Tab */}
             {activeTab === 'whatsapp' && (
               <motion.div key="whatsapp" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <WhatsappPanel clientes={clientes} showToast={showToast} />
+                <WhatsappPanel clientes={clientes} showToast={showToast} setActiveTab={setActiveTab} />
               </motion.div>
             )}
 
