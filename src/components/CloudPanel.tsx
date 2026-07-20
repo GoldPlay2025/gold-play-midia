@@ -24,13 +24,19 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
         body: JSON.stringify({ deviceId: fullyDeviceId, action })
       });
       
-      const data = await response.json();
+      const responseText = await response.text();
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (e) {
+        throw new Error('O servidor retornou uma resposta inválida (não-JSON).');
+      }
       
       if (!response.ok) {
         throw new Error(data.error || 'Erro ao enviar comando.');
       }
       
-      showToast('success', `Comando ${action === 'loadURL' ? 'Recarregar' : 'Reiniciar'} enviado com sucesso!`);
+      showToast('success', `Comando ${action === 'loadStartUrl' ? 'Recarregar' : 'Reiniciar'} enviado com sucesso!`);
     } catch (err: any) {
       console.error(err);
       showToast('error', err.message);
@@ -135,7 +141,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
 
             <div className="mt-6 pt-4 border-t border-white/5 grid grid-cols-2 gap-3">
               <button
-                onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'loadURL')}
+                onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'loadStartUrl')}
                 disabled={!tela.fully_device_id || loadingAction !== null}
                 className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   !tela.fully_device_id 
@@ -143,7 +149,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                     : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20'
                 }`}
               >
-                {loadingAction === `${tela.id}-loadURL` ? (
+                {loadingAction === `${tela.id}-loadStartUrl` ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <RefreshCw className="w-4 h-4" />
