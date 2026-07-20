@@ -44,11 +44,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
-    // Pega a resposta em JSON
-    const data = await response.json();
+    // Pega a resposta como texto primeiro para evitar erro de JSON vazio
+    const responseText = await response.text();
+    
+    let data;
+    try {
+      data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado, mas sem resposta no corpo' };
+    } catch (e) {
+      console.warn("Resposta não é um JSON válido:", responseText);
+      // Retornar um JSON genérico para não quebrar o frontend
+      return res.status(200).json({ 
+        status: 'Success', 
+        statustext: 'Comando enviado (resposta não-JSON)', 
+        rawResponse: responseText 
+      });
+    }
 
     // Se o Fully Cloud retornar erro, repassa para o painel
-    if (data.status === 'Error') {
+    if (data && data.status === 'Error') {
        return res.status(400).json({ error: data.statustext || 'Erro desconhecido retornado pelo Fully Cloud' });
     }
 
