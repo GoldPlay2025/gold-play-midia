@@ -21,7 +21,7 @@ export async function connectToWhatsApp() {
         const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
         
         if (sock) {
-            sock.ev.removeAllListeners();
+            (sock.ev as any).removeAllListeners();
             sock = null;
         }
 
@@ -50,7 +50,7 @@ export async function connectToWhatsApp() {
                 console.log('Connection closed. Error:', lastDisconnect?.error?.message, 'StatusCode:', statusCode);
                 
                 if (sock) {
-                    sock.ev.removeAllListeners();
+                    (sock.ev as any).removeAllListeners();
                     sock = null;
                 }
                 
@@ -92,7 +92,7 @@ export function logoutWhatsApp() {
         try {
             sock.logout();
         } catch (e) {}
-        sock.ev.removeAllListeners();
+        (sock.ev as any).removeAllListeners();
         sock = null;
     }
     connectionStatus = 'close';
