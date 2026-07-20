@@ -1,69 +1,40 @@
 import { NextResponse } from 'next/server';
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const { deviceId, action } = await req.json();
-    const apiToken = process.env.FULLY_API_TOKEN;
-
-    if (!apiToken) {
-      return NextResponse.json(
-        { error: "FULLY_API_TOKEN não configurado no servidor (Vercel Secrets)." },
-        { status: 503 }
-      );
-    }
+    // Recebe qual tela e qual ação o usuário clicou no painel
+    const { deviceId, action } = await request.json();
     
-    if (!deviceId || !action) {
-      return NextResponse.json(
-        { error: "O deviceId e a action são obrigatórios." },
-        { status: 400 }
-      );
+    // Puxa a chave mestra escondida na Vercel
+    const token = process.env.FULLY_API_TOKEN;
+
+    if (!token) {
+      return NextResponse.json({ error: 'Token da API não configurado na Vercel' }, { status: 500 });
     }
 
-    // A URL padrão para enviar comandos usando o Token
-    const url = `https://cloud.fully-kiosk.com/api/v2/device/runCommand?token=${apiToken}`;
-    
-    // O corpo da requisição
-    const payload = {
-      cmd: action,
-      deviceId: deviceId
-    };
-    
-    const response = await fetch(url, {
-      method: "POST",
+    // A URL no formato exato exigido pela documentação do Fully Cloud
+    const fullyUrl = `https://cloud.fully-kiosk.com/?cmd=${action}&deviceId=${deviceId}&token=${token}&type=json`;
+
+    // Dispara a ordem para o servidor deles
+    const response = await fetch(fullyUrl, {
+      method: 'POST', 
       headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(payload)
+        'Accept': 'application/json',
+      }
     });
 
-    const responseText = await response.text();
+    // Pega a resposta em JSON
+    const data = await response.json();
 
-    if (!response.ok) {
-      // Se a resposta for um erro HTTP, envia a mensagem e o corpo da resposta
-      return NextResponse.json(
-        { error: `Erro na API do Fully Cloud (${response.status}): ${responseText}` },
-        { status: response.status }
-      );
-    }
-    
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      // Captura o erro específico que apareceu no Toast (HTML ao invés de JSON)
-      return NextResponse.json(
-        { error: `A API do Fully Cloud retornou uma resposta inválida (HTML em vez de JSON). Verifique se a URL da API está correta no backend.` },
-        { status: 502 }
-      );
+    // Se o Fully Cloud retornar erro, repassa para o painel
+    if (data.status === 'Error') {
+       return NextResponse.json({ error: data.statustext }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, data });
-  } catch (err: any) {
-    console.error("Erro no comando Fully Cloud:", err);
-    return NextResponse.json(
-      { error: err.message || "Erro interno ao comandar o dispositivo." },
-      { status: 500 }
-    );
+    return NextResponse.json(data);
+
+  } catch (error) {
+    console.error("Erro na API do Fully:", error);
+    return NextResponse.json({ error: 'Falha de comunicação com o Fully Cloud' }, { status: 500 });
   }
 }
