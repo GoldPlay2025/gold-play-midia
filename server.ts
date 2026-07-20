@@ -84,7 +84,7 @@ async function startServer() {
       }
 
       // A URL no formato exato exigido pela documentação do Fully Cloud
-      const fullyUrl = `https://cloud.fully-kiosk.com/?cmd=${action}&deviceId=${deviceId}&token=${apiToken}&type=json`;
+      const fullyUrl = `https://cloud.fully-kiosk.com/api/?cmd=${action}&deviceId=${deviceId}&token=${apiToken}&type=json`;
 
       // Dispara a ordem para o servidor deles
       const response = await fetch(fullyUrl, {
