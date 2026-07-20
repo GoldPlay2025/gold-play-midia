@@ -91,6 +91,17 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                   <p className="text-xs text-slate-500">{tela.clientes?.nome_empresa || 'Sem Cliente'}</p>
                 </div>
               </div>
+
+              <a
+                href="https://cloud.fully-kiosk.com/cloud/devices"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir no Fully Cloud"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 hover:border-blue-500/30 rounded-xl text-xs font-semibold transition-all hover:scale-[1.02] active:scale-95 shrink-0"
+              >
+                <Cloud className="w-3.5 h-3.5 text-blue-400" />
+                <span>Cloud</span>
+              </a>
             </div>
 
             <div className="flex-1 space-y-4">
