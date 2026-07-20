@@ -6,14 +6,25 @@ import fs from 'fs';
 let sock: ReturnType<typeof makeWASocket> | null = null;
 let currentQR: string | null = null;
 let connectionStatus: 'connecting' | 'open' | 'close' = 'close';
+let reconnectTimer: NodeJS.Timeout | null = null;
 
 export async function connectToWhatsApp() {
     if (connectionStatus === 'connecting' || connectionStatus === 'open') return;
     connectionStatus = 'connecting';
     
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+    
     try {
         const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
         
+        if (sock) {
+            sock.ev.removeAllListeners();
+            sock = null;
+        }
+
         sock = makeWASocket({
             auth: state,
             printQRInTerminal: false,
@@ -38,22 +49,24 @@ export async function connectToWhatsApp() {
                 const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
                 console.log('Connection closed. Error:', lastDisconnect?.error?.message, 'StatusCode:', statusCode);
                 
+                if (sock) {
+                    sock.ev.removeAllListeners();
+                    sock = null;
+                }
+                
                 if (statusCode === DisconnectReason.loggedOut) {
                     console.log('Device logged out. Deleting session.');
                     if (fs.existsSync('auth_info_baileys')) {
                         fs.rmSync('auth_info_baileys', { recursive: true, force: true });
                     }
-                    sock = null;
-                } else if (statusCode === 409 || statusCode === 440 || statusCode === 401) { 
-                    // 440 Connection Replaced / 409 Conflict
-                    console.log('Connection conflict/replaced. Will not automatically reconnect immediately to avoid loop.');
-                    sock = null;
-                } else if (statusCode === 428) {
-                    console.log('Connection closed (428). Reconnecting in 2s...');
-                    setTimeout(() => connectToWhatsApp(), 2000);
+                } else if (statusCode === 409 || statusCode === 440 || statusCode === 401 || statusCode === 515) { 
+                    console.log('Connection conflict/replaced/stream errored. Will not automatically reconnect immediately to avoid loop.');
                 } else {
-                    console.log('Connection Failure. Reconnecting in 5 seconds...');
-                    setTimeout(() => connectToWhatsApp(), 5000);
+                    console.log('Connection Failure. Reconnecting in 10 seconds...');
+                    reconnectTimer = setTimeout(() => {
+                        connectionStatus = 'close';
+                        connectToWhatsApp();
+                    }, 10000);
                 }
             } else if (connection === 'open') {
                 connectionStatus = 'open';
@@ -79,10 +92,15 @@ export function logoutWhatsApp() {
         try {
             sock.logout();
         } catch (e) {}
+        sock.ev.removeAllListeners();
         sock = null;
     }
     connectionStatus = 'close';
     currentQR = null;
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
     if (fs.existsSync('auth_info_baileys')) {
         fs.rmSync('auth_info_baileys', { recursive: true, force: true });
     }
@@ -93,12 +111,10 @@ export async function sendWhatsAppMessage(number: string, message: string) {
         throw new Error('WhatsApp não está conectado');
     }
     
-    // Format number
     const jid = `${number.replace(/\D/g, '')}@s.whatsapp.net`;
     await sock.sendMessage(jid, { text: message });
 }
 
-// A simple queue to respect META terms (smart delay)
 export async function startBillingJob(clients: any[], template: string) {
     if (connectionStatus !== 'open' || !sock) {
         console.error('WhatsApp not connected');
@@ -127,7 +143,6 @@ export async function startBillingJob(clients: any[], template: string) {
             }
         }
         
-        // Smart delay between 5 to 15 seconds
         const delay = Math.floor(Math.random() * (15000 - 5000 + 1) + 5000);
         setTimeout(sendNext, delay);
     };
