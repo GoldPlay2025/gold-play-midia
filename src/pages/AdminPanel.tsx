@@ -448,13 +448,14 @@ export default function AdminPanel() {
   }, [systemSettings.systemName, systemSettings.iconUrl]);
 
   useEffect(() => {
+    let interval: NodeJS.Timeout;
+
     if (isAuthenticated) {
       if (activeTab === 'dashboard') {
         fetchDashboardData();
         fetchMidias();
         checkWaStatus();
-        const interval = setInterval(checkWaStatus, 5000);
-        return () => clearInterval(interval);
+        interval = setInterval(checkWaStatus, 5000);
       } else if (activeTab === 'nova-tela') {
         fetchClientes();
       } else if (activeTab === 'nova-midia') {
@@ -462,6 +463,10 @@ export default function AdminPanel() {
         fetchMidias(); // Carrega biblioteca de mídias
       }
     }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [activeTab, isAuthenticated]);
 
   useEffect(() => {
