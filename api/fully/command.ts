@@ -36,9 +36,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // URL format as required by the Fully Cloud API
     const fullyUrl = `https://cloud.fully-kiosk.com/api/?cmd=${action}&deviceId=${deviceId}&token=${token}&type=json`;
 
-    // Fetch from Fully Cloud API
+    // Fetch from Fully Cloud API using GET method
     const response = await fetch(fullyUrl, {
-      method: 'POST', 
+      method: 'GET', 
       headers: {
         'Accept': 'application/json',
       }
