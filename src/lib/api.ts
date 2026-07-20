@@ -11,7 +11,7 @@ export function getApiUrl(path: string): string {
   }
 
   const localBackend = savedSettings?.backendUrl;
-  const envBackend = import.meta.env.VITE_BACKEND_URL;
+  const envBackend = import.meta.env.VITE_BACKEND_URL || import.meta.env.NEXT_PUBLIC_BACKEND_URL;
   const backendUrl = localBackend || envBackend || '';
   
   if (backendUrl) {
