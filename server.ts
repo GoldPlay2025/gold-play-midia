@@ -94,6 +94,12 @@ async function startServer() {
         }
       });
 
+      // Evita o erro "Unexpected token '<'" verificando se a resposta é HTML
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("text/html")) {
+         return res.status(502).json({ error: "A API do Fully Cloud retornou uma página HTML (possivelmente página de Login). A URL ou o Token estão incorretos e causaram um redirecionamento." });
+      }
+
       // Pega a resposta em JSON
       const data = await response.json();
 
