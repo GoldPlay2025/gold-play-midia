@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { RefreshCw, Power, Monitor, Loader2, Cloud, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { fetchApi } from '../lib/api';
 
 type CloudPanelProps = {
   telas: any[];
@@ -18,9 +19,8 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
   const handleCommand = async (telaId: string, fullyDeviceId: string, action: string) => {
     setLoadingAction(`${telaId}-${action}`);
     try {
-      const response = await fetch('/api/fully/command', {
+      const response = await fetchApi('/api/fully/command', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId: fullyDeviceId, action })
       });
       

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { QrCode, Smartphone, LogOut, Send, AlertTriangle, Loader2, MessageCircle, HeartPulse, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { fetchApi } from '../lib/api';
 
-export function WhatsappPanel({ clientes, showToast }: any) {
+export function WhatsappPanel({ clientes, showToast, setActiveTab }: any) {
   const [status, setStatus] = useState<string>('close');
   const [qr, setQr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -14,6 +15,20 @@ export function WhatsappPanel({ clientes, showToast }: any) {
   const [manualMessage, setManualMessage] = useState('');
   const [isSendingManual, setIsSendingManual] = useState(false);
 
+  // Vercel Environment Check
+  const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+  let hasBackendUrl = false;
+  try {
+    const localSettings = typeof window !== 'undefined' ? localStorage.getItem('gpm_system_settings') : null;
+    if (localSettings) {
+      const parsed = JSON.parse(localSettings);
+      hasBackendUrl = !!parsed?.backendUrl;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  const showVercelAlert = isVercel && !hasBackendUrl;
+
   useEffect(() => {
     fetchStatus();
     const interval = setInterval(fetchStatus, 3000);
@@ -22,7 +37,7 @@ export function WhatsappPanel({ clientes, showToast }: any) {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/whatsapp/status');
+      const res = await fetchApi('/api/whatsapp/status');
       const data = await res.json();
       setStatus(data.status);
       setQr(data.qr || null);
@@ -36,7 +51,7 @@ export function WhatsappPanel({ clientes, showToast }: any) {
   const connect = async () => {
     setLoading(true);
     try {
-      await fetch('/api/whatsapp/connect', { method: 'POST' });
+      await fetchApi('/api/whatsapp/connect', { method: 'POST' });
     } catch (err) {
       console.error(err);
     }
@@ -45,7 +60,7 @@ export function WhatsappPanel({ clientes, showToast }: any) {
   const logout = async () => {
     setLoading(true);
     try {
-      await fetch('/api/whatsapp/logout', { method: 'POST' });
+      await fetchApi('/api/whatsapp/logout', { method: 'POST' });
       setQr(null);
     } catch (err) {
       console.error(err);
@@ -59,9 +74,8 @@ export function WhatsappPanel({ clientes, showToast }: any) {
     }
     setIsSending(true);
     try {
-      const res = await fetch('/api/whatsapp/trigger-billing', {
+      const res = await fetchApi('/api/whatsapp/trigger-billing', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clients: clientes, template })
       });
       if (res.ok) {
@@ -98,9 +112,8 @@ export function WhatsappPanel({ clientes, showToast }: any) {
     
     setIsSendingManual(true);
     try {
-      const res = await fetch('/api/whatsapp/send', {
+      const res = await fetchApi('/api/whatsapp/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ number: cleanNumber, message: manualMessage })
       });
       if (res.ok) {
@@ -121,6 +134,27 @@ export function WhatsappPanel({ clientes, showToast }: any) {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-5xl mx-auto pt-6">
+      {showVercelAlert && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-3xl p-6 flex flex-col sm:flex-row gap-4 items-start text-red-200">
+          <AlertTriangle className="w-8 h-8 text-red-500 shrink-0 mt-0.5" />
+          <div className="space-y-2">
+            <h4 className="text-base font-semibold text-white">Ambiente Serverless Detectado (Vercel)</h4>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              O WhatsApp requer um servidor persistente (Node.js) para manter as conexões WebSocket e gerar o QR Code. 
+              Como esta página está sendo servida na Vercel, você deve configurar a <span className="text-amber-500 font-medium">URL do seu servidor persistente do AI Studio (Shared App URL)</span> nas configurações de perfil para que o WhatsApp funcione normalmente.
+            </p>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <button
+                onClick={() => setActiveTab && setActiveTab('perfil')}
+                className="bg-amber-500 hover:bg-amber-400 text-black px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+              >
+                Configurar Servidor Backend
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         <h2 className="text-3xl font-display font-light text-white mb-2 tracking-tight">WhatsApp Manager</h2>
         <p className="text-sm text-slate-500 font-light">Conecte seu WhatsApp para automatizar envios e realizar disparos manuais.</p>
