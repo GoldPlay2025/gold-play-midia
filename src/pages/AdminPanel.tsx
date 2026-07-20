@@ -438,6 +438,7 @@ export default function AdminPanel() {
     if (isAuthenticated) {
       if (activeTab === 'dashboard') {
         fetchDashboardData();
+        fetchMidias();
       } else if (activeTab === 'nova-tela') {
         fetchClientes();
       } else if (activeTab === 'nova-midia') {
