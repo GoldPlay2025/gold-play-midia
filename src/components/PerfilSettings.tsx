@@ -260,44 +260,16 @@ ON CONFLICT (id) DO NOTHING;`);
       </AnimatePresence>
 
       <form onSubmit={handleSave} className="bg-[#0f0f11] border border-white/5 p-8 rounded-3xl shadow-2xl shadow-black/50 space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Nome do Sistema</label>
-            <input 
-              type="text" 
-              value={form.systemName}
-              onChange={e => setForm({...form, systemName: e.target.value})}
-              className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700"
-              placeholder="Ex: GOLD PLAY"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-              <Link className="w-3.5 h-3.5 text-amber-500" />
-              URL do Servidor Backend (WhatsApp / APIs)
-            </label>
-            <input 
-              type="url" 
-              value={form.backendUrl || ''}
-              onChange={e => setForm({...form, backendUrl: e.target.value})}
-              className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono placeholder-slate-700"
-              placeholder="Ex: https://meu-app-no-cloud-run.run.app"
-            />
-          </div>
-        </div>
-
-        {/* Informative Help Text for Backend URL */}
-        <div className="bg-[#050505] border border-white/5 rounded-2xl p-4 text-xs text-slate-400 space-y-1">
-          <p className="font-semibold text-white flex items-center gap-1.5">
-            <AlertCircle className="w-4 h-4 text-amber-500" />
-            Por que configurar o Servidor Backend?
-          </p>
-          <p className="leading-relaxed">
-            Se você hospedar o painel na <span className="text-white font-medium">Vercel</span>, as conexões do WhatsApp e os comandos de tela não funcionarão diretamente devido às limitações serverless da Vercel. 
-            Colando aqui a <span className="text-white font-medium">Shared App URL</span> do seu container persistente no AI Studio (ou de outra hospedagem Node.js), a Vercel enviará todas as requisições do WhatsApp e comandos para lá automaticamente, mantendo o sistema 100% ativo!
-          </p>
+        <div>
+          <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Nome do Sistema</label>
+          <input 
+            type="text" 
+            value={form.systemName}
+            onChange={e => setForm({...form, systemName: e.target.value})}
+            className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700"
+            placeholder="Ex: GOLD PLAY"
+            required
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
