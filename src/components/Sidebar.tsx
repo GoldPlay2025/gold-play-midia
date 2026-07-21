@@ -47,7 +47,6 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
         <MenuButton icon={Cloud} label="Cloud Manager" active={activeTab === 'cloud'} onClick={() => { setActiveTab('cloud'); setIsOpen(false); }} />
         <MenuButton icon={Film} label="Gerenciar Mídias" active={activeTab === 'nova-midia'} onClick={() => { setActiveTab('nova-midia'); setIsOpen(false); }} />
         <MenuButton icon={Settings} label="Perfil" active={activeTab === 'perfil'} onClick={() => { setActiveTab('perfil'); setIsOpen(false); }} />
-        <MenuButton icon={MessageSquare} label="WhatsApp" active={activeTab === 'whatsapp'} onClick={() => { setActiveTab('whatsapp'); setIsOpen(false); }} />
       </div>
 
       <div className="p-4 border-t border-white/10">
