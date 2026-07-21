@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Upload, Save, Loader2, Image as ImageIcon, Database, Link, AlertCircle } from 'lucide-react';
-import { motion } from 'motion/react';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { Settings, Upload, Save, Loader2, Image as ImageIcon, Database, Link, AlertCircle, CheckCircle, HelpCircle, FileCode } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const envUrl = import.meta.env.VITE_SUPABASE_URL;
 const localUrl = typeof window !== 'undefined' ? localStorage.getItem('gpm_supabase_url') : null;
@@ -38,10 +38,56 @@ interface PerfilSettingsProps {
 export function PerfilSettings({ showToast, settings, onSettingsChange }: PerfilSettingsProps) {
   const [form, setForm] = useState<SystemSettings>(settings);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dbStatus, setDbStatus] = useState<'synced' | 'local' | 'error' | 'loading'>('local');
+  const [showSqlInstruction, setShowSqlInstruction] = useState(false);
+
+  const fetchDbSettings = async () => {
+    if (!isSupabaseConfigured) {
+      setDbStatus('local');
+      return;
+    }
+    setDbStatus('loading');
+    try {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('id', 'sistema')
+        .maybeSingle();
+
+      if (error) {
+        console.warn('configuracoes table fetch error:', error);
+        if (error.code === 'PGRST116' || error.code === '42P01') {
+          // Table doesn't exist
+          setShowSqlInstruction(true);
+        }
+        setDbStatus('local');
+        return;
+      }
+
+      if (data) {
+        const loadedSettings: SystemSettings = {
+          systemName: data.system_name || 'GOLD PLAY',
+          logoUrl: data.logo_url || '/gpm.png',
+          iconUrl: data.icon_url || '/gpm.png',
+          backendUrl: data.backend_url || '',
+        };
+        setForm(loadedSettings);
+        onSettingsChange(loadedSettings);
+        localStorage.setItem('gpm_system_settings', JSON.stringify(loadedSettings));
+        setDbStatus('synced');
+        setShowSqlInstruction(false);
+      } else {
+        setDbStatus('local');
+      }
+    } catch (err) {
+      console.error('Error fetching settings from db:', err);
+      setDbStatus('error');
+    }
+  };
 
   useEffect(() => {
-    setForm(settings);
-  }, [settings]);
+    fetchDbSettings();
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'iconUrl') => {
     const file = e.target.files?.[0];
@@ -60,17 +106,45 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
     reader.readAsDataURL(file);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
     try {
+      // Save local backup first
       localStorage.setItem('gpm_system_settings', JSON.stringify(form));
+      
+      if (isSupabaseConfigured) {
+        // Upsert to configuracoes table
+        const { error } = await supabase
+          .from('configuracoes')
+          .upsert({
+            id: 'sistema',
+            system_name: form.systemName,
+            logo_url: form.logoUrl,
+            icon_url: form.iconUrl,
+            backend_url: form.backendUrl || '',
+          });
+
+        if (error) {
+          if (error.code === '42P01') {
+            setShowSqlInstruction(true);
+            throw new Error("A tabela 'configuracoes' não existe no Supabase. Por favor, crie a tabela rodando o script SQL.");
+          }
+          throw error;
+        }
+        
+        setDbStatus('synced');
+        setShowSqlInstruction(false);
+        showToast('success', 'Configurações salvas e integradas ao banco de dados com sucesso!');
+      } else {
+        showToast('success', 'Configurações salvas localmente no navegador (Banco offline).');
+      }
+      
       onSettingsChange(form);
-      showToast('success', 'Configurações de perfil atualizadas com sucesso.');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast('error', 'Erro ao salvar as configurações.');
+      showToast('error', err.message || 'Erro ao sincronizar configurações com o banco de dados.');
     } finally {
       setIsSubmitting(false);
     }
@@ -84,15 +158,106 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
       transition={{ duration: 0.3 }}
       className="max-w-2xl mx-auto"
     >
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-            <Settings className="w-5 h-5 text-amber-500" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+              <Settings className="w-5 h-5 text-amber-500" />
+            </div>
+            <h2 className="text-3xl font-display font-light text-white tracking-tight">Perfil & Sistema</h2>
           </div>
-          <h2 className="text-3xl font-display font-light text-white tracking-tight">Perfil & Sistema</h2>
+          <p className="text-sm text-slate-500 font-light ml-0 sm:ml-13">Configure a identidade visual e as opções do workspace.</p>
         </div>
-        <p className="text-sm text-slate-500 font-light ml-13">Configure a identidade visual e as opções do workspace.</p>
+
+        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-xs font-mono shrink-0 self-start sm:self-center">
+          <Database className="w-4 h-4 text-amber-500" />
+          <span className="text-slate-400">Banco:</span>
+          {dbStatus === 'loading' && (
+            <span className="text-amber-400 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> Carregando...
+            </span>
+          )}
+          {dbStatus === 'synced' && (
+            <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+              <CheckCircle className="w-3.5 h-3.5" /> Sincronizado
+            </span>
+          )}
+          {dbStatus === 'local' && (
+            <span className="text-amber-500/80 flex items-center gap-1 font-semibold">
+              <AlertCircle className="w-3.5 h-3.5" /> Apenas Local (Backup)
+            </span>
+          )}
+          {dbStatus === 'error' && (
+            <span className="text-red-400 flex items-center gap-1 font-semibold">
+              <AlertCircle className="w-3.5 h-3.5" /> Erro de Conexão
+            </span>
+          )}
+        </div>
       </div>
+
+      <AnimatePresence>
+        {showSqlInstruction && isSupabaseConfigured && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mb-8 bg-amber-500/10 border border-amber-500/20 rounded-3xl p-6 space-y-4 overflow-hidden"
+          >
+            <div className="flex gap-3">
+              <AlertCircle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold text-amber-200">Tabela de Configurações Pendente no Supabase</h4>
+                <p className="text-xs text-amber-400/80 leading-relaxed">
+                  Para que a Logo e o Ícone do sistema sejam carregados diretamente do banco de dados, você precisa criar a tabela <code className="font-mono bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/10 text-white">configuracoes</code> no seu Supabase.
+                </p>
+              </div>
+            </div>
+            <div className="bg-black/40 rounded-xl p-4 border border-white/5 space-y-3">
+              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Código SQL para Executar</span>
+              <pre className="text-[10px] font-mono text-slate-300 overflow-x-auto leading-relaxed select-all max-h-36 p-1">
+{`CREATE TABLE IF NOT EXISTS configuracoes (
+  id TEXT PRIMARY KEY DEFAULT 'sistema',
+  system_name TEXT NOT NULL DEFAULT 'GOLD PLAY',
+  logo_url TEXT,
+  icon_url TEXT,
+  backend_url TEXT,
+  criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO configuracoes (id, system_name, logo_url, icon_url, backend_url)
+VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '')
+ON CONFLICT (id) DO NOTHING;`}
+              </pre>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(`CREATE TABLE IF NOT EXISTS configuracoes (
+  id TEXT PRIMARY KEY DEFAULT 'sistema',
+  system_name TEXT NOT NULL DEFAULT 'GOLD PLAY',
+  logo_url TEXT,
+  icon_url TEXT,
+  backend_url TEXT,
+  criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO configuracoes (id, system_name, logo_url, icon_url, backend_url)
+VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '')
+ON CONFLICT (id) DO NOTHING;`);
+                  showToast('success', 'Script de configurações copiado para a área de transferência!');
+                }}
+                className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
+              >
+                <FileCode className="w-3.5 h-3.5" />
+                Copiar Script SQL de Configurações
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <form onSubmit={handleSave} className="bg-[#0f0f11] border border-white/5 p-8 rounded-3xl shadow-2xl shadow-black/50 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
