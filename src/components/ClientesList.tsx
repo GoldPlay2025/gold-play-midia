@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, X, Calendar } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export type Cliente = {
@@ -51,6 +51,7 @@ const getCleanEndereco = (endereco?: string): string => {
 export function ClientesList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [telas, setTelas] = useState<any[]>([]);
+  const [midias, setMidias] = useState<any[]>([]);
   const [linkedTelaIds, setLinkedTelaIds] = useState<string[]>([]);
   const [searchTelaQuery, setSearchTelaQuery] = useState('');
   const [showTelaDropdown, setShowTelaDropdown] = useState(false);
@@ -69,12 +70,36 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
     try {
       const { data, error } = await supabase
         .from('telas')
-        .select('*')
+        .select(`
+          *,
+          playlists (
+            id,
+            ordem_exibicao,
+            midias (
+              id,
+              titulo_video,
+              url_storage
+            )
+          )
+        `)
         .order('nome_local', { ascending: true });
       if (error) throw error;
       setTelas(data || []);
     } catch (error: any) {
       console.error('Erro ao carregar telas:', error);
+    }
+  };
+
+  const fetchMidias = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('midias')
+        .select('*')
+        .order('criado_em', { ascending: false });
+      if (error) throw error;
+      setMidias(data || []);
+    } catch (error: any) {
+      console.error('Erro ao carregar mídias:', error);
     }
   };
 
@@ -100,6 +125,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
   useEffect(() => {
     fetchClientes();
     fetchTelas();
+    fetchMidias();
 
     const channel = supabase
       .channel('public:clientes')
@@ -115,9 +141,17 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       })
       .subscribe();
 
+    const midiasChannel = supabase
+      .channel('public:midias_clientes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'midias' }, () => {
+        fetchMidias();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(screensChannel);
+      supabase.removeChannel(midiasChannel);
     };
   }, []);
 
@@ -398,22 +432,117 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
             </div>
           </div>
         )}
-        renderExpandedRow={(row) => (
-          <div className="px-6 py-6 bg-[#0a0a0c]/80 rounded-xl border border-white/5 flex flex-col sm:flex-row gap-8 sm:gap-16 text-sm mx-4 mb-4 mt-2">
-            <div className="flex flex-col gap-2">
-              <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Vencimento</span>
-              <span className="text-slate-300 font-medium">
-                {row.vencimento ? new Date(row.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}
-              </span>
+        renderExpandedRow={(row) => {
+          const clientTelas = telas.filter(t => getClientIdsForTela(t).includes(row.id));
+          const clientMidias = midias.filter(m => m.cliente_id === row.id);
+          const hasMidias = clientMidias.length > 0;
+          const gridCols = hasMidias ? 'md:grid-cols-4' : 'md:grid-cols-3';
+
+          return (
+            <div className={`px-6 py-6 bg-[#0a0a0c]/80 rounded-2xl border border-white/5 mx-4 mb-4 mt-2 grid grid-cols-1 ${gridCols} gap-6 text-sm`}>
+              {/* Vencimento */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-amber-500/70" /> Vencimento
+                </span>
+                <span className="text-slate-200 font-medium">
+                  {row.vencimento ? new Date(row.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}
+                </span>
+              </div>
+
+              {/* Valor */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
+                  <span className="text-emerald-500 font-bold">$</span> Valor / Mensalidade
+                </span>
+                <span className="text-emerald-400 font-medium font-mono text-base">
+                  {row.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor) : '-'}
+                </span>
+              </div>
+
+              {/* Mídia Vinculada */}
+              {hasMidias && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
+                    <Film className="w-3 h-3 text-amber-500/70" /> Mídia Vinculada
+                  </span>
+                  <div className="flex flex-col gap-2">
+                    {clientMidias.map(m => (
+                      <div key={m.id} className="flex items-center gap-3.5 bg-amber-500/[0.01] border border-amber-500/10 rounded-2xl p-2.5 hover:border-amber-500/30 transition-all group">
+                        {/* Compact Video Thumbnail */}
+                        <div className="w-14 h-14 rounded-xl bg-black overflow-hidden border border-white/10 shrink-0 flex items-center justify-center relative group/thumb">
+                          {m.url_storage ? (
+                            <video 
+                              src={m.url_storage} 
+                              className="w-full h-full object-cover"
+                              muted
+                              loop
+                              playsInline
+                              onMouseEnter={e => e.currentTarget.play()}
+                              onMouseLeave={e => {
+                                e.currentTarget.pause();
+                                e.currentTarget.currentTime = 0;
+                              }}
+                            />
+                          ) : (
+                            <Film className="w-5 h-5 text-slate-700" />
+                          )}
+                          <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                            <Play className="w-4 h-4 fill-amber-500 text-amber-500 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] transition-transform group-hover/thumb:scale-115" />
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-slate-200 font-semibold truncate" title={m.titulo_video}>
+                            {m.titulo_video}
+                          </p>
+                          <p className="text-[10px] font-mono text-slate-500 mt-1">
+                            {m.tamanho_mb ? `${m.tamanho_mb} MB` : 'Vídeo'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Telas Associadas */}
+              <div className="flex flex-col gap-2">
+                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
+                  <Monitor className="w-3 h-3 text-amber-500/70" /> Telas do Cliente ({clientTelas.length})
+                </span>
+                {clientTelas.length === 0 ? (
+                  <span className="text-slate-600 text-xs italic font-light">Nenhuma tela vinculada</span>
+                ) : (
+                  <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/5">
+                    {clientTelas.map(t => (
+                      <div key={t.id} className="flex items-center justify-between gap-2 bg-white/[0.02] border border-white/5 rounded-xl px-3 py-2 text-xs hover:border-amber-500/30 transition-all">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {/* Miniatura da mídia vinculada à tela */}
+                          {t.playlists && t.playlists[0]?.midias && (
+                             <div className="w-8 h-8 rounded-md bg-black overflow-hidden border border-white/10 shrink-0">
+                                <video 
+                                  src={t.playlists[0].midias.url_storage} 
+                                  className="w-full h-full object-cover"
+                                  muted
+                                />
+                             </div>
+                          )}
+                          <Tv className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span className="text-slate-300 font-medium truncate" title={t.nome_local}>
+                            {t.nome_local}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-500 shrink-0 uppercase">
+                          {t.identificador_unico}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider">Valor</span>
-              <span className="text-emerald-400 font-medium font-mono">
-                {row.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor) : '-'}
-              </span>
-            </div>
-          </div>
-        )}
+          );
+        }}
       />
 
       <Modal 
