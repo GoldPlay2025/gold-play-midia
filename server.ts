@@ -1,5 +1,3 @@
-import { connectToWhatsApp, getWhatsAppStatus, logoutWhatsApp, sendWhatsAppMessage, startBillingJob } from "./whatsappService.js";
-import cron from "node-cron";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -40,46 +38,6 @@ async function startServer() {
     });
   }
 
-
-  // WhatsApp API Routes
-  app.get("/api/whatsapp/status", (req, res) => {
-    res.json(getWhatsAppStatus());
-  });
-
-  app.post("/api/whatsapp/connect", (req, res) => {
-    connectToWhatsApp();
-    res.json({ message: "Connecting..." });
-  });
-
-  app.post("/api/whatsapp/logout", (req, res) => {
-    logoutWhatsApp();
-    res.json({ message: "Logged out" });
-  });
-
-  app.post("/api/whatsapp/send", async (req, res) => {
-    try {
-      const { number, message } = req.body;
-      if (!number || !message) {
-        return res.status(400).json({ error: "Number and message are required" });
-      }
-      await sendWhatsAppMessage(number, message);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-  
-  app.post("/api/whatsapp/trigger-billing", async (req, res) => {
-    try {
-        const { clients, template } = req.body;
-        if (!clients || !template) return res.status(400).json({ error: "Missing clients or template" });
-        
-        startBillingJob(clients, template);
-        res.json({ success: true, message: "Job started" });
-    } catch(err: any) {
-        res.status(500).json({ error: err.message });
-    }
-  });
 
   // Fully Cloud API Routes
   app.post("/api/fully/command", async (req, res) => {
