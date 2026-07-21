@@ -191,6 +191,38 @@ export default function AdminPanel() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const fetchSystemSettings = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('id', 'sistema')
+        .maybeSingle();
+
+      if (error) {
+        console.warn('configuracoes table fetch error:', error);
+        return;
+      }
+
+      if (data) {
+        const loadedSettings: SystemSettings = {
+          systemName: data.system_name || 'GOLD PLAY',
+          logoUrl: data.logo_url || '/gpm.png',
+          iconUrl: data.icon_url || '/gpm.png',
+          backendUrl: data.backend_url || '',
+        };
+        setSystemSettings(loadedSettings);
+        localStorage.setItem('gpm_system_settings', JSON.stringify(loadedSettings));
+      }
+    } catch (err) {
+      console.error('Error loading configuration from DB:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSystemSettings();
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -720,10 +752,20 @@ export default function AdminPanel() {
 -- Gold Play Mídia - Digital Signage Workspace
 -- =========================================================================
 
+drop table if exists configuracoes cascade;
 drop table if exists playlists cascade;
 drop table if exists midias cascade;
 drop table if exists telas cascade;
 drop table if exists clientes cascade;
+
+create table configuracoes (
+  id text primary key default 'sistema',
+  system_name text not null default 'GOLD PLAY',
+  logo_url text,
+  icon_url text,
+  backend_url text,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
 
 create table clientes (
   id uuid default gen_random_uuid() primary key,
@@ -763,6 +805,7 @@ create table playlists (
   criado_em timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+alter table configuracoes disable row level security;
 alter table clientes disable row level security;
 alter table telas disable row level security;
 alter table midias disable row level security;
@@ -770,6 +813,10 @@ alter table playlists disable row level security;
 
 -- Caso o RLS seja reativado ou mantido ativo pelo Supabase, criamos políticas públicas irrestritas (CRUD completo)
 -- para permitir que as requisições anônimas funcionem normalmente.
+
+-- Políticas para Configurações
+drop policy if exists "Acesso público total configuracoes" on configuracoes;
+create policy "Acesso público total configuracoes" on configuracoes for all using (true) with check (true);
 
 -- Políticas para Clientes
 drop policy if exists "Acesso público total clientes" on clientes;
@@ -786,6 +833,10 @@ create policy "Acesso público total midias" on midias for all using (true) with
 -- Políticas para Playlists
 drop policy if exists "Acesso público total playlists" on playlists;
 create policy "Acesso público total playlists" on playlists for all using (true) with check (true);
+
+insert into configuracoes (id, system_name, logo_url, icon_url, backend_url)
+values ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '')
+on conflict (id) do nothing;
 
 insert into storage.buckets (id, name, public) 
 values ('midias', 'midias', true)
