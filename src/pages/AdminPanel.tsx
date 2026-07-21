@@ -6,6 +6,7 @@ import { TelasList } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
 import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
+import { WhatsappPanel } from "../components/WhatsappPanel";
 import { fetchApi } from '../lib/api';
 import { 
   LayoutDashboard,
@@ -102,7 +103,7 @@ export default function AdminPanel() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'whatsapp'>('dashboard');
   const [telas, setTelas] = useState<Tela[]>([]);
   const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -1280,6 +1281,13 @@ create policy "Permitir deletar midias" on storage.objects
             {activeTab === 'cloud' && (
               <motion.div key="cloud" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
                 <CloudPanel telas={telas} showToast={showToast} fetchDashboardData={fetchDashboardData} />
+              </motion.div>
+            )}
+
+            {/* WhatsApp Tab */}
+            {activeTab === 'whatsapp' && (
+              <motion.div key="whatsapp" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
+                <WhatsappPanel showToast={showToast} />
               </motion.div>
             )}
 
