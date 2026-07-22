@@ -20,6 +20,7 @@ export type SystemSettings = {
   logoUrl: string;
   iconUrl: string;
   backendUrl?: string;
+  weatherCity?: string;
 };
 
 export const defaultSettings: SystemSettings = {
@@ -27,6 +28,7 @@ export const defaultSettings: SystemSettings = {
   logoUrl: '/gpm.png',
   iconUrl: '/gpm.png',
   backendUrl: '',
+  weatherCity: 'São Paulo',
 };
 
 interface PerfilSettingsProps {
@@ -70,6 +72,7 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           logoUrl: data.logo_url || '/gpm.png',
           iconUrl: data.icon_url || '/gpm.png',
           backendUrl: data.backend_url || '',
+          weatherCity: data.weather_city || 'São Paulo',
         };
         setForm(loadedSettings);
         onSettingsChange(loadedSettings);
@@ -124,6 +127,7 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             logo_url: form.logoUrl,
             icon_url: form.iconUrl,
             backend_url: form.backendUrl || '',
+            weather_city: form.weatherCity || 'São Paulo',
           });
 
         if (error) {
@@ -221,13 +225,14 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
   logo_url TEXT,
   icon_url TEXT,
   backend_url TEXT,
+  weather_city TEXT,
   criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
-INSERT INTO configuracoes (id, system_name, logo_url, icon_url, backend_url)
-VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '')
+INSERT INTO configuracoes (id, system_name, logo_url, icon_url, backend_url, weather_city)
+VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'São Paulo')
 ON CONFLICT (id) DO NOTHING;`}
               </pre>
               <button
@@ -239,13 +244,14 @@ ON CONFLICT (id) DO NOTHING;`}
   logo_url TEXT,
   icon_url TEXT,
   backend_url TEXT,
+  weather_city TEXT,
   criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
-INSERT INTO configuracoes (id, system_name, logo_url, icon_url, backend_url)
-VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '')
+INSERT INTO configuracoes (id, system_name, logo_url, icon_url, backend_url, weather_city)
+VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'São Paulo')
 ON CONFLICT (id) DO NOTHING;`);
                   showToast('success', 'Script de configurações copiado para a área de transferência!');
                 }}
@@ -270,6 +276,18 @@ ON CONFLICT (id) DO NOTHING;`);
             placeholder="Ex: GOLD PLAY"
             required
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Cidade (Previsão do Tempo)</label>
+          <input 
+            type="text" 
+            value={form.weatherCity}
+            onChange={e => setForm({...form, weatherCity: e.target.value})}
+            className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder-slate-700"
+            placeholder="Ex: São Paulo"
+          />
+          <p className="text-[10px] text-slate-500 mt-2">Esta cidade será usada para exibir a previsão do tempo no painel.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
