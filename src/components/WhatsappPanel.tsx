@@ -52,7 +52,7 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
   const fileInputRef = useRef<HTMLInputElement>(null);
   const manualFileInputRef = useRef<HTMLInputElement>(null);
 
-  const apiUrl = import.meta.env.VITE_BACKEND_URL ? `${import.meta.env.VITE_BACKEND_URL}/api/whatsapp` : '/api/whatsapp';
+  const apiUrl = '/api/whatsapp';
   const apiKey = import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta';
 
   const defaultHeaders = {
