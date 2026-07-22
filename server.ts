@@ -9,11 +9,8 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = 3000;
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
   app.use(express.json());
 
   // Rotas do WhatsApp
@@ -70,12 +67,6 @@ app.listen(PORT, () => {
           'Accept': 'application/json',
         }
       });
-      // Conexão whatsapp
-      const PORT = process.env.PORT || 3000;
-
-      app.listen(PORT, () => {
-      console.log(`Servidor rodando na porta ${PORT}`);
-});
 
       // Evita o erro "Unexpected token '<'" verificando se a resposta é HTML
       const contentType = response.headers.get("content-type");
