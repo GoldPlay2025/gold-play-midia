@@ -28,7 +28,7 @@ export const defaultSettings: SystemSettings = {
   logoUrl: '/gpm.png',
   iconUrl: '/gpm.png',
   backendUrl: '',
-  weatherCity: 'São Paulo',
+  weatherCity: 'Paranavaí, Paraná',
 };
 
 interface PerfilSettingsProps {
@@ -72,7 +72,7 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           logoUrl: data.logo_url || '/gpm.png',
           iconUrl: data.icon_url || '/gpm.png',
           backendUrl: data.backend_url || '',
-          weatherCity: data.weather_city || 'São Paulo',
+          weatherCity: data.weather_city || 'Paranavaí, Paraná',
         };
         setForm(loadedSettings);
         onSettingsChange(loadedSettings);
@@ -127,13 +127,28 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             logo_url: form.logoUrl,
             icon_url: form.iconUrl,
             backend_url: form.backendUrl || '',
-            weather_city: form.weatherCity || 'São Paulo',
+            weather_city: form.weatherCity || 'Paranavaí, Paraná',
           });
 
         if (error) {
           if (error.code === '42P01') {
             setShowSqlInstruction(true);
             throw new Error("A tabela 'configuracoes' não existe no Supabase. Por favor, crie a tabela rodando o script SQL.");
+          }
+          if (error.message?.includes('weather_city')) {
+            setShowSqlInstruction(true);
+            // Salva sem a nova coluna
+            const { error: errorFallback } = await supabase
+              .from('configuracoes')
+              .upsert({
+                id: 'sistema',
+                system_name: form.systemName,
+                logo_url: form.logoUrl,
+                icon_url: form.iconUrl,
+                backend_url: form.backendUrl || '',
+              });
+            if (errorFallback) throw errorFallback;
+            throw new Error("Configuração salva, mas a cidade não pôde ser sincronizada. Atualize sua tabela no Supabase com o script abaixo (falta a coluna weather_city).");
           }
           throw error;
         }
@@ -232,7 +247,7 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
 INSERT INTO configuracoes (id, system_name, logo_url, icon_url, backend_url, weather_city)
-VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'São Paulo')
+VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'Paranavaí, Paraná')
 ON CONFLICT (id) DO NOTHING;`}
               </pre>
               <button
@@ -251,7 +266,7 @@ ON CONFLICT (id) DO NOTHING;`}
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
 INSERT INTO configuracoes (id, system_name, logo_url, icon_url, backend_url, weather_city)
-VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'São Paulo')
+VALUES ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'Paranavaí, Paraná')
 ON CONFLICT (id) DO NOTHING;`);
                   showToast('success', 'Script de configurações copiado para a área de transferência!');
                 }}
