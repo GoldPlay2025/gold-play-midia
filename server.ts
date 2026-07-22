@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { whatsappRouter } from "./src/server/whatsappRoutes";
 
 dotenv.config();
 
@@ -11,6 +12,9 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // Rotas do WhatsApp
+  app.use('/api/whatsapp', whatsappRouter);
 
   // CORS Middleware to allow cross-origin requests (e.g. from Vercel frontend deployments)
   app.use((req, res, next) => {
