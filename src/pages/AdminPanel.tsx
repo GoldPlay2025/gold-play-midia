@@ -838,7 +838,7 @@ drop policy if exists "Acesso público total playlists" on playlists;
 create policy "Acesso público total playlists" on playlists for all using (true) with check (true);
 
 insert into configuracoes (id, system_name, logo_url, icon_url, backend_url, weather_city)
-values ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'São Paulo')
+values ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'Paranavaí, Paraná')
 on conflict (id) do nothing;
 
 insert into storage.buckets (id, name, public) 
@@ -1083,7 +1083,7 @@ create policy "Permitir deletar midias" on storage.objects
                     </div>
 
                     <div className="flex-1 flex flex-col">
-                      <WeatherWidget city={systemSettings.weatherCity || 'São Paulo'} />
+                      <WeatherWidget city={systemSettings.weatherCity || 'Paranavaí, Paraná'} />
                     </div>
                   </div>
                   <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px]">
