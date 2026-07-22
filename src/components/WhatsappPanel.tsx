@@ -46,12 +46,13 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
 
   const [isSendingBilling, setIsSendingBilling] = useState(false);
   const [clientesCount, setClientesCount] = useState(0);
+  const [showBillingModal, setShowBillingModal] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const manualFileInputRef = useRef<HTMLInputElement>(null);
 
-  const apiUrl = '/api/whatsapp';
+  const apiUrl = import.meta.env.VITE_BACKEND_URL ? `${import.meta.env.VITE_BACKEND_URL}/api/whatsapp` : '/api/whatsapp';
   const apiKey = import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta';
 
   const defaultHeaders = {
@@ -69,18 +70,22 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
     }
   };
 
-  useEffect(() => {
-    checkStatus();
-  }, []);
+  const loadClientesCount = async () => {
+    try {
+      const { data, count, error } = await supabase
+        .from('clientes')
+        .select('*', { count: 'exact' });
+      if (!error && data) {
+        setClientesCount(data.length);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar clientes:', err);
+    }
+  };
 
   useEffect(() => {
-    const loadClientes = async () => {
-      const { count } = await supabase
-        .from('clientes')
-        .select('*', { count: 'exact', head: true });
-      if (count !== null) setClientesCount(count);
-    };
-    loadClientes();
+    checkStatus();
+    loadClientesCount();
   }, []);
 
   // Salvar template e imagem no localStorage
@@ -249,15 +254,15 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
   };
 
   const handleSendBilling = async () => {
-    if (!confirm(`Deseja disparar o template de cobrança para ${clientesCount} cliente(s)?`)) return;
-    
     setIsSendingBilling(true);
+    setShowBillingModal(false);
     try {
       const { data: clientes, error } = await supabase.from('clientes').select('*');
       if (error) throw error;
       
       if (!clientes || clientes.length === 0) {
-        throw new Error('Nenhum cliente encontrado no banco de dados para disparo.');
+        showToast('error', 'Nenhum cliente encontrado no banco de dados para disparo.');
+        return;
       }
 
       const res = await fetch(`${apiUrl}/send-billing`, {
@@ -273,7 +278,7 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
       
       if (!res.ok) throw new Error(data.error || 'Falha ao agendar disparos');
       
-      showToast('success', `${clientes.length} disparos de cobrança agendados com sucesso!`);
+      showToast('success', `${clientes.length} disparos de cobrança iniciados com sucesso!`);
     } catch (error: any) {
       showToast('error', error.message || 'Erro ao iniciar cobranças.');
     } finally {
@@ -508,14 +513,74 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
 
             {/* Botão de Disparo */}
             <button
-              onClick={handleSendBilling}
-              disabled={!isConnected || isSendingBilling || clientesCount === 0}
+              onClick={() => {
+                if (!isConnected) {
+                  showToast('error', 'WhatsApp não está conectado.');
+                  return;
+                }
+                setShowBillingModal(true);
+              }}
+              disabled={!isConnected || isSendingBilling}
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold text-xs tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
             >
               {isSendingBilling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {isSendingBilling ? 'Processando Disparos...' : 'Disparar Cobranças do Dia'}
             </button>
           </motion.div>
+
+          {/* Modal de Confirmação de Disparo */}
+          {showBillingModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-[#0f0f11] border border-white/10 p-6 rounded-2xl max-w-md w-full shadow-2xl relative"
+              >
+                <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-emerald-400" />
+                    Confirmar Disparo de Cobrança
+                  </h3>
+                  <button 
+                    onClick={() => setShowBillingModal(false)}
+                    className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Você está prestes a iniciar o envio automático do template de cobrança para toda a sua base de clientes cadastrados no banco de dados.
+                  </p>
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-400">Total de clientes na base:</span>
+                    <strong className="text-emerald-400 font-bold text-sm">{clientesCount}</strong>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    O sistema enviará as mensagens de forma cadenciada (com intervalo de segurança de 3s a 5s por cliente) para evitar bloqueios.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => setShowBillingModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSendBilling}
+                    disabled={isSendingBilling}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                  >
+                    {isSendingBilling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    Confirmar e Disparar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
 
           {/* Disparo Avulso */}
           <motion.div 
