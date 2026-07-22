@@ -8,6 +8,7 @@ import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
 import { WhatsappPanel } from "../components/WhatsappPanel";
 import { fetchApi } from '../lib/api';
+import { WeatherWidget } from '../components/WeatherWidget';
 import { 
   LayoutDashboard,
   Users, 
@@ -111,22 +112,8 @@ export default function AdminPanel() {
     return saved ? JSON.parse(saved) : defaultSettings;
   });
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [whatsappConnected, setWhatsappConnected] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-
-  const checkWhatsappStatus = async () => {
-    try {
-      const apiKey = import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta';
-      const res = await fetch('/api/whatsapp/status', { headers: { 'x-api-key': apiKey } });
-      if (res.ok) {
-        const data = await res.json();
-        setWhatsappConnected(!!data.connected);
-      }
-    } catch (err) {
-      console.error('Error fetching whatsapp status:', err);
-    }
-  };
 
   const { crescimentoTelasData, crescimentoClientesData } = useMemo(() => {
     const months: string[] = [];
@@ -270,8 +257,6 @@ export default function AdminPanel() {
 
       if (clientesError) throw clientesError;
       setClientes(clientesData || []);
-
-      await checkWhatsappStatus();
     } catch (error: any) {
       console.error('Error fetching data:', error);
       const errorMsg = error.message || error.details || JSON.stringify(error);
@@ -781,6 +766,7 @@ create table configuracoes (
   logo_url text,
   icon_url text,
   backend_url text,
+  weather_city text,
   criado_em timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -851,8 +837,8 @@ create policy "Acesso público total midias" on midias for all using (true) with
 drop policy if exists "Acesso público total playlists" on playlists;
 create policy "Acesso público total playlists" on playlists for all using (true) with check (true);
 
-insert into configuracoes (id, system_name, logo_url, icon_url, backend_url)
-values ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '')
+insert into configuracoes (id, system_name, logo_url, icon_url, backend_url, weather_city)
+values ('sistema', 'GOLD PLAY', '/gpm.png', '/gpm.png', '', 'São Paulo')
 on conflict (id) do nothing;
 
 insert into storage.buckets (id, name, public) 
@@ -1096,33 +1082,8 @@ create policy "Permitir deletar midias" on storage.objects
                       <p className="text-3xl font-display font-light text-white">{telas.length}</p>
                     </div>
 
-                    <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
-                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <MessageSquare className="w-12 h-12 text-emerald-500" />
-                      </div>
-                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Status do WhatsApp</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {whatsappConnected ? (
-                          <>
-                            <div className="relative flex h-2.5 w-2.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                            </div>
-                            <p className="text-base font-display font-medium tracking-wide text-emerald-500">
-                              ON-LINE
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="relative flex h-2.5 w-2.5">
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
-                            </div>
-                            <p className="text-base font-display font-medium tracking-wide text-rose-500">
-                              OFF-LINE
-                            </p>
-                          </>
-                        )}
-                      </div>
+                    <div className="flex-1 flex flex-col">
+                      <WeatherWidget city={systemSettings.weatherCity || 'São Paulo'} />
                     </div>
                   </div>
                   <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px]">
