@@ -8,6 +8,7 @@ import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
 import { WhatsappPanel } from "../components/WhatsappPanel";
 import { PillProgressButton } from "../components/PillProgressButton";
+import { MediaThumbnail, MediaModalPlayer } from "../components/MediaThumbnail";
 import { fetchApi } from '../lib/api';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { 
@@ -1563,25 +1564,7 @@ create policy "Permitir deletar midias" on storage.objects
                                       title="Clique para conferir com som e controles"
                                     >
                                       {m.url_storage ? (
-                                        <>
-                                          <video 
-                                            src={m.url_storage} 
-                                            className="w-full h-full object-cover group-hover/preview:scale-105 transition-transform duration-300" 
-                                            muted 
-                                            loop 
-                                            playsInline 
-                                            onMouseEnter={e => e.currentTarget.play()} 
-                                            onMouseLeave={e => {
-                                              e.currentTarget.pause();
-                                              e.currentTarget.currentTime = 0;
-                                            }}
-                                          />
-                                          <div className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity">
-                                            <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-black shadow-lg shadow-amber-500/20 transform scale-90 group-hover/preview:scale-100 transition-transform">
-                                              <Play className="w-4 h-4 fill-black text-black ml-0.5" />
-                                            </div>
-                                          </div>
-                                        </>
+                                        <MediaThumbnail url={m.url_storage} title={m.titulo_video} className="w-24 h-24" />
                                       ) : (
                                         <FileVideo className="w-8 h-8 text-slate-600" />
                                       )}
@@ -1871,13 +1854,7 @@ create policy "Permitir deletar midias" on storage.objects
               {/* Player de Vídeo com controles completos habilitados */}
               <div className="bg-black aspect-video flex items-center justify-center relative group">
                 {previewMidia.url_storage ? (
-                  <video 
-                    src={previewMidia.url_storage} 
-                    className="w-full h-full object-contain" 
-                    controls
-                    autoPlay
-                    playsInline
-                  />
+                  <MediaModalPlayer url={previewMidia.url_storage} />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-slate-600 gap-3">
                     <FileVideo className="w-12 h-12 text-slate-700 animate-pulse" />
