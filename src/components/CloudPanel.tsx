@@ -75,24 +75,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
       if (existingMidias && existingMidias.length > 0) {
         midiaId = existingMidias[0].id;
         midiaTitle = existingMidias[0].titulo_video || cleanTitle;
-      } else {
-        const { data: newMidia } = await supabase
-          .from('midias')
-          .insert([{
-            titulo_video: cleanTitle,
-            url_storage: newUrl,
-            tamanho_mb: 0,
-            cliente_id: tela.cliente_id || null
-          }])
-          .select()
-          .single();
 
-        if (newMidia) {
-          midiaId = newMidia.id;
-        }
-      }
-
-      if (midiaId) {
         await supabase.from('playlists').delete().eq('tela_id', tela.id);
         await supabase.from('playlists').insert([{
           tela_id: tela.id,
