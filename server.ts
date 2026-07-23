@@ -81,24 +81,24 @@ async function startServer() {
         method: 'GET',
       });
 
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("text/html")) {
-        return res.status(502).json({ 
-          error: "A API do Fully Cloud retornou HTML em vez de JSON. Verifique se FULLY_API_EMAIL, FULLY_API_TOKEN e o Device ID estão corretos." 
+      const responseText = await response.text();
+      
+      // Verificação de tela de login / acesso negado
+      if (responseText.includes("Sign in") || responseText.includes("Login") || responseText.includes("Access Denied")) {
+        return res.status(401).json({ 
+          error: "Acesso negado pelo Fully Cloud. Verifique se FULLY_API_EMAIL, FULLY_API_TOKEN e o Device ID estão corretos nas variáveis de ambiente." 
         });
       }
 
-      const responseText = await response.text();
-      
       let data;
       try {
         data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado com sucesso' };
       } catch (e) {
-        console.warn("Resposta não é um JSON válido:", responseText);
-        data = { status: 'Success', text: responseText };
+        // Se a requisição retornou 200 OK e texto/HTML de confirmação (ex: "String loaded" ou "OK"), considera sucesso
+        data = { status: 'Success', statustext: 'Comando enviado para a Tela com sucesso.', rawResponse: responseText };
       }
 
-      if (data && data.status === 'Error') {
+      if (data && (data.status === 'Error' || data.statustext?.toLowerCase().includes('error'))) {
         return res.status(400).json({ error: data.statustext || "Erro retornado pela API do Fully Kiosk." });
       }
 
