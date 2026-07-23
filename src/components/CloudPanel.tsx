@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { RefreshCw, Power, Monitor, Loader2, Cloud, CheckCircle2, AlertCircle, Send, Globe, Play, Copy, Film, Check, ExternalLink, Tv } from 'lucide-react';
+import { RefreshCw, Power, Monitor, Loader2, Cloud, CheckCircle2, AlertCircle, Send, Globe, Play, Copy, Film, Check, ExternalLink, Tv, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchApi } from '../lib/api';
 import { PillProgressButton } from './PillProgressButton';
+import { FullyCloudLoginModal } from './FullyCloudLoginModal';
 
 type CloudPanelProps = {
   telas: any[];
@@ -19,6 +20,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
   const [savingId, setSavingId] = useState<string | null>(null);
   const [newUrls, setNewUrls] = useState<Record<string, string>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showFullyLoginModal, setShowFullyLoginModal] = useState(false);
 
   // Persistence for screen active media in localStorage
   const [updatedMidias, setUpdatedMidias] = useState<Record<string, { id: string; titulo_video: string; url_storage: string }>>(() => {
@@ -147,6 +149,9 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
       }
       
       if (!response.ok) {
+        if (response.status === 401 || data?.requiresLogin) {
+          setShowFullyLoginModal(true);
+        }
         throw new Error(data.error || 'Erro ao enviar comando para a API.');
       }
 
@@ -171,6 +176,9 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
       clearInterval(progressInterval);
       console.error(err);
       let msg = err.message || 'Erro ao enviar comando.';
+      if (msg.includes('Sessão do Fully Cloud') || msg.includes('login') || msg.includes('Acesso negado')) {
+        setShowFullyLoginModal(true);
+      }
       if (msg === 'Failed to fetch' || err.name === 'TypeError') {
         msg = 'Falha de conexão com o servidor da aplicação. Verifique a chave FULLY_API_TOKEN ou se a API do Fully Cloud está acessível.';
       }
@@ -216,14 +224,24 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pt-6">
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 to-blue-500/10 flex items-center justify-center border border-amber-500/20 shadow-lg shadow-amber-500/5">
-          <Cloud className="w-6 h-6 text-amber-400" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 to-blue-500/10 flex items-center justify-center border border-amber-500/20 shadow-lg shadow-amber-500/5">
+            <Cloud className="w-6 h-6 text-amber-400" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-display font-light text-white tracking-tight">Fully Cloud Manager</h2>
+            <p className="text-sm text-slate-400 font-light mt-1">Gerencie e envie mídias diretamente para cada tela cadastrada.</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-3xl font-display font-light text-white tracking-tight">Fully Cloud Manager</h2>
-          <p className="text-sm text-slate-400 font-light mt-1">Gerencie e envie mídias diretamente para cada tela cadastrada.</p>
-        </div>
+
+        <button
+          onClick={() => setShowFullyLoginModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 hover:border-amber-500/30 rounded-2xl text-xs font-semibold transition-all shrink-0 active:scale-95 shadow-lg shadow-amber-500/5"
+        >
+          <KeyRound className="w-4 h-4 text-amber-400" />
+          <span>Login Fully Cloud</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -483,6 +501,14 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
           </div>
         )}
       </div>
+
+      <FullyCloudLoginModal
+        isOpen={showFullyLoginModal}
+        onClose={() => setShowFullyLoginModal(false)}
+        onSuccess={() => {
+          showToast('success', 'Sessão revalidada! Você já pode enviar comandos para as telas.');
+        }}
+      />
     </div>
   );
 }
