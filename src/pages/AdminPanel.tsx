@@ -332,15 +332,34 @@ export default function AdminPanel() {
 
     setIsLoading(true);
     try {
-      // 1. Deleta do banco
-      const { error: deleteDbError } = await supabase
-        .from('midias')
-        .delete()
-        .eq('id', midiaId);
+      // 1. Deleta os vínculos na tabela 'playlists' primeiro para evitar violação de FK constraint
+      if (midiaId) {
+        await supabase
+          .from('playlists')
+          .delete()
+          .eq('midia_id', midiaId);
+      }
 
-      if (deleteDbError) throw deleteDbError;
+      // 2. Deleta a mídia do banco de dados por ID ou por url_storage
+      if (midiaId) {
+        const { error: deleteDbError } = await supabase
+          .from('midias')
+          .delete()
+          .eq('id', midiaId);
 
-      // 2. Deleta do storage se aplicável
+        if (deleteDbError) {
+          console.warn('Tentando deletar mídia por URL:', deleteDbError);
+          if (urlStorage) {
+            await supabase.from('midias').delete().eq('url_storage', urlStorage);
+          } else {
+            throw deleteDbError;
+          }
+        }
+      } else if (urlStorage) {
+        await supabase.from('midias').delete().eq('url_storage', urlStorage);
+      }
+
+      // 3. Deleta do Supabase storage se aplicável
       if (urlStorage) {
         const parts = urlStorage.split('/videos/');
         if (parts.length > 1) {
@@ -353,12 +372,52 @@ export default function AdminPanel() {
         }
       }
 
+      // Atualiza o estado da lista imediatamente
+      setMidias(prev => prev.filter(m => m.id !== midiaId && m.url_storage !== urlStorage));
       showToast('success', 'Mídia excluída com sucesso.');
       fetchMidias();
       fetchDashboardData();
     } catch (error: any) {
       console.error('Error deleting midia:', error);
-      showToast('error', 'Erro ao excluir mídia: ' + error.message);
+      showToast('error', 'Erro ao excluir mídia: ' + (error.message || 'Falha na remoção'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLimparMidiasVazias = async () => {
+    if (!confirm('Deseja excluir automaticamente todas as mídias sem arquivo de vídeo (mídias vazias/registros temporários)?')) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Busca mídias que tem tamanho_mb == 0 ou null ou cujo título parece um UUID/sem vídeo
+      const { data: vazias } = await supabase
+        .from('midias')
+        .select('id, url_storage, tamanho_mb')
+        .or('tamanho_mb.eq.0,tamanho_mb.is.null');
+
+      if (vazias && vazias.length > 0) {
+        const ids = vazias.map(v => v.id);
+        
+        // Deleta os vínculos das playlists
+        await supabase.from('playlists').delete().in('midia_id', ids);
+        // Deleta as mídias da tabela midias
+        const { error: deleteError } = await supabase.from('midias').delete().in('id', ids);
+
+        if (deleteError) throw deleteError;
+
+        showToast('success', `${vazias.length} mídia(s) vazia(s) limpa(s) com sucesso!`);
+      } else {
+        showToast('success', 'Nenhuma mídia vazia encontrada para limpeza.');
+      }
+
+      fetchMidias();
+      fetchDashboardData();
+    } catch (err: any) {
+      console.error('Erro ao limpar mídias vazias:', err);
+      showToast('error', 'Erro ao limpar mídias vazias: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -1328,12 +1387,23 @@ create policy "Permitir deletar midias" on storage.objects
                     <h2 className="text-3xl font-display font-light text-white mb-2 tracking-tight">Gerenciar Mídias</h2>
                     <p className="text-sm text-slate-500 font-light">Envie, edite, exclua e mude o destino das mídias em sua rede.</p>
                   </div>
-                  <button 
-                    onClick={() => { fetchMidias(); fetchDashboardData(); }}
-                    className="text-xs text-amber-500 hover:text-amber-400 font-mono transition-colors border border-amber-500/20 hover:border-amber-500/50 px-3 py-1.5 rounded-lg bg-amber-500/5 whitespace-nowrap"
-                  >
-                    {isLoading ? 'Sincronizando...' : 'Sincronizar Biblioteca'}
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button 
+                      type="button"
+                      onClick={handleLimparMidiasVazias}
+                      className="text-xs text-rose-400 hover:text-rose-300 font-mono transition-colors border border-rose-500/20 hover:border-rose-500/50 px-3 py-1.5 rounded-lg bg-rose-500/5 whitespace-nowrap flex items-center gap-1.5"
+                      title="Exclui automaticamente todos os registros de mídias sem arquivo de vídeo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Limpar Mídias Vazias</span>
+                    </button>
+                    <button 
+                      onClick={() => { fetchMidias(); fetchDashboardData(); }}
+                      className="text-xs text-amber-500 hover:text-amber-400 font-mono transition-colors border border-amber-500/20 hover:border-amber-500/50 px-3 py-1.5 rounded-lg bg-amber-500/5 whitespace-nowrap"
+                    >
+                      {isLoading ? 'Sincronizando...' : 'Sincronizar Biblioteca'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
