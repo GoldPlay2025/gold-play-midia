@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { RefreshCw, Power, Monitor, Loader2, Cloud, CheckCircle2, AlertCircle } from 'lucide-react';
+import { RefreshCw, Power, Monitor, Loader2, Cloud, CheckCircle2, AlertCircle, Send, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchApi } from '../lib/api';
 
@@ -15,13 +15,23 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deviceIdInput, setDeviceIdInput] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [newUrls, setNewUrls] = useState<Record<string, string>>({});
 
-  const handleCommand = async (telaId: string, fullyDeviceId: string, action: string) => {
+  const handleCommand = async (telaId: string, fullyDeviceId: string, action: string, extraData?: { newUrl?: string }) => {
     setLoadingAction(`${telaId}-${action}`);
     try {
-      const response = await fetchApi('/api/fully/command', {
+      const payload: any = { deviceId: fullyDeviceId, action };
+      if (extraData?.newUrl) {
+        payload.newUrl = extraData.newUrl;
+      }
+
+      // Usa a rota local do backend da aplicação para evitar conflitos de CORS ou backendUrl desconfigurado
+      const response = await fetch('/api/fully/command', {
         method: 'POST',
-        body: JSON.stringify({ deviceId: fullyDeviceId, action })
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
       });
       
       const responseText = await response.text();
@@ -29,17 +39,26 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
       try {
         data = responseText ? JSON.parse(responseText) : {};
       } catch (e) {
-        throw new Error('O servidor retornou uma resposta inválida (não-JSON).');
+        throw new Error('O servidor retornou uma resposta inválida.');
       }
       
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao enviar comando.');
+        throw new Error(data.error || 'Erro ao enviar comando para a API.');
       }
       
-      showToast('success', `Comando ${action === 'loadStartUrl' ? 'Recarregar' : 'Reiniciar'} enviado com sucesso!`);
+      let successMessage = 'Comando enviado com sucesso!';
+      if (action === 'loadStartUrl') successMessage = 'Recarregar Mídia enviado com sucesso!';
+      if (action === 'restartApp') successMessage = 'Reiniciar TV enviado com sucesso!';
+      if (action === 'change_url') successMessage = 'Nova URL enviada para o APP com sucesso!';
+
+      showToast('success', successMessage);
     } catch (err: any) {
       console.error(err);
-      showToast('error', err.message);
+      let msg = err.message || 'Erro ao enviar comando.';
+      if (msg === 'Failed to fetch' || err.name === 'TypeError') {
+        msg = 'Falha de conexão com o servidor da aplicação. Verifique a chave FULLY_API_TOKEN ou se a API do Fully Cloud está acessível.';
+      }
+      showToast('error', msg);
     } finally {
       setLoadingAction(null);
     }
@@ -115,12 +134,12 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                       value={deviceIdInput}
                       onChange={(e) => setDeviceIdInput(e.target.value)}
                       placeholder="Ex: 86b9e7b2-3c..."
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
                     />
                     <button 
                       onClick={() => handleSaveDeviceId(tela)}
                       disabled={savingId === tela.id}
-                      className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-xl transition-colors disabled:opacity-50"
+                      className="bg-amber-500 hover:bg-amber-600 text-black p-2 rounded-xl transition-colors disabled:opacity-50"
                     >
                       {savingId === tela.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                     </button>
@@ -141,12 +160,47 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                         setDeviceIdInput(tela.fully_device_id || '');
                         setEditingId(tela.id);
                       }}
-                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      className="text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium"
                     >
                       Editar
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* Injeção de URL Direta na Tela */}
+              <div className="bg-[#050505] p-4 rounded-2xl border border-white/5 space-y-3">
+                <label className="block text-[10px] uppercase font-mono tracking-widest text-slate-400">
+                  Atualizar Mídia no APP
+                </label>
+                <div className="space-y-2.5">
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={newUrls[tela.id] || ''}
+                    onChange={(e) => setNewUrls({ ...newUrls, [tela.id]: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all"
+                  />
+                  <button
+                    onClick={() => {
+                      const url = newUrls[tela.id];
+                      if (!url || !url.trim()) {
+                        showToast('error', 'Digite uma URL válida antes de enviar.');
+                        return;
+                      }
+                      handleCommand(tela.id, tela.fully_device_id!, 'change_url', { newUrl: url.trim() });
+                    }}
+                    disabled={!tela.fully_device_id || !newUrls[tela.id]?.trim() || loadingAction !== null}
+                    className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none"
+                  >
+                    {loadingAction === `${tela.id}-change_url` ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span>Enviar URL</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -154,10 +208,10 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
               <button
                 onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'loadStartUrl')}
                 disabled={!tela.fully_device_id || loadingAction !== null}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                   !tela.fully_device_id 
                     ? 'bg-white/5 text-slate-600 cursor-not-allowed' 
-                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20'
+                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 active:scale-95'
                 }`}
               >
                 {loadingAction === `${tela.id}-loadStartUrl` ? (
@@ -171,10 +225,10 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
               <button
                 onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'restartApp')}
                 disabled={!tela.fully_device_id || loadingAction !== null}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                   !tela.fully_device_id 
                     ? 'bg-white/5 text-slate-600 cursor-not-allowed' 
-                    : 'bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20'
+                    : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:border-rose-500/40 active:scale-95'
                 }`}
               >
                 {loadingAction === `${tela.id}-restartApp` ? (
