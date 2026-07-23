@@ -151,9 +151,9 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                   </div>
 
                   {activeMidia ? (
-                    <div className="flex items-center gap-3 p-2 bg-white/[0.02] rounded-xl border border-white/5">
-                      {/* Miniatura com Borda Arredondada */}
-                      <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-black border border-white/10 shrink-0 group/thumb">
+                    <div className="flex items-center gap-3.5 p-2.5 bg-white/[0.02] rounded-2xl border border-white/5">
+                      {/* Miniatura Aumentada com Borda Arredondada Elegante */}
+                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-black border border-white/10 shrink-0 group/thumb shadow-md">
                         {activeMidia.url_storage.match(/\.(mp4|webm|ogg)$/i) || activeMidia.url_storage.includes('/storage/v1/object/') ? (
                           <video 
                             src={activeMidia.url_storage} 
@@ -164,58 +164,57 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                           />
                         ) : (
                           <div className="w-full h-full bg-amber-500/10 flex items-center justify-center text-amber-400">
-                            <Film className="w-6 h-6" />
+                            <Film className="w-8 h-8" />
                           </div>
                         )}
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-80 group-hover/thumb:opacity-100 transition-opacity">
-                          <Play className="w-4 h-4 text-amber-400 fill-amber-400" />
+                          <Play className="w-5 h-5 text-amber-400 fill-amber-400" />
                         </div>
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-white truncate" title={activeMidia.titulo_video}>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-sm font-semibold text-white truncate" title={activeMidia.titulo_video}>
                           {activeMidia.titulo_video}
                         </p>
-                        <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                        <p className="text-[10px] text-slate-500 truncate font-mono">
                           {activeMidia.url_storage}
                         </p>
-                        <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex items-center gap-2.5 pt-1">
                           <button
                             onClick={() => {
                               setNewUrls({ ...newUrls, [tela.id]: activeMidia.url_storage });
                               showToast('success', `URL da mídia "${activeMidia.titulo_video}" inserida!`);
                             }}
-                            className="text-[10px] font-medium text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1"
+                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 whitespace-nowrap bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20"
                           >
-                            <Send className="w-2.5 h-2.5" /> Inserir no Campo
+                            <Send className="w-3 h-3" /> Inserir já
                           </button>
-                          <span className="text-slate-700">•</span>
                           <button
                             onClick={() => copyToClipboard(activeMidia.url_storage, tela.nome_local)}
-                            className="text-[10px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+                            className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1 whitespace-nowrap px-2 py-1 rounded-lg hover:bg-white/5"
                           >
-                            {copiedId === activeMidia.url_storage ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
+                            {copiedId === activeMidia.url_storage ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                             Copiar
                           </button>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3 p-2 bg-white/[0.02] rounded-xl border border-white/5">
-                      <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                        <Monitor className="w-5 h-5" />
+                    <div className="flex items-center gap-3.5 p-2.5 bg-white/[0.02] rounded-2xl border border-white/5">
+                      <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                        <Monitor className="w-7 h-7" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-slate-300 truncate">Player Oficial ({tela.nome_local})</p>
-                        <p className="text-[10px] text-slate-500 truncate mt-0.5">{telaPlayerUrl}</p>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-xs font-semibold text-slate-200 truncate">Player Oficial ({tela.nome_local})</p>
+                        <p className="text-[10px] text-slate-500 truncate font-mono">{telaPlayerUrl}</p>
                         <button
                           onClick={() => {
                             setNewUrls({ ...newUrls, [tela.id]: telaPlayerUrl });
                             showToast('success', `URL do Player de ${tela.nome_local} inserida!`);
                           }}
-                          className="text-[10px] font-medium text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 mt-1"
+                          className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 whitespace-nowrap bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 mt-1"
                         >
-                          <Send className="w-2.5 h-2.5" /> Usar Player desta Tela
+                          <Send className="w-3 h-3" /> Inserir já
                         </button>
                       </div>
                     </div>
