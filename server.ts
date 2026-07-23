@@ -47,20 +47,24 @@ async function startServer() {
   app.post("/api/fully/command", async (req, res) => {
     try {
       const { deviceId, action, newUrl } = req.body;
-      const apiToken = process.env.FULLY_API_TOKEN;
+      const apiToken = process.env.FULLY_API_TOKEN || process.env.FULLY_API_KEY;
+      const apiEmail = process.env.FULLY_API_EMAIL;
 
       if (!apiToken) {
-        return res.status(503).json({ error: "FULLY_API_TOKEN não configurado no servidor." });
+        return res.status(503).json({ error: "FULLY_API_TOKEN (ou FULLY_API_KEY) não configurado no servidor." });
       }
       
       if (!deviceId || !action) {
         return res.status(400).json({ error: "O deviceId e a action são obrigatórios." });
       }
 
+      // Mapeamento das actions para o cmd do Fully Cloud
       let fullyCmd = action;
-      let extraParams = "";
+      if (action === 'reload') fullyCmd = 'loadStartUrl';
+      if (action === 'restart') fullyCmd = 'restartApp';
 
-      if (action === 'change_url') {
+      let extraParams = "";
+      if (action === 'change_url' || action === 'loadURL') {
         if (!newUrl) {
           return res.status(400).json({ error: "A propriedade newUrl é obrigatória para alterar a URL." });
         }
@@ -68,47 +72,40 @@ async function startServer() {
         extraParams = `&url=${encodeURIComponent(newUrl)}`;
       }
 
-      // A URL no formato exato exigido pela documentação do Fully Cloud
-      const fullyUrl = `https://cloud.fully-kiosk.com/api/?cmd=${fullyCmd}${extraParams}&deviceId=${deviceId}&token=${apiToken}&type=json`;
+      // Endpoint oficial da REST API do Fully Kiosk Cloud
+      const emailParam = apiEmail ? `&apiemail=${encodeURIComponent(apiEmail)}` : '';
+      const fullyUrl = `https://api.fully-kiosk.com/remote/?cmd=${fullyCmd}&devid=${encodeURIComponent(deviceId)}${emailParam}&apikey=${encodeURIComponent(apiToken)}${extraParams}&type=json`;
 
-      // Dispara a ordem para o servidor deles usando GET, como exigido pela API do Fully Cloud
+      // Dispara a requisição GET para o endpoint oficial da API do Fully Kiosk
       const response = await fetch(fullyUrl, {
-        method: 'GET', 
-        headers: {
-          'Accept': 'application/json',
-        }
+        method: 'GET',
       });
 
-      // Evita o erro "Unexpected token '<'" verificando se a resposta é HTML
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("text/html")) {
-         return res.status(502).json({ error: "A API do Fully Cloud retornou uma página HTML (possivelmente página de Login). A URL ou o Token estão incorretos e causaram um redirecionamento." });
+        return res.status(502).json({ 
+          error: "A API do Fully Cloud retornou HTML em vez de JSON. Verifique se FULLY_API_EMAIL, FULLY_API_TOKEN e o Device ID estão corretos." 
+        });
       }
 
-      // Pega a resposta como texto primeiro para evitar erro de JSON vazio
       const responseText = await response.text();
       
       let data;
       try {
-        data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado, mas sem resposta no corpo' };
+        data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado com sucesso' };
       } catch (e) {
         console.warn("Resposta não é um JSON válido:", responseText);
-        return res.status(200).json({ 
-          status: 'Success', 
-          statustext: 'Comando enviado (resposta não-JSON)', 
-          rawResponse: responseText 
-        });
+        data = { status: 'Success', text: responseText };
       }
 
-      // Se o Fully Cloud retornar erro, repassa para o painel
       if (data && data.status === 'Error') {
-         return res.status(400).json({ error: data.statustext });
+        return res.status(400).json({ error: data.statustext || "Erro retornado pela API do Fully Kiosk." });
       }
 
-      res.json(data);
+      return res.json(data);
     } catch (err: any) {
       console.error("Erro no comando Fully Cloud:", err);
-      res.status(500).json({ error: 'Falha de comunicação com o Fully Cloud' });
+      return res.status(500).json({ error: err.message || "Erro interno ao enviar comando ao Fully Cloud." });
     }
   });
 
