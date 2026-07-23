@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { RefreshCw, Power, Monitor, Loader2, Cloud, CheckCircle2, AlertCircle, Send, Globe } from 'lucide-react';
+import { RefreshCw, Power, Monitor, Loader2, Cloud, CheckCircle2, AlertCircle, Send, Globe, Play, Copy, Film, Check, ExternalLink, Tv } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchApi } from '../lib/api';
 
@@ -16,6 +16,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
   const [deviceIdInput, setDeviceIdInput] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [newUrls, setNewUrls] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCommand = async (telaId: string, fullyDeviceId: string, action: string, extraData?: { newUrl?: string }) => {
     setLoadingAction(`${telaId}-${action}`);
@@ -25,7 +26,6 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
         payload.newUrl = extraData.newUrl;
       }
 
-      // Usa a rota local do backend da aplicação para evitar conflitos de CORS ou backendUrl desconfigurado
       const response = await fetch('/api/fully/command', {
         method: 'POST',
         headers: {
@@ -85,162 +85,274 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
     }
   };
 
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(text);
+    showToast('success', `URL da ${label} copiada para a área de transferência!`);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pt-6">
       <div className="flex items-center gap-4 mb-8">
-        <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-          <Cloud className="w-6 h-6 text-blue-500" />
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 to-blue-500/10 flex items-center justify-center border border-amber-500/20 shadow-lg shadow-amber-500/5">
+          <Cloud className="w-6 h-6 text-amber-400" />
         </div>
         <div>
           <h2 className="text-3xl font-display font-light text-white tracking-tight">Fully Cloud Manager</h2>
-          <p className="text-sm text-slate-500 font-light mt-1">Gerencie os aparelhos TV Box remotamente via API do Fully Kiosk.</p>
+          <p className="text-sm text-slate-400 font-light mt-1">Gerencie e envie mídias diretamente para cada tela cadastrada.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {telas.map((tela) => (
-          <div key={tela.id} className="bg-[#0f0f11] border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-white/10 transition-colors flex flex-col">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${tela.status_online ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-                  <Monitor className={`w-5 h-5 ${tela.status_online ? 'text-emerald-500' : 'text-red-500'}`} />
+        {telas.map((tela) => {
+          // Identifica a mídia ativa cadastrada especificamente para esta tela
+          const playlists = tela.playlists || [];
+          const activeMidia = playlists.length > 0 ? playlists[0]?.midias : null;
+          const telaPlayerUrl = `${window.location.origin}/player/${tela.id}`;
+          const currentTargetUrl = activeMidia?.url_storage || telaPlayerUrl;
+
+          return (
+            <div key={tela.id} className="bg-[#0f0f11] border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-white/10 transition-all flex flex-col shadow-xl">
+              {/* Header do Card da Tela */}
+              <div className="flex items-start justify-between mb-5 pb-4 border-b border-white/5">
+                <div className="flex items-center gap-3 min-w-0 pr-2">
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border shrink-0 ${tela.status_online ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                    <Monitor className={`w-5 h-5 ${tela.status_online ? 'text-emerald-500' : 'text-red-400'}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-semibold text-white truncate">{tela.nome_local}</h3>
+                    <p className="text-xs text-slate-400 truncate">{tela.clientes?.nome_empresa || 'Sem Cliente'}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-medium text-white">{tela.nome_local}</h3>
-                  <p className="text-xs text-slate-500">{tela.clientes?.nome_empresa || 'Sem Cliente'}</p>
-                </div>
+
+                <a
+                  href="https://cloud.fully-kiosk.com/cloud/devices"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Abrir no Fully Cloud"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 hover:border-blue-500/30 rounded-xl text-xs font-medium transition-all hover:scale-[1.02] active:scale-95 shrink-0"
+                >
+                  <Cloud className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Cloud</span>
+                </a>
               </div>
 
-              <a
-                href="https://cloud.fully-kiosk.com/cloud/devices"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Abrir no Fully Cloud"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 hover:border-blue-500/30 rounded-xl text-xs font-semibold transition-all hover:scale-[1.02] active:scale-95 shrink-0"
-              >
-                <Cloud className="w-3.5 h-3.5 text-blue-400" />
-                <span>Cloud</span>
-              </a>
-            </div>
-
-            <div className="flex-1 space-y-4">
-              <div className="bg-[#050505] p-4 rounded-2xl border border-white/5">
-                <p className="text-[10px] uppercase font-mono tracking-widest text-slate-500 mb-2">Device ID (Fully Cloud)</p>
-                
-                {editingId === tela.id ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={deviceIdInput}
-                      onChange={(e) => setDeviceIdInput(e.target.value)}
-                      placeholder="Ex: 86b9e7b2-3c..."
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
-                    />
-                    <button 
-                      onClick={() => handleSaveDeviceId(tela)}
-                      disabled={savingId === tela.id}
-                      className="bg-amber-500 hover:bg-amber-600 text-black p-2 rounded-xl transition-colors disabled:opacity-50"
-                    >
-                      {savingId === tela.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    </button>
-                    <button 
-                      onClick={() => setEditingId(null)}
-                      className="bg-white/5 hover:bg-white/10 text-white p-2 rounded-xl transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : (
+              <div className="flex-1 space-y-4">
+                {/* Exibição da Mídia Atual Veiculada NESTA Tela */}
+                <div className="bg-[#050505] p-3.5 rounded-2xl border border-white/5 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-mono text-slate-300 truncate pr-4">
-                      {tela.fully_device_id ? tela.fully_device_id : <span className="text-slate-600 italic">Não configurado</span>}
-                    </p>
-                    <button 
+                    <span className="text-[10px] uppercase font-mono tracking-widest text-slate-400 font-semibold flex items-center gap-1.5">
+                      <Tv className="w-3 h-3 text-amber-400" /> Mídia da Tela
+                    </span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                      Ativa
+                    </span>
+                  </div>
+
+                  {activeMidia ? (
+                    <div className="flex items-center gap-3 p-2 bg-white/[0.02] rounded-xl border border-white/5">
+                      {/* Miniatura com Borda Arredondada */}
+                      <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-black border border-white/10 shrink-0 group/thumb">
+                        {activeMidia.url_storage.match(/\.(mp4|webm|ogg)$/i) || activeMidia.url_storage.includes('/storage/v1/object/') ? (
+                          <video 
+                            src={activeMidia.url_storage} 
+                            muted 
+                            playsInline 
+                            preload="metadata" 
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-amber-500/10 flex items-center justify-center text-amber-400">
+                            <Film className="w-6 h-6" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-80 group-hover/thumb:opacity-100 transition-opacity">
+                          <Play className="w-4 h-4 text-amber-400 fill-amber-400" />
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-white truncate" title={activeMidia.titulo_video}>
+                          {activeMidia.titulo_video}
+                        </p>
+                        <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                          {activeMidia.url_storage}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <button
+                            onClick={() => {
+                              setNewUrls({ ...newUrls, [tela.id]: activeMidia.url_storage });
+                              showToast('success', `URL da mídia "${activeMidia.titulo_video}" inserida!`);
+                            }}
+                            className="text-[10px] font-medium text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1"
+                          >
+                            <Send className="w-2.5 h-2.5" /> Inserir no Campo
+                          </button>
+                          <span className="text-slate-700">•</span>
+                          <button
+                            onClick={() => copyToClipboard(activeMidia.url_storage, tela.nome_local)}
+                            className="text-[10px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+                          >
+                            {copiedId === activeMidia.url_storage ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
+                            Copiar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 p-2 bg-white/[0.02] rounded-xl border border-white/5">
+                      <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                        <Monitor className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-300 truncate">Player Oficial ({tela.nome_local})</p>
+                        <p className="text-[10px] text-slate-500 truncate mt-0.5">{telaPlayerUrl}</p>
+                        <button
+                          onClick={() => {
+                            setNewUrls({ ...newUrls, [tela.id]: telaPlayerUrl });
+                            showToast('success', `URL do Player de ${tela.nome_local} inserida!`);
+                          }}
+                          className="text-[10px] font-medium text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 mt-1"
+                        >
+                          <Send className="w-2.5 h-2.5" /> Usar Player desta Tela
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Configuração do Device ID */}
+                <div className="bg-[#050505] p-3.5 rounded-2xl border border-white/5">
+                  <p className="text-[10px] uppercase font-mono tracking-widest text-slate-400 font-semibold mb-2">Device ID (Fully Cloud)</p>
+                  
+                  {editingId === tela.id ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={deviceIdInput}
+                        onChange={(e) => setDeviceIdInput(e.target.value)}
+                        placeholder="Ex: 86b9e7b2-3c..."
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/50"
+                      />
+                      <button 
+                        onClick={() => handleSaveDeviceId(tela)}
+                        disabled={savingId === tela.id}
+                        className="bg-amber-500 hover:bg-amber-600 text-black px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+                      >
+                        {savingId === tela.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      </button>
+                      <button 
+                        onClick={() => setEditingId(null)}
+                        className="bg-white/5 hover:bg-white/10 text-white px-2.5 py-1.5 rounded-xl text-xs transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-mono text-slate-300 truncate pr-4">
+                        {tela.fully_device_id ? tela.fully_device_id : <span className="text-slate-600 italic">Não configurado</span>}
+                      </p>
+                      <button 
+                        onClick={() => {
+                          setDeviceIdInput(tela.fully_device_id || '');
+                          setEditingId(tela.id);
+                        }}
+                        className="text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium shrink-0"
+                      >
+                        Editar
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Atualizar Mídia no APP */}
+                <div className="bg-[#050505] p-3.5 rounded-2xl border border-white/5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] uppercase font-mono tracking-widest text-slate-400 font-semibold">
+                      Atualizar Mídia no APP
+                    </label>
+                    {newUrls[tela.id] && (
+                      <button
+                        onClick={() => setNewUrls({ ...newUrls, [tela.id]: '' })}
+                        className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2.5">
+                    <input
+                      type="url"
+                      placeholder={`Cole a URL para a tela ${tela.nome_local}...`}
+                      value={newUrls[tela.id] || ''}
+                      onChange={(e) => setNewUrls({ ...newUrls, [tela.id]: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all"
+                    />
+                    <button
                       onClick={() => {
-                        setDeviceIdInput(tela.fully_device_id || '');
-                        setEditingId(tela.id);
+                        const url = newUrls[tela.id];
+                        if (!url || !url.trim()) {
+                          showToast('error', 'Digite ou insira uma URL válida antes de enviar.');
+                          return;
+                        }
+                        handleCommand(tela.id, tela.fully_device_id!, 'change_url', { newUrl: url.trim() });
                       }}
-                      className="text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium"
+                      disabled={!tela.fully_device_id || !newUrls[tela.id]?.trim() || loadingAction !== null}
+                      className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none"
                     >
-                      Editar
+                      {loadingAction === `${tela.id}-change_url` ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>Enviar URL</span>
                     </button>
                   </div>
-                )}
-              </div>
-
-              {/* Injeção de URL Direta na Tela */}
-              <div className="bg-[#050505] p-4 rounded-2xl border border-white/5 space-y-3">
-                <label className="block text-[10px] uppercase font-mono tracking-widest text-slate-400">
-                  Atualizar Mídia no APP
-                </label>
-                <div className="space-y-2.5">
-                  <input
-                    type="url"
-                    placeholder="https://..."
-                    value={newUrls[tela.id] || ''}
-                    onChange={(e) => setNewUrls({ ...newUrls, [tela.id]: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all"
-                  />
-                  <button
-                    onClick={() => {
-                      const url = newUrls[tela.id];
-                      if (!url || !url.trim()) {
-                        showToast('error', 'Digite uma URL válida antes de enviar.');
-                        return;
-                      }
-                      handleCommand(tela.id, tela.fully_device_id!, 'change_url', { newUrl: url.trim() });
-                    }}
-                    disabled={!tela.fully_device_id || !newUrls[tela.id]?.trim() || loadingAction !== null}
-                    className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none"
-                  >
-                    {loadingAction === `${tela.id}-change_url` ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Send className="w-3.5 h-3.5" />
-                    )}
-                    <span>Enviar URL</span>
-                  </button>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-6 pt-4 border-t border-white/5 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'loadStartUrl')}
-                disabled={!tela.fully_device_id || loadingAction !== null}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                  !tela.fully_device_id 
-                    ? 'bg-white/5 text-slate-600 cursor-not-allowed' 
-                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 active:scale-95'
-                }`}
-              >
-                {loadingAction === `${tela.id}-loadStartUrl` ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
-                )}
-                Recarregar Mídia
-              </button>
-              
-              <button
-                onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'restartApp')}
-                disabled={!tela.fully_device_id || loadingAction !== null}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                  !tela.fully_device_id 
-                    ? 'bg-white/5 text-slate-600 cursor-not-allowed' 
-                    : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:border-rose-500/40 active:scale-95'
-                }`}
-              >
-                {loadingAction === `${tela.id}-restartApp` ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Power className="w-4 h-4" />
-                )}
-                Reiniciar TV
-              </button>
+              {/* Botões Inferiores de Ação */}
+              <div className="mt-6 pt-4 border-t border-white/5 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'loadStartUrl')}
+                  disabled={!tela.fully_device_id || loadingAction !== null}
+                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                    !tela.fully_device_id 
+                      ? 'bg-white/5 text-slate-600 cursor-not-allowed' 
+                      : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 active:scale-95'
+                  }`}
+                >
+                  {loadingAction === `${tela.id}-loadStartUrl` ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Recarregar Mídia
+                </button>
+                
+                <button
+                  onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'restartApp')}
+                  disabled={!tela.fully_device_id || loadingAction !== null}
+                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                    !tela.fully_device_id 
+                      ? 'bg-white/5 text-slate-600 cursor-not-allowed' 
+                      : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:border-rose-500/40 active:scale-95'
+                  }`}
+                >
+                  {loadingAction === `${tela.id}-restartApp` ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Power className="w-4 h-4" />
+                  )}
+                  Reiniciar TV
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         
         {telas.length === 0 && (
           <div className="col-span-full py-12 text-center text-slate-500">
