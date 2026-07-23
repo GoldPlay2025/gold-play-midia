@@ -20,61 +20,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { deviceId, action } = req.body;
+    const { deviceId, action, newUrl } = req.body || {};
     
-    // Get Fully API Token from Vercel environment variables
-    const token = process.env.FULLY_API_TOKEN;
+    const apiToken = process.env.FULLY_API_TOKEN || process.env.FULLY_API_KEY;
+    const apiEmail = process.env.FULLY_API_EMAIL;
 
-    if (!token) {
-      return res.status(500).json({ error: 'FULLY_API_TOKEN não configurado nas variáveis de ambiente da Vercel.' });
+    if (!apiToken) {
+      return res.status(503).json({ error: 'FULLY_API_TOKEN (ou FULLY_API_KEY) não configurado nas variáveis da Vercel.' });
     }
 
     if (!deviceId || !action) {
-       return res.status(400).json({ error: 'O deviceId e a action são obrigatórios.' });
+      return res.status(400).json({ error: 'O deviceId e a action são obrigatórios.' });
     }
 
-    // URL format as required by the Fully Cloud API
-    const fullyUrl = `https://cloud.fully-kiosk.com/api/?cmd=${action}&deviceId=${deviceId}&token=${token}&type=json`;
+    // Mapeamento de comandos
+    let fullyCmd = action;
+    if (action === 'reload') fullyCmd = 'loadStartUrl';
+    if (action === 'restart') fullyCmd = 'restartApp';
 
-    // Fetch from Fully Cloud API using GET method
-    const response = await fetch(fullyUrl, {
-      method: 'GET', 
-      headers: {
-        'Accept': 'application/json',
+    let extraParams = '';
+    if (action === 'change_url' || action === 'loadURL') {
+      if (!newUrl) {
+        return res.status(400).json({ error: 'A propriedade newUrl é obrigatória para alterar a URL.' });
       }
+      fullyCmd = 'loadURL';
+      extraParams = `&url=${encodeURIComponent(newUrl)}`;
+    }
+
+    const emailParam = apiEmail ? `&apiemail=${encodeURIComponent(apiEmail)}` : '';
+    const fullyUrl = `https://api.fully-kiosk.com/remote/?cmd=${fullyCmd}&devid=${encodeURIComponent(deviceId)}${emailParam}&apikey=${encodeURIComponent(apiToken)}${extraParams}&type=json`;
+
+    const response = await fetch(fullyUrl, {
+      method: 'GET',
     });
 
-    // Check if response is HTML (redirects, login page, etc.)
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("text/html")) {
-       return res.status(502).json({ error: "A API do Fully Cloud retornou uma página HTML. Verifique se o FULLY_API_TOKEN e o Device ID estão corretos." });
+      return res.status(502).json({ 
+        error: "A API do Fully Cloud retornou HTML em vez de JSON. Verifique se FULLY_API_EMAIL, FULLY_API_TOKEN e o Device ID estão corretos." 
+      });
     }
 
-    // Get response body as text first to handle empty body
     const responseText = await response.text();
     
     let data;
     try {
-      data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado, mas sem resposta no corpo' };
+      data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado com sucesso' };
     } catch (e) {
-      console.warn("Resposta não é um JSON válido:", responseText);
-      return res.status(200).json({ 
-        status: 'Success', 
-        statustext: 'Comando enviado (resposta não-JSON)', 
-        rawResponse: responseText 
-      });
+      data = { status: 'Success', text: responseText };
     }
 
-    // If Fully Cloud returns error
     if (data && data.status === 'Error') {
-       return res.status(400).json({ error: data.statustext || 'Erro retornado pelo Fully Cloud' });
+      return res.status(400).json({ error: data.statustext || 'Erro retornado pela API do Fully Kiosk.' });
     }
 
-    // Success
     return res.status(200).json(data);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro na API do Fully:", error);
-    return res.status(500).json({ error: 'Falha de comunicação com o Fully Cloud' });
+    return res.status(500).json({ error: error.message || 'Falha de comunicação com o Fully Kiosk Cloud' });
   }
 }
