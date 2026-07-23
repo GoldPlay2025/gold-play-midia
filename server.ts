@@ -157,6 +157,139 @@ Pergunta ou solicitação do usuário:
     }
   });
 
+  // In-memory fallback for costs if Supabase table is not yet migrated
+  let memoryCustos: Array<{
+    id: string;
+    descricao: string;
+    valor: number;
+    data_pagamento: string;
+    recorrencia: string;
+    categoria: string;
+    observacoes?: string;
+    criado_em: string;
+  }> = [
+    {
+      id: "cost-1",
+      descricao: "Licenciamento Anual Fully Kiosk (10 Telas)",
+      valor: 820.00,
+      data_pagamento: "2026-01-15",
+      recorrencia: "Anual",
+      categoria: "Licença Fully Kiosk",
+      observacoes: "Pagamento para renovação anual de licenças de exibição",
+      criado_em: new Date().toISOString()
+    },
+    {
+      id: "cost-2",
+      descricao: "Hospedagem & Servidor Cloud",
+      valor: 150.00,
+      data_pagamento: "2026-07-01",
+      recorrencia: "Mensal",
+      categoria: "Servidor",
+      observacoes: "Infraestrutura de streaming e API Gold Play",
+      criado_em: new Date().toISOString()
+    }
+  ];
+
+  // API Endpoints para Gestão de Custos
+  app.get("/api/custos", async (req, res) => {
+    try {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+      if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder')) {
+        const resp = await fetch(`${supabaseUrl}/rest/v1/custos?select=*&order=data_pagamento.desc`, {
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`
+          }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          return res.json(data);
+        }
+      }
+      return res.json(memoryCustos);
+    } catch (err) {
+      return res.json(memoryCustos);
+    }
+  });
+
+  app.post("/api/custos", async (req, res) => {
+    try {
+      const { descricao, valor, data_pagamento, recorrencia, categoria, observacoes } = req.body;
+      if (!descricao || valor === undefined) {
+        return res.status(400).json({ error: "Descrição e Valor são obrigatórios." });
+      }
+
+      const newCost = {
+        id: "cost-" + Date.now(),
+        descricao,
+        valor: Number(valor),
+        data_pagamento: data_pagamento || new Date().toISOString().split('T')[0],
+        recorrencia: recorrencia || "Anual",
+        categoria: categoria || "Licença Fully Kiosk",
+        observacoes: observacoes || "",
+        criado_em: new Date().toISOString()
+      };
+
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+      if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder')) {
+        const resp = await fetch(`${supabaseUrl}/rest/v1/custos`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            descricao: newCost.descricao,
+            valor: newCost.valor,
+            data_pagamento: newCost.data_pagamento,
+            recorrencia: newCost.recorrencia,
+            categoria: newCost.categoria,
+            observacoes: newCost.observacoes
+          })
+        });
+        if (resp.ok) {
+          const inserted = await resp.json();
+          return res.json(inserted[0] || newCost);
+        }
+      }
+
+      memoryCustos.unshift(newCost);
+      return res.json(newCost);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || "Erro ao salvar custo." });
+    }
+  });
+
+  app.delete("/api/custos/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+      if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder')) {
+        await fetch(`${supabaseUrl}/rest/v1/custos?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`
+          }
+        });
+      }
+
+      memoryCustos = memoryCustos.filter(c => c.id !== id);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || "Erro ao remover custo." });
+    }
+  });
+
+
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
