@@ -7,6 +7,7 @@ import { PerfilSettings, SystemSettings, defaultSettings } from "../components/P
 import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
 import { WhatsappPanel } from "../components/WhatsappPanel";
+import { GestaoPanel } from "../components/GestaoPanel";
 import { PillProgressButton } from "../components/PillProgressButton";
 import { MediaThumbnail, MediaModalPlayer } from "../components/MediaThumbnail";
 import { fetchApi } from '../lib/api';
@@ -96,7 +97,7 @@ type Toast = {
   message: string;
 };
 
-export default function AdminPanel() {
+export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'whatsapp' }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('gpm_authenticated') === 'true';
@@ -106,7 +107,7 @@ export default function AdminPanel() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'whatsapp'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'whatsapp'>(initialTab || 'dashboard');
   const [telas, setTelas] = useState<Tela[]>([]);
   const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -1334,6 +1335,13 @@ create policy "Permitir deletar midias" on storage.objects
                     </div>
                   </div>
                 </div>
+              </motion.div>
+            )}
+
+            {/* Gestão Tab */}
+            {activeTab === 'gestao' && (
+              <motion.div key="gestao" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
+                <GestaoPanel showToast={showToast} />
               </motion.div>
             )}
 
