@@ -8,7 +8,9 @@ import {
   Film,
   X,
   MessageSquare,
-  Cloud
+  Cloud,
+  TrendingUp,
+  Wallet
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -42,6 +44,7 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
 
       <div className="flex-1 py-6 px-3 flex flex-col gap-2 overflow-y-auto">
         <MenuButton icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsOpen(false); }} />
+        <MenuButton icon={TrendingUp} label="Gestão Financeira" active={activeTab === 'gestao'} onClick={() => { setActiveTab('gestao'); setIsOpen(false); }} />
         <MenuButton icon={Users} label="Clientes" active={activeTab === 'clientes'} onClick={() => { setActiveTab('clientes'); setIsOpen(false); }} />
         <MenuButton icon={Monitor} label="Telas" active={activeTab === 'telas'} onClick={() => { setActiveTab('telas'); setIsOpen(false); }} />
         {/* <MenuButton icon={MessageSquare} label="WhatsApp" active={activeTab === 'whatsapp'} onClick={() => { setActiveTab('whatsapp'); setIsOpen(false); }} /> */}
