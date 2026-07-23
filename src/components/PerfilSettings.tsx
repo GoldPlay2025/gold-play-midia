@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, Upload, Save, Loader2, Image as ImageIcon, Database, Link, AlertCircle, CheckCircle, HelpCircle, FileCode } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { PillProgressButton } from './PillProgressButton';
 
 const envUrl = import.meta.env.VITE_SUPABASE_URL;
 const localUrl = typeof window !== 'undefined' ? localStorage.getItem('gpm_supabase_url') : null;
@@ -360,14 +361,15 @@ ON CONFLICT (id) DO NOTHING;`);
         </div>
 
         <div className="pt-6 border-t border-white/5 flex justify-end">
-          <button 
-            type="submit" 
+          <PillProgressButton
+            type="submit"
+            label="Salvar Configurações"
+            loadingLabel="Salvando..."
+            icon={<Save className="w-4 h-4" />}
+            variant="amber"
+            isLoading={isSubmitting}
             disabled={isSubmitting}
-            className="bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 px-8 py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.2)] hover:shadow-[0_0_30px_rgba(245,158,11,0.4)]"
-          >
-            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Salvar Configurações
-          </button>
+          />
         </div>
       </form>
 

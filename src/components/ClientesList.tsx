@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check } from 'lucide-react';
 import { motion } from 'motion/react';
+import { PillProgressButton } from './PillProgressButton';
 
 export type Cliente = {
   id: string;
@@ -691,22 +692,23 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
             )}
           </div>
           
-          <div className="pt-4 border-t border-white/5 flex justify-end gap-3">
+          <div className="pt-4 border-t border-white/5 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
             >
               Cancelar
             </button>
-            <button 
-              type="submit" 
+            <PillProgressButton
+              type="submit"
+              label={editingId ? 'Salvar Alterações' : 'Cadastrar Cliente'}
+              loadingLabel={editingId ? 'Salvando...' : 'Cadastrando...'}
+              icon={<Check className="w-4 h-4" />}
+              variant="amber"
+              isLoading={isSubmitting}
               disabled={isSubmitting}
-              className="bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 px-6 py-2 rounded-xl text-sm font-medium transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] flex items-center gap-2"
-            >
-              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {editingId ? 'Salvar Alterações' : 'Cadastrar Cliente'}
-            </button>
+            />
           </div>
         </form>
       </Modal>
@@ -720,21 +722,22 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
           <p className="text-slate-300 text-sm">
             Tem certeza que deseja excluir este cliente? Esta ação não poderá ser desfeita e pode afetar telas vinculadas.
           </p>
-          <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
             <button
               onClick={() => setDeleteConfirmId(null)}
-              className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
             >
               Cancelar
             </button>
-            <button 
+            <PillProgressButton
               onClick={handleDelete}
+              label="Excluir Cliente"
+              loadingLabel="Excluindo..."
+              icon={<Trash2 className="w-4 h-4" />}
+              variant="rose"
+              isLoading={isDeleting}
               disabled={isDeleting}
-              className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-xl text-sm font-medium transition-all shadow-[0_0_15px_rgba(239,68,68,0.2)] flex items-center gap-2"
-            >
-              {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
-              Excluir Cliente
-            </button>
+            />
           </div>
         </div>
       </Modal>

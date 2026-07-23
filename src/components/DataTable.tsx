@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Edit2, Trash2, Search, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { PillProgressButton } from './PillProgressButton';
 
 export type Column<T> = {
   key: keyof T | 'actions';
@@ -85,13 +86,12 @@ export function DataTable<T extends { id: string }>({
             </div>
           )}
           {onAdd && (
-            <button 
+            <PillProgressButton 
               onClick={onAdd}
-              className="flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              {addActionLabel}
-            </button>
+              label={addActionLabel}
+              icon={<Plus className="w-4 h-4" />}
+              variant="amber"
+            />
           )}
         </div>
       </div>
