@@ -10,6 +10,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<AdminPanel />} />
+        <Route path="/gestao" element={<AdminPanel initialTab="gestao" />} />
         <Route path="/player/:screenId" element={<Player />} />
         <Route path="/campanha/:midiaId" element={<CampanhaPlayer />} />
         <Route path="/player" element={<AppView />} />
