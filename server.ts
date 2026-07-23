@@ -83,10 +83,11 @@ async function startServer() {
 
       const responseText = await response.text();
       
-      // Verificação de tela de login / acesso negado
-      if (responseText.includes("Sign in") || responseText.includes("Login") || responseText.includes("Access Denied")) {
+      // Verificação de tela de login / acesso negado / sessão expirada
+      if (responseText.includes("Sign in") || responseText.includes("Login") || responseText.includes("Access Denied") || responseText.includes("Logged out")) {
         return res.status(401).json({ 
-          error: "Acesso negado pelo Fully Cloud. Verifique se FULLY_API_EMAIL, FULLY_API_TOKEN e o Device ID estão corretos nas variáveis de ambiente." 
+          requiresLogin: true,
+          error: "Sessão do Fully Cloud expirada ou acesso negado. Faça login na sua conta da Fully Cloud para revalidar." 
         });
       }
 
