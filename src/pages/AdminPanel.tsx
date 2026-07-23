@@ -7,6 +7,7 @@ import { PerfilSettings, SystemSettings, defaultSettings } from "../components/P
 import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
 import { WhatsappPanel } from "../components/WhatsappPanel";
+import { PillProgressButton } from "../components/PillProgressButton";
 import { fetchApi } from '../lib/api';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { 
@@ -741,13 +742,14 @@ export default function AdminPanel() {
               </AnimatePresence>
             </div>
 
-            <button
+            <PillProgressButton
               type="submit"
-              className="w-full bg-white text-black hover:bg-slate-200 py-4 rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2 group"
-            >
-              <span>Autenticar</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </button>
+              label="Autenticar"
+              loadingLabel="Autenticando..."
+              icon={<ArrowRight className="w-4 h-4" />}
+              variant="amber"
+              className="w-full"
+            />
           </form>
 
           <div className="mt-12 text-center">
@@ -1411,23 +1413,16 @@ create policy "Permitir deletar midias" on storage.objects
                         </div>
 
                         <div className="pt-2">
-                          <button 
+                          <PillProgressButton
                             type="submit"
-                            disabled={isSubmitting} 
-                            className="w-full bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 py-3 rounded-xl text-sm font-medium transition-all shadow-[0_0_15px_rgba(245,158,11,0.15)] hover:shadow-[0_0_20px_rgba(245,158,11,0.3)] flex items-center justify-center gap-2"
-                          >
-                            {isSubmitting ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Enviando para Nuvem...
-                              </>
-                            ) : (
-                              <>
-                                <UploadCloud className="w-4 h-4" />
-                                Enviar e Vincular Mídia
-                              </>
-                            )}
-                          </button>
+                            label="Enviar e Vincular Mídia"
+                            loadingLabel="Enviando para Nuvem..."
+                            icon={<UploadCloud className="w-4 h-4" />}
+                            variant="amber"
+                            isLoading={isSubmitting}
+                            disabled={isSubmitting}
+                            className="w-full"
+                          />
                         </div>
                       </form>
                     </div>
@@ -1757,14 +1752,15 @@ create policy "Permitir deletar midias" on storage.objects
                   >
                     Cancelar
                   </button>
-                  <button 
+                  <PillProgressButton
                     type="submit"
+                    label="Salvar Alterações"
+                    loadingLabel="Salvando..."
+                    icon={<Check className="w-4 h-4" />}
+                    variant="amber"
+                    isLoading={isUpdatingMidia}
                     disabled={isUpdatingMidia}
-                    className="bg-gradient-to-r from-amber-600 to-amber-500 text-black hover:from-amber-500 hover:to-amber-400 px-6 py-2.5 rounded-xl text-xs font-medium transition-all shadow-[0_0_15px_rgba(245,158,11,0.15)] flex items-center gap-1.5"
-                  >
-                    {isUpdatingMidia && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    Salvar Alterações
-                  </button>
+                  />
                 </div>
               </form>
             </motion.div>
