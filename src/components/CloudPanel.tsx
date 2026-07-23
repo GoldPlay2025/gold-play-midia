@@ -17,12 +17,48 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
   const [savingId, setSavingId] = useState<string | null>(null);
   const [newUrls, setNewUrls] = useState<Record<string, string>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [updatedMidias, setUpdatedMidias] = useState<Record<string, { id: string; titulo_video: string; url_storage: string }>>({});
+
+  // Persistence for screen active media in localStorage
+  const [updatedMidias, setUpdatedMidias] = useState<Record<string, { id: string; titulo_video: string; url_storage: string }>>(() => {
+    try {
+      const saved = localStorage.getItem('fully_screen_media_cache');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const updateScreenMediaState = (telaId: string, mediaObj: { id: string; titulo_video: string; url_storage: string }) => {
+    setUpdatedMidias(prev => {
+      const next = { ...prev, [telaId]: mediaObj };
+      try {
+        localStorage.setItem('fully_screen_media_cache', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   const syncNewMediaToDatabase = async (tela: any, newUrl: string) => {
     if (!tela) return;
+
+    let cleanTitle = newUrl.split('/').pop()?.split('?')[0] || 'Mídia Atualizada';
     try {
-      // 1. Verificar se a mídia já existe no banco
+      cleanTitle = decodeURIComponent(cleanTitle);
+    } catch (e) {}
+    if (!cleanTitle || cleanTitle.trim() === '' || cleanTitle.length > 60) {
+      cleanTitle = 'Mídia Atualizada';
+    }
+
+    // Immediately update local state & localStorage so the UI updates instantly
+    const newMediaItem = {
+      id: 'active-' + Date.now(),
+      titulo_video: cleanTitle,
+      url_storage: newUrl
+    };
+    updateScreenMediaState(tela.id, newMediaItem);
+
+    // Persist to Supabase in background
+    try {
       const { data: existingMidias } = await supabase
         .from('midias')
         .select('*')
@@ -30,22 +66,16 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
         .limit(1);
 
       let midiaId = '';
-      let midiaTitle = '';
+      let midiaTitle = cleanTitle;
 
       if (existingMidias && existingMidias.length > 0) {
         midiaId = existingMidias[0].id;
-        midiaTitle = existingMidias[0].titulo_video;
+        midiaTitle = existingMidias[0].titulo_video || cleanTitle;
       } else {
-        let titleFromUrl = newUrl.split('/').pop()?.split('?')[0] || 'Mídia Direta';
-        try {
-          titleFromUrl = decodeURIComponent(titleFromUrl);
-        } catch (e) {}
-        if (!titleFromUrl || titleFromUrl.trim() === '') titleFromUrl = 'Mídia Direta';
-
-        const { data: newMidia, error: midiaErr } = await supabase
+        const { data: newMidia } = await supabase
           .from('midias')
           .insert([{
-            titulo_video: titleFromUrl,
+            titulo_video: cleanTitle,
             url_storage: newUrl,
             tamanho_mb: 0,
             cliente_id: tela.cliente_id || null
@@ -53,56 +83,27 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
           .select()
           .single();
 
-        if (!midiaErr && newMidia) {
+        if (newMidia) {
           midiaId = newMidia.id;
-          midiaTitle = newMidia.titulo_video;
         }
       }
 
       if (midiaId) {
-        // Remove atrelações de playlist antigas dessa tela para fixar a nova mídia
         await supabase.from('playlists').delete().eq('tela_id', tela.id);
-
-        // Insere a nova relação na playlist da tela
         await supabase.from('playlists').insert([{
           tela_id: tela.id,
           midia_id: midiaId,
           ordem_exibicao: 0
         }]);
 
-        // Atualiza estado local imediatamente
-        setUpdatedMidias(prev => ({
-          ...prev,
-          [tela.id]: {
-            id: midiaId,
-            titulo_video: midiaTitle,
-            url_storage: newUrl
-          }
-        }));
+        updateScreenMediaState(tela.id, { id: midiaId, titulo_video: midiaTitle, url_storage: newUrl });
 
         if (fetchDashboardData) {
           fetchDashboardData();
         }
-      } else {
-        setUpdatedMidias(prev => ({
-          ...prev,
-          [tela.id]: {
-            id: 'temp-' + Date.now(),
-            titulo_video: newUrl.split('/').pop()?.split('?')[0] || 'Mídia Atualizada',
-            url_storage: newUrl
-          }
-        }));
       }
     } catch (err) {
-      console.error('Erro ao sincronizar mídia no banco:', err);
-      setUpdatedMidias(prev => ({
-        ...prev,
-        [tela.id]: {
-          id: 'temp-' + Date.now(),
-          titulo_video: newUrl.split('/').pop()?.split('?')[0] || 'Mídia Atualizada',
-          url_storage: newUrl
-        }
-      }));
+      console.warn('Sincronização no banco falhou, mantendo mídia em cache local:', err);
     }
   };
 
@@ -198,7 +199,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {telas.map((tela) => {
           // Identifica a mídia ativa cadastrada especificamente para esta tela (ou a mídia recém-atualizada pelo Fully)
           const playlists = tela.playlists || [];
@@ -212,12 +213,12 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
             <div key={tela.id} className="bg-[#0f0f11] border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-white/10 transition-all flex flex-col shadow-xl">
               {/* Header do Card da Tela */}
               <div className="flex items-start justify-between mb-5 pb-4 border-b border-white/5">
-                <div className="flex items-center gap-3 min-w-0 pr-2">
-                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border shrink-0 ${tela.status_online ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-                    <Monitor className={`w-5 h-5 ${tela.status_online ? 'text-emerald-500' : 'text-red-400'}`} />
+                <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0 ${tela.status_online ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                    <Monitor className={`w-6 h-6 ${tela.status_online ? 'text-emerald-500' : 'text-red-400'}`} />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-base font-semibold text-white truncate">{tela.nome_local}</h3>
+                    <h3 className="text-lg font-semibold text-white truncate">{tela.nome_local}</h3>
                     <p className="text-xs text-slate-400 truncate">{tela.clientes?.nome_empresa || 'Sem Cliente'}</p>
                   </div>
                 </div>
@@ -227,29 +228,29 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Abrir no Fully Cloud"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 hover:border-blue-500/30 rounded-xl text-xs font-medium transition-all hover:scale-[1.02] active:scale-95 shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 hover:border-blue-500/30 rounded-xl text-xs font-semibold transition-all shrink-0"
                 >
-                  <Cloud className="w-3.5 h-3.5 text-blue-400" />
+                  <Cloud className="w-4 h-4 text-blue-400" />
                   <span>Cloud</span>
                 </a>
               </div>
 
               <div className="flex-1 space-y-4">
                 {/* Exibição da Mídia Atual Veiculada NESTA Tela */}
-                <div className="bg-[#050505] p-3.5 rounded-2xl border border-white/5 space-y-2.5">
+                <div className="bg-[#050505] p-4 rounded-2xl border border-white/5 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase font-mono tracking-widest text-slate-400 font-semibold flex items-center gap-1.5">
-                      <Tv className="w-3 h-3 text-amber-400" /> Mídia da Tela
+                      <Tv className="w-3.5 h-3.5 text-amber-400" /> Mídia da Tela
                     </span>
-                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                    <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
                       Ativa
                     </span>
                   </div>
 
                   {activeMidia ? (
-                    <div className="flex items-center gap-3.5 p-2.5 bg-white/[0.02] rounded-2xl border border-white/5">
-                      {/* Miniatura Aumentada com Borda Arredondada Elegante */}
-                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-black border border-white/10 shrink-0 group/thumb shadow-md">
+                    <div className="flex items-center gap-4 p-3 bg-white/[0.02] rounded-2xl border border-white/5">
+                      {/* Miniatura Aumentada e Arredondada */}
+                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-black border border-white/10 shrink-0 shadow-md flex items-center justify-center">
                         {activeMidia.url_storage?.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i) ? (
                           <img 
                             key={activeMidia.url_storage}
@@ -271,7 +272,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                             <Film className="w-8 h-8" />
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-80 group-hover/thumb:opacity-100 transition-opacity pointer-events-none">
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
                           <Play className="w-5 h-5 text-amber-400 fill-amber-400" />
                         </div>
                       </div>
@@ -280,22 +281,22 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                         <p className="text-sm font-semibold text-white truncate" title={activeMidia.titulo_video}>
                           {activeMidia.titulo_video}
                         </p>
-                        <p className="text-[10px] text-slate-500 truncate font-mono">
+                        <p className="text-[11px] text-slate-500 truncate font-mono">
                           {activeMidia.url_storage}
                         </p>
-                        <div className="flex items-center gap-2.5 pt-1">
+                        <div className="flex items-center gap-2 pt-1 flex-wrap">
                           <button
                             onClick={() => {
                               setNewUrls({ ...newUrls, [tela.id]: activeMidia.url_storage });
                               showToast('success', `URL da mídia "${activeMidia.titulo_video}" inserida!`);
                             }}
-                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 whitespace-nowrap bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20"
+                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 shrink-0"
                           >
                             <Send className="w-3 h-3" /> Inserir já
                           </button>
                           <button
                             onClick={() => copyToClipboard(activeMidia.url_storage, tela.nome_local)}
-                            className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1 whitespace-nowrap px-2 py-1 rounded-lg hover:bg-white/5"
+                            className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 shrink-0 border border-white/5"
                           >
                             {copiedId === activeMidia.url_storage ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                             Copiar
@@ -304,22 +305,24 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3.5 p-2.5 bg-white/[0.02] rounded-2xl border border-white/5">
-                      <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                        <Monitor className="w-7 h-7" />
+                    <div className="flex items-center gap-4 p-3 bg-white/[0.02] rounded-2xl border border-white/5">
+                      <div className="w-20 h-20 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                        <Monitor className="w-8 h-8" />
                       </div>
                       <div className="flex-1 min-w-0 space-y-1">
                         <p className="text-xs font-semibold text-slate-200 truncate">Player Oficial ({tela.nome_local})</p>
-                        <p className="text-[10px] text-slate-500 truncate font-mono">{telaPlayerUrl}</p>
-                        <button
-                          onClick={() => {
-                            setNewUrls({ ...newUrls, [tela.id]: telaPlayerUrl });
-                            showToast('success', `URL do Player de ${tela.nome_local} inserida!`);
-                          }}
-                          className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 whitespace-nowrap bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 mt-1"
-                        >
-                          <Send className="w-3 h-3" /> Inserir já
-                        </button>
+                        <p className="text-[11px] text-slate-500 truncate font-mono">{telaPlayerUrl}</p>
+                        <div className="pt-1">
+                          <button
+                            onClick={() => {
+                              setNewUrls({ ...newUrls, [tela.id]: telaPlayerUrl });
+                              showToast('success', `URL do Player de ${tela.nome_local} inserida!`);
+                            }}
+                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20"
+                          >
+                            <Send className="w-3 h-3" /> Inserir já
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
