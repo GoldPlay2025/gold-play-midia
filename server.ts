@@ -46,7 +46,7 @@ async function startServer() {
   // Fully Cloud API Routes
   app.post("/api/fully/command", async (req, res) => {
     try {
-      const { deviceId, action } = req.body;
+      const { deviceId, action, newUrl } = req.body;
       const apiToken = process.env.FULLY_API_TOKEN;
 
       if (!apiToken) {
@@ -57,8 +57,19 @@ async function startServer() {
         return res.status(400).json({ error: "O deviceId e a action são obrigatórios." });
       }
 
+      let fullyCmd = action;
+      let extraParams = "";
+
+      if (action === 'change_url') {
+        if (!newUrl) {
+          return res.status(400).json({ error: "A propriedade newUrl é obrigatória para alterar a URL." });
+        }
+        fullyCmd = 'loadURL';
+        extraParams = `&url=${encodeURIComponent(newUrl)}`;
+      }
+
       // A URL no formato exato exigido pela documentação do Fully Cloud
-      const fullyUrl = `https://cloud.fully-kiosk.com/api/?cmd=${action}&deviceId=${deviceId}&token=${apiToken}&type=json`;
+      const fullyUrl = `https://cloud.fully-kiosk.com/api/?cmd=${fullyCmd}${extraParams}&deviceId=${deviceId}&token=${apiToken}&type=json`;
 
       // Dispara a ordem para o servidor deles usando GET, como exigido pela API do Fully Cloud
       const response = await fetch(fullyUrl, {
