@@ -244,7 +244,19 @@ export default function AdminPanel() {
     try {
       const { data: telasData, error: telasError } = await supabase
         .from('telas')
-        .select(`*, clientes (nome_empresa)`)
+        .select(`
+          *,
+          clientes (nome_empresa),
+          playlists (
+            id,
+            ordem_exibicao,
+            midias (
+              id,
+              titulo_video,
+              url_storage
+            )
+          )
+        `)
         .order('criado_em', { ascending: false });
 
       if (telasError) throw telasError;
