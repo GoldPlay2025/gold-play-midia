@@ -54,23 +54,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       method: 'GET',
     });
 
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.includes("text/html")) {
-      return res.status(502).json({ 
-        error: "A API do Fully Cloud retornou HTML em vez de JSON. Verifique se FULLY_API_EMAIL, FULLY_API_TOKEN e o Device ID estão corretos." 
+    const responseText = await response.text();
+    
+    if (responseText.includes("Sign in") || responseText.includes("Login") || responseText.includes("Access Denied")) {
+      return res.status(401).json({ 
+        error: "Acesso negado pelo Fully Cloud. Verifique se FULLY_API_EMAIL, FULLY_API_TOKEN e o Device ID estão corretos nas variáveis de ambiente da Vercel." 
       });
     }
 
-    const responseText = await response.text();
-    
     let data;
     try {
       data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado com sucesso' };
     } catch (e) {
-      data = { status: 'Success', text: responseText };
+      data = { status: 'Success', statustext: 'Comando enviado para a Tela com sucesso.', rawResponse: responseText };
     }
 
-    if (data && data.status === 'Error') {
+    if (data && (data.status === 'Error' || data.statustext?.toLowerCase().includes('error'))) {
       return res.status(400).json({ error: data.statustext || 'Erro retornado pela API do Fully Kiosk.' });
     }
 
