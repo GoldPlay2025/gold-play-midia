@@ -17,6 +17,94 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
   const [savingId, setSavingId] = useState<string | null>(null);
   const [newUrls, setNewUrls] = useState<Record<string, string>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [updatedMidias, setUpdatedMidias] = useState<Record<string, { id: string; titulo_video: string; url_storage: string }>>({});
+
+  const syncNewMediaToDatabase = async (tela: any, newUrl: string) => {
+    if (!tela) return;
+    try {
+      // 1. Verificar se a mídia já existe no banco
+      const { data: existingMidias } = await supabase
+        .from('midias')
+        .select('*')
+        .eq('url_storage', newUrl)
+        .limit(1);
+
+      let midiaId = '';
+      let midiaTitle = '';
+
+      if (existingMidias && existingMidias.length > 0) {
+        midiaId = existingMidias[0].id;
+        midiaTitle = existingMidias[0].titulo_video;
+      } else {
+        let titleFromUrl = newUrl.split('/').pop()?.split('?')[0] || 'Mídia Direta';
+        try {
+          titleFromUrl = decodeURIComponent(titleFromUrl);
+        } catch (e) {}
+        if (!titleFromUrl || titleFromUrl.trim() === '') titleFromUrl = 'Mídia Direta';
+
+        const { data: newMidia, error: midiaErr } = await supabase
+          .from('midias')
+          .insert([{
+            titulo_video: titleFromUrl,
+            url_storage: newUrl,
+            tamanho_mb: 0,
+            cliente_id: tela.cliente_id || null
+          }])
+          .select()
+          .single();
+
+        if (!midiaErr && newMidia) {
+          midiaId = newMidia.id;
+          midiaTitle = newMidia.titulo_video;
+        }
+      }
+
+      if (midiaId) {
+        // Remove atrelações de playlist antigas dessa tela para fixar a nova mídia
+        await supabase.from('playlists').delete().eq('tela_id', tela.id);
+
+        // Insere a nova relação na playlist da tela
+        await supabase.from('playlists').insert([{
+          tela_id: tela.id,
+          midia_id: midiaId,
+          ordem_exibicao: 0
+        }]);
+
+        // Atualiza estado local imediatamente
+        setUpdatedMidias(prev => ({
+          ...prev,
+          [tela.id]: {
+            id: midiaId,
+            titulo_video: midiaTitle,
+            url_storage: newUrl
+          }
+        }));
+
+        if (fetchDashboardData) {
+          fetchDashboardData();
+        }
+      } else {
+        setUpdatedMidias(prev => ({
+          ...prev,
+          [tela.id]: {
+            id: 'temp-' + Date.now(),
+            titulo_video: newUrl.split('/').pop()?.split('?')[0] || 'Mídia Atualizada',
+            url_storage: newUrl
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('Erro ao sincronizar mídia no banco:', err);
+      setUpdatedMidias(prev => ({
+        ...prev,
+        [tela.id]: {
+          id: 'temp-' + Date.now(),
+          titulo_video: newUrl.split('/').pop()?.split('?')[0] || 'Mídia Atualizada',
+          url_storage: newUrl
+        }
+      }));
+    }
+  };
 
   const handleCommand = async (telaId: string, fullyDeviceId: string, action: string, extraData?: { newUrl?: string }) => {
     setLoadingAction(`${telaId}-${action}`);
@@ -52,6 +140,12 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
       if (action === 'change_url') successMessage = 'Nova URL enviada para o APP com sucesso!';
 
       showToast('success', successMessage);
+
+      // Se for alteração de URL, sincroniza no banco e atualiza a miniatura
+      if (action === 'change_url' && extraData?.newUrl) {
+        const targetTela = telas.find(t => t.id === telaId);
+        await syncNewMediaToDatabase(targetTela, extraData.newUrl);
+      }
     } catch (err: any) {
       console.error(err);
       let msg = err.message || 'Erro ao enviar comando.';
@@ -106,9 +200,11 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {telas.map((tela) => {
-          // Identifica a mídia ativa cadastrada especificamente para esta tela
+          // Identifica a mídia ativa cadastrada especificamente para esta tela (ou a mídia recém-atualizada pelo Fully)
           const playlists = tela.playlists || [];
-          const activeMidia = playlists.length > 0 ? playlists[0]?.midias : null;
+          const dbMidiaRaw = playlists.length > 0 ? playlists[0]?.midias : null;
+          const dbMidia = Array.isArray(dbMidiaRaw) ? dbMidiaRaw[0] : dbMidiaRaw;
+          const activeMidia = updatedMidias[tela.id] || dbMidia;
           const telaPlayerUrl = `${window.location.origin}/player/${tela.id}`;
           const currentTargetUrl = activeMidia?.url_storage || telaPlayerUrl;
 
@@ -154,8 +250,16 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                     <div className="flex items-center gap-3.5 p-2.5 bg-white/[0.02] rounded-2xl border border-white/5">
                       {/* Miniatura Aumentada com Borda Arredondada Elegante */}
                       <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-black border border-white/10 shrink-0 group/thumb shadow-md">
-                        {activeMidia.url_storage.match(/\.(mp4|webm|ogg)$/i) || activeMidia.url_storage.includes('/storage/v1/object/') ? (
+                        {activeMidia.url_storage?.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i) ? (
+                          <img 
+                            key={activeMidia.url_storage}
+                            src={activeMidia.url_storage} 
+                            alt={activeMidia.titulo_video} 
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : activeMidia.url_storage?.match(/\.(mp4|webm|ogg)(\?.*)?$/i) || activeMidia.url_storage?.includes('/storage/v1/object/') ? (
                           <video 
+                            key={activeMidia.url_storage}
                             src={activeMidia.url_storage} 
                             muted 
                             playsInline 
@@ -167,7 +271,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                             <Film className="w-8 h-8" />
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-80 group-hover/thumb:opacity-100 transition-opacity">
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-80 group-hover/thumb:opacity-100 transition-opacity pointer-events-none">
                           <Play className="w-5 h-5 text-amber-400 fill-amber-400" />
                         </div>
                       </div>
