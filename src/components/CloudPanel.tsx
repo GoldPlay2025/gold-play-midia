@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { fetchApi } from '../lib/api';
 import { PillProgressButton } from './PillProgressButton';
 import { FullyCloudLoginModal } from './FullyCloudLoginModal';
+import { MediaThumbnail } from './MediaThumbnail';
 
 type CloudPanelProps = {
   telas: any[];
@@ -278,32 +279,11 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                   {activeMidia ? (
                     <div className="flex items-center gap-4 p-3 bg-white/[0.02] rounded-2xl border border-white/5">
                       {/* Miniatura Aumentada e Arredondada */}
-                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-black border border-white/10 shrink-0 shadow-md flex items-center justify-center">
-                        {activeMidia.url_storage?.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i) ? (
-                          <img 
-                            key={activeMidia.url_storage}
-                            src={activeMidia.url_storage} 
-                            alt={activeMidia.titulo_video} 
-                            className="w-full h-full object-cover" 
-                          />
-                        ) : activeMidia.url_storage?.match(/\.(mp4|webm|ogg)(\?.*)?$/i) || activeMidia.url_storage?.includes('/storage/v1/object/') ? (
-                          <video 
-                            key={activeMidia.url_storage}
-                            src={activeMidia.url_storage} 
-                            muted 
-                            playsInline 
-                            preload="metadata" 
-                            className="w-full h-full object-cover" 
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-amber-500/10 flex items-center justify-center text-amber-400">
-                            <Film className="w-8 h-8" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
-                          <Play className="w-5 h-5 text-amber-400 fill-amber-400" />
-                        </div>
-                      </div>
+                      <MediaThumbnail
+                        url={activeMidia.url_storage}
+                        title={activeMidia.titulo_video}
+                        className="w-20 h-20"
+                      />
 
                       <div className="flex-1 min-w-0 space-y-1">
                         <p className="text-sm font-semibold text-white truncate" title={activeMidia.titulo_video}>
