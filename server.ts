@@ -190,22 +190,31 @@ Pergunta ou solicitação do usuário:
     }
   ];
 
-  // API Endpoints para Gestão de Custos
+  // API Endpoints para Gestão de Custos com Timeout Seguro
   app.get("/api/custos", async (req, res) => {
     try {
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
       const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
       if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder')) {
-        const resp = await fetch(`${supabaseUrl}/rest/v1/custos?select=*&order=data_pagamento.desc`, {
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        try {
+          const resp = await fetch(`${supabaseUrl}/rest/v1/custos?select=*&order=data_pagamento.desc`, {
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`
+            },
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (resp.ok) {
+            const data = await resp.json();
+            return res.json(data);
           }
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          return res.json(data);
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
         }
       }
       return res.json(memoryCustos);
@@ -232,34 +241,45 @@ Pergunta ou solicitação do usuário:
         criado_em: new Date().toISOString()
       };
 
+      // Adiciona na memória imediatamente para garantir que o estado local nunca trave
+      memoryCustos.unshift(newCost);
+
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
       const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
       if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder')) {
-        const resp = await fetch(`${supabaseUrl}/rest/v1/custos`, {
-          method: 'POST',
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({
-            descricao: newCost.descricao,
-            valor: newCost.valor,
-            data_pagamento: newCost.data_pagamento,
-            recorrencia: newCost.recorrencia,
-            categoria: newCost.categoria,
-            observacoes: newCost.observacoes
-          })
-        });
-        if (resp.ok) {
-          const inserted = await resp.json();
-          return res.json(inserted[0] || newCost);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        try {
+          const resp = await fetch(`${supabaseUrl}/rest/v1/custos`, {
+            method: 'POST',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+              descricao: newCost.descricao,
+              valor: newCost.valor,
+              data_pagamento: newCost.data_pagamento,
+              recorrencia: newCost.recorrencia,
+              categoria: newCost.categoria,
+              observacoes: newCost.observacoes
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (resp.ok) {
+            const inserted = await resp.json();
+            return res.json(inserted[0] || newCost);
+          }
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
         }
       }
 
-      memoryCustos.unshift(newCost);
       return res.json(newCost);
     } catch (err: any) {
       return res.status(500).json({ error: err.message || "Erro ao salvar custo." });
@@ -269,20 +289,30 @@ Pergunta ou solicitação do usuário:
   app.delete("/api/custos/:id", async (req, res) => {
     try {
       const { id } = req.params;
+      memoryCustos = memoryCustos.filter(c => c.id !== id);
+
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
       const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
       if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder')) {
-        await fetch(`${supabaseUrl}/rest/v1/custos?id=eq.${id}`, {
-          method: 'DELETE',
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`
-          }
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        try {
+          await fetch(`${supabaseUrl}/rest/v1/custos?id=eq.${id}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`
+            },
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+        }
       }
 
-      memoryCustos = memoryCustos.filter(c => c.id !== id);
       return res.json({ success: true });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || "Erro ao remover custo." });
