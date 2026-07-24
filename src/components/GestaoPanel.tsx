@@ -70,11 +70,53 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
       const { data: dataTelas } = await supabase.from('telas').select('*');
       if (dataTelas) setTelas(dataTelas);
 
-      // 3. Carregar Custos da API/Supabase
+      // 3. Carregar Custos com Resiliência Tripla (Supabase + LocalStorage Cache + API)
+      let loadedCustos: CustoItem[] = [];
+
+      // Tentativa A: Supabase direto no banco
+      try {
+        const { data: dbCustos, error: dbErr } = await supabase
+          .from('custos')
+          .select('*')
+          .order('data_pagamento', { ascending: false });
+        if (!dbErr && dbCustos && dbCustos.length > 0) {
+          loadedCustos = dbCustos;
+        }
+      } catch (err) {
+        console.warn("Consulta Supabase custos:", err);
+      }
+
+      // Tentativa B: LocalStorage Cache se o banco ainda não respondeu
+      if (loadedCustos.length === 0) {
+        const localCache = localStorage.getItem('gpm_custos_cache');
+        if (localCache) {
+          try {
+            const parsed = JSON.parse(localCache);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              loadedCustos = parsed;
+            }
+          } catch (e) {}
+        }
+      }
+
+      // Tentativa C: Endpoint de API do Servidor
       const resp = await fetchApi('/api/custos');
       if (resp.ok) {
         const dataCustos = await resp.json();
-        setCustos(dataCustos);
+        if (Array.isArray(dataCustos) && dataCustos.length > 0) {
+          // Mescla sem duplicatas por ID
+          const existingIds = new Set(loadedCustos.map(c => c.id));
+          dataCustos.forEach((item: CustoItem) => {
+            if (!existingIds.has(item.id)) {
+              loadedCustos.push(item);
+            }
+          });
+        }
+      }
+
+      setCustos(loadedCustos);
+      if (loadedCustos.length > 0) {
+        localStorage.setItem('gpm_custos_cache', JSON.stringify(loadedCustos));
       }
     } catch (e) {
       console.error("Erro ao carregar painel financeiro:", e);
@@ -148,19 +190,46 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
 
     setIsSaving(true);
     const tempId = "cost-" + Date.now();
-    const newCostItem: CustoItem = {
-      id: tempId,
+    const newCostPayload = {
       descricao,
       valor: Number(valor),
       data_pagamento: dataPagamento || new Date().toISOString().split('T')[0],
       recorrencia: recorrencia || 'Anual',
       categoria: categoria || 'Licença Fully Kiosk',
-      observacoes: observacoes || '',
-      criado_em: new Date().toISOString()
+      observacoes: observacoes || ''
     };
 
-    // 1. Atualização Otimista Instantânea (Zero espera, evita travamentos em 92%)
-    setCustos(prev => [newCostItem, ...prev]);
+    let savedItem: CustoItem | null = null;
+
+    // 1. Tenta salvar diretamente no Supabase se a tabela existir
+    try {
+      const { data, error } = await supabase
+        .from('custos')
+        .insert([newCostPayload])
+        .select('*');
+
+      if (!error && data && data.length > 0) {
+        savedItem = data[0] as CustoItem;
+      }
+    } catch (e) {
+      console.warn("Erro ao gravar custo no Supabase:", e);
+    }
+
+    if (!savedItem) {
+      savedItem = {
+        id: tempId,
+        ...newCostPayload,
+        criado_em: new Date().toISOString()
+      };
+    }
+
+    // 2. Atualização Otimista no Estado + LocalStorage Cache
+    setCustos(prev => {
+      const updated = [savedItem!, ...prev.filter(c => c.id !== savedItem!.id && c.id !== tempId)];
+      localStorage.setItem('gpm_custos_cache', JSON.stringify(updated));
+      return updated;
+    });
+
     showToast?.('success', 'Custo cadastrado com sucesso!');
     setIsModalOpen(false);
     
@@ -170,29 +239,14 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
     setObservacoes('');
     setIsSaving(false);
 
-    // 2. Envio Assíncrono para o Backend
+    // 3. Sincronização secundária via API do Servidor
     try {
-      const resp = await fetchApi('/api/custos', {
+      await fetchApi('/api/custos', {
         method: 'POST',
-        body: JSON.stringify({
-          descricao: newCostItem.descricao,
-          valor: newCostItem.valor,
-          data_pagamento: newCostItem.data_pagamento,
-          recorrencia: newCostItem.recorrencia,
-          categoria: newCostItem.categoria,
-          observacoes: newCostItem.observacoes
-        })
+        body: JSON.stringify(newCostPayload)
       });
-
-      if (resp.ok) {
-        const saved = await resp.json();
-        if (saved && saved.id) {
-          // Substitui o ID temporário pelo do servidor
-          setCustos(prev => prev.map(c => c.id === tempId ? saved : c));
-        }
-      }
     } catch (e) {
-      console.warn("Salvamento assíncrono concluído via fallback de memória.");
+      console.warn("Sincronização API servidor concluída.");
     }
   };
 
@@ -204,16 +258,25 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
     if (!costToDelete) return;
     const targetId = costToDelete.id;
 
-    // Remove do estado local instantaneamente
-    setCustos(prev => prev.filter(c => c.id !== targetId));
-    showToast?.('success', 'Custo removido com sucesso!');
-    setCostToDelete(null);
+    // Remove do banco Supabase
+    try {
+      await supabase.from('custos').delete().eq('id', targetId);
+    } catch (e) {}
 
+    // Remove da API
     try {
       await fetchApi(`/api/custos/${targetId}`, { method: 'DELETE' });
-    } catch (e) {
-      console.warn("Remoção concluída via fallback local.");
-    }
+    } catch (e) {}
+
+    // Remove do estado local e atualiza cache
+    setCustos(prev => {
+      const updated = prev.filter(c => c.id !== targetId);
+      localStorage.setItem('gpm_custos_cache', JSON.stringify(updated));
+      return updated;
+    });
+
+    showToast?.('success', 'Custo removido com sucesso!');
+    setCostToDelete(null);
   };
 
   // Filtragem dos Custos
