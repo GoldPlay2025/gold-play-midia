@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -157,8 +158,10 @@ Pergunta ou solicitação do usuário:
     }
   });
 
-  // In-memory fallback for costs if Supabase table is not yet migrated
-  let memoryCustos: Array<{
+  // File-backed persistent storage for costs
+  const CUSTOS_FILE_PATH = path.join(process.cwd(), "custos_data.json");
+
+  function readCustosFromFile(): Array<{
     id: string;
     descricao: string;
     valor: number;
@@ -167,32 +170,54 @@ Pergunta ou solicitação do usuário:
     categoria: string;
     observacoes?: string;
     criado_em: string;
-  }> = [
-    {
-      id: "cost-1",
-      descricao: "Licenciamento Anual Fully Kiosk (10 Telas)",
-      valor: 820.00,
-      data_pagamento: "2026-01-15",
-      recorrencia: "Anual",
-      categoria: "Licença Fully Kiosk",
-      observacoes: "Pagamento para renovação anual de licenças de exibição",
-      criado_em: new Date().toISOString()
-    },
-    {
-      id: "cost-2",
-      descricao: "Hospedagem & Servidor Cloud",
-      valor: 150.00,
-      data_pagamento: "2026-07-01",
-      recorrencia: "Mensal",
-      categoria: "Servidor",
-      observacoes: "Infraestrutura de streaming e API Gold Play",
-      criado_em: new Date().toISOString()
+  }> {
+    try {
+      if (fs.existsSync(CUSTOS_FILE_PATH)) {
+        const fileContent = fs.readFileSync(CUSTOS_FILE_PATH, "utf-8");
+        const parsed = JSON.parse(fileContent);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn("Erro ao ler custos_data.json:", e);
     }
-  ];
+    const initialCosts = [
+      {
+        id: "cost-1",
+        descricao: "Licenciamento Anual Fully Kiosk (10 Telas)",
+        valor: 820.00,
+        data_pagamento: "2026-01-15",
+        recorrencia: "Anual",
+        categoria: "Licença Fully Kiosk",
+        observacoes: "Pagamento para renovação anual de licenças de exibição",
+        criado_em: new Date().toISOString()
+      },
+      {
+        id: "cost-2",
+        descricao: "Hospedagem & Servidor Cloud",
+        valor: 150.00,
+        data_pagamento: "2026-07-01",
+        recorrencia: "Mensal",
+        categoria: "Servidor",
+        observacoes: "Infraestrutura de streaming e API Gold Play",
+        criado_em: new Date().toISOString()
+      }
+    ];
+    saveCustosToFile(initialCosts);
+    return initialCosts;
+  }
 
-  // API Endpoints para Gestão de Custos com Timeout Seguro
+  function saveCustosToFile(custosList: any[]) {
+    try {
+      fs.writeFileSync(CUSTOS_FILE_PATH, JSON.stringify(custosList, null, 2), "utf-8");
+    } catch (e) {
+      console.warn("Erro ao gravar custos_data.json:", e);
+    }
+  }
+
+  // API Endpoints para Gestão de Custos com Timeout Seguro & Persistência Local Garantida
   app.get("/api/custos", async (req, res) => {
     try {
+      let persistentCustos = readCustosFromFile();
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
       const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
@@ -210,28 +235,41 @@ Pergunta ou solicitação do usuário:
           });
           clearTimeout(timeoutId);
           if (resp.ok) {
-            const data = await resp.json();
-            return res.json(data);
+            const dbData = await resp.json();
+            if (Array.isArray(dbData) && dbData.length > 0) {
+              const existingIds = new Set(persistentCustos.map(c => c.id));
+              let updated = false;
+              dbData.forEach((item: any) => {
+                if (!existingIds.has(item.id)) {
+                  persistentCustos.push(item);
+                  updated = true;
+                }
+              });
+              if (updated) saveCustosToFile(persistentCustos);
+            }
           }
         } catch (fetchErr) {
           clearTimeout(timeoutId);
         }
       }
-      return res.json(memoryCustos);
+      return res.json(persistentCustos);
     } catch (err) {
-      return res.json(memoryCustos);
+      return res.json(readCustosFromFile());
     }
   });
 
   app.post("/api/custos", async (req, res) => {
     try {
-      const { descricao, valor, data_pagamento, recorrencia, categoria, observacoes } = req.body;
+      const { id, descricao, valor, data_pagamento, recorrencia, categoria, observacoes } = req.body;
       if (!descricao || valor === undefined) {
         return res.status(400).json({ error: "Descrição e Valor são obrigatórios." });
       }
 
+      let persistentCustos = readCustosFromFile();
+      const costId = id || ("cost-" + Date.now());
+
       const newCost = {
-        id: "cost-" + Date.now(),
+        id: costId,
         descricao,
         valor: Number(valor),
         data_pagamento: data_pagamento || new Date().toISOString().split('T')[0],
@@ -241,8 +279,14 @@ Pergunta ou solicitação do usuário:
         criado_em: new Date().toISOString()
       };
 
-      // Adiciona na memória imediatamente para garantir que o estado local nunca trave
-      memoryCustos.unshift(newCost);
+      // Se já existir item com esse ID, atualiza. Se não, adiciona no topo.
+      const existingIdx = persistentCustos.findIndex(c => c.id === costId);
+      if (existingIdx >= 0) {
+        persistentCustos[existingIdx] = newCost;
+      } else {
+        persistentCustos.unshift(newCost);
+      }
+      saveCustosToFile(persistentCustos);
 
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
       const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
@@ -261,6 +305,7 @@ Pergunta ou solicitação do usuário:
               'Prefer': 'return=representation'
             },
             body: JSON.stringify({
+              id: newCost.id,
               descricao: newCost.descricao,
               valor: newCost.valor,
               data_pagamento: newCost.data_pagamento,
@@ -273,7 +318,9 @@ Pergunta ou solicitação do usuário:
           clearTimeout(timeoutId);
           if (resp.ok) {
             const inserted = await resp.json();
-            return res.json(inserted[0] || newCost);
+            if (inserted && inserted[0]) {
+              return res.json(inserted[0]);
+            }
           }
         } catch (fetchErr) {
           clearTimeout(timeoutId);
@@ -289,7 +336,9 @@ Pergunta ou solicitação do usuário:
   app.delete("/api/custos/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      memoryCustos = memoryCustos.filter(c => c.id !== id);
+      let persistentCustos = readCustosFromFile();
+      persistentCustos = persistentCustos.filter(c => c.id !== id);
+      saveCustosToFile(persistentCustos);
 
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
       const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
