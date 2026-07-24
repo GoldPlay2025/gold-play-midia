@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Upload, Save, Loader2, Image as ImageIcon, Database, Link, AlertCircle, CheckCircle, HelpCircle, FileCode } from 'lucide-react';
+import { Settings, Upload, Save, Loader2, Image as ImageIcon, Database, Link, AlertCircle, CheckCircle, FileCode, Copy, Check, Lock, Unlock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { PillProgressButton } from './PillProgressButton';
@@ -43,6 +43,8 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dbStatus, setDbStatus] = useState<'synced' | 'local' | 'error' | 'loading'>('local');
   const [showSqlInstruction, setShowSqlInstruction] = useState(false);
+  const [canDisconnect, setCanDisconnect] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const fetchDbSettings = async () => {
     if (!isSupabaseConfigured) {
@@ -402,11 +404,38 @@ ON CONFLICT (id) DO NOTHING;`);
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest flex items-center gap-1">
               <Link className="w-3.5 h-3.5 text-slate-400" />
-              URL do Projeto
+              URL do Projeto (Protegida)
             </span>
-            <span className="font-mono text-xs text-slate-300 bg-[#050505] p-3 rounded-xl border border-white/5 break-all select-all">
-              {isSupabaseConfigured ? supabaseUrl : 'Nenhuma conexão ativa configurada'}
-            </span>
+            <div className="flex items-center gap-2 bg-[#050505] p-2.5 px-3 rounded-xl border border-white/5">
+              <span className="font-mono text-xs text-slate-300 break-all select-all flex-1 font-semibold">
+                {isSupabaseConfigured ? supabaseUrl : 'Nenhuma conexão ativa configurada'}
+              </span>
+              {isSupabaseConfigured && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(supabaseUrl);
+                    setCopiedUrl(true);
+                    showToast('success', 'URL do Projeto copiada com sucesso!');
+                    setTimeout(() => setCopiedUrl(false), 2000);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-mono font-semibold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  title="Copiar URL do Projeto"
+                >
+                  {copiedUrl ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-400">Copiado</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Copiar</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -427,16 +456,36 @@ ON CONFLICT (id) DO NOTHING;`);
         </div>
 
         {isSupabaseConfigured && (
-          <div className="pt-6 border-t border-white/5 flex justify-end">
+          <div className="pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-400 hover:text-slate-200 transition-colors select-none">
+              <input
+                type="checkbox"
+                checked={canDisconnect}
+                onChange={(e) => setCanDisconnect(e.target.checked)}
+                className="w-4 h-4 rounded border-white/10 bg-[#050505] text-amber-500 focus:ring-amber-500/20 focus:ring-offset-0 cursor-pointer"
+              />
+              <span className="flex items-center gap-1.5 font-mono text-[11px]">
+                {canDisconnect ? <Unlock className="w-3.5 h-3.5 text-amber-400" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
+                Desbloquear para desconectar
+              </span>
+            </label>
+
             <button
               type="button"
+              disabled={!canDisconnect}
               onClick={() => {
+                if (!canDisconnect) return;
                 if (confirm('Deseja realmente desconectar este banco de dados? Você precisará configurar novamente para acessar os dados.')) {
                   clearSupabaseConfig();
                 }
               }}
-              className="px-6 py-2.5 border border-red-500/20 bg-red-950/20 hover:bg-red-950/40 text-red-200 hover:border-red-500/40 rounded-xl text-xs font-medium transition-all flex items-center gap-2"
+              className={`px-6 py-2.5 border rounded-xl text-xs font-medium transition-all flex items-center gap-2 ${
+                canDisconnect
+                  ? 'border-red-500/40 bg-red-950/40 hover:bg-red-900/60 text-red-200 shadow-lg shadow-red-950/30 cursor-pointer'
+                  : 'border-white/5 bg-white/[0.02] text-slate-600 opacity-40 cursor-not-allowed select-none'
+              }`}
             >
+              <Lock className="w-3.5 h-3.5" />
               Desconectar Banco de Dados
             </button>
           </div>
