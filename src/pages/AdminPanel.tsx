@@ -52,7 +52,9 @@ import {
   MessageSquare,
   Smartphone,
   Link2,
-  Cloud
+  Cloud,
+  SearchX,
+  Receipt
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -115,6 +117,9 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     return saved ? JSON.parse(saved) : defaultSettings;
   });
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [custos, setCustos] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -293,6 +298,67 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
       console.error('Error fetching clients:', error);
     }
   };
+
+  const fetchCustos = async () => {
+    try {
+      let loadedCustos: any[] = [];
+      const { data: dbCustos } = await supabase
+        .from('custos')
+        .select('*')
+        .order('data_pagamento', { ascending: false });
+
+      if (dbCustos && dbCustos.length > 0) {
+        loadedCustos = dbCustos;
+      } else {
+        const localCache = localStorage.getItem('gpm_custos_cache');
+        if (localCache) {
+          try {
+            const parsed = JSON.parse(localCache);
+            if (Array.isArray(parsed)) loadedCustos = parsed;
+          } catch (e) {}
+        }
+      }
+      setCustos(loadedCustos);
+    } catch (err) {
+      const localCache = localStorage.getItem('gpm_custos_cache');
+      if (localCache) {
+        try {
+          const parsed = JSON.parse(localCache);
+          if (Array.isArray(parsed)) setCustos(parsed);
+        } catch (e) {}
+      }
+    }
+  };
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return { clientes: [], custos: [], telas: [], total: 0 };
+
+    const matchedClientes = clientes.filter(c => 
+      c.nome_empresa?.toLowerCase().includes(q) ||
+      c.contato?.toLowerCase().includes(q)
+    );
+
+    const matchedCustos = custos.filter(c => 
+      c.descricao?.toLowerCase().includes(q) ||
+      c.categoria?.toLowerCase().includes(q) ||
+      c.observacoes?.toLowerCase().includes(q) ||
+      String(c.valor).includes(q)
+    );
+
+    const matchedTelas = telas.filter(t => 
+      t.nome_local?.toLowerCase().includes(q) ||
+      t.identificador_unico?.toLowerCase().includes(q) ||
+      t.clientes?.nome_empresa?.toLowerCase().includes(q)
+    );
+
+    return {
+      clientes: matchedClientes,
+      custos: matchedCustos,
+      telas: matchedTelas,
+      total: matchedClientes.length + matchedCustos.length + matchedTelas.length
+    };
+  }, [searchQuery, clientes, custos, telas]);
 
   const fetchMidias = async () => {
     setIsLoading(true);
@@ -547,6 +613,8 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
 
   useEffect(() => {
     if (isAuthenticated) {
+      fetchClientes();
+      fetchCustos();
       if (activeTab === 'dashboard') {
         fetchDashboardData();
         fetchMidias();
@@ -1111,13 +1179,189 @@ create policy "Permitir deletar midias" on storage.objects
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="relative hidden md:block">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
               <input 
                 type="text" 
-                placeholder="Buscar..." 
-                className="bg-white/5 border border-white/10 rounded-full py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-amber-500/50 focus:bg-white/10 transition-all w-48 lg:w-64 text-white placeholder-slate-600"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchFocused(true);
+                }}
+                onFocus={() => setIsSearchFocused(true)}
+                placeholder="Buscar cliente, custo, tela..." 
+                className="bg-white/5 border border-white/10 rounded-full py-1.5 pl-9 pr-8 text-xs focus:outline-none focus:border-amber-500/60 focus:bg-white/10 focus:ring-2 focus:ring-amber-500/20 transition-all w-48 sm:w-64 lg:w-80 text-white placeholder-slate-500"
               />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="Limpar busca"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {/* Floating Dropdown Results */}
+              <AnimatePresence>
+                {isSearchFocused && searchQuery.trim().length > 0 && (
+                  <>
+                    {/* Backdrop */}
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setIsSearchFocused(false)} 
+                    />
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-80 sm:w-96 md:w-[480px] bg-[#0c0c0e] border border-amber-500/30 rounded-2xl shadow-2xl shadow-black/90 z-50 overflow-hidden backdrop-blur-2xl"
+                    >
+                      {/* Header bar */}
+                      <div className="px-4 py-3 bg-white/[0.02] border-b border-white/5 flex items-center justify-between">
+                        <span className="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-bold flex items-center gap-2">
+                          <Search className="w-3.5 h-3.5" />
+                          Resultados para "{searchQuery}"
+                        </span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/20">
+                          {searchResults.total} {searchResults.total === 1 ? 'item' : 'itens'}
+                        </span>
+                      </div>
+
+                      {/* Content list */}
+                      <div className="max-h-[380px] overflow-y-auto p-2 divide-y divide-white/5 custom-scrollbar">
+                        {searchResults.total === 0 ? (
+                          <div className="p-8 text-center text-slate-500">
+                            <SearchX className="w-8 h-8 mx-auto mb-2 opacity-40 text-amber-500" />
+                            <p className="text-xs font-medium text-slate-300">Nenhum resultado encontrado</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Tente buscar por nome de empresa, descrição de custo ou tela.</p>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Clientes */}
+                            {searchResults.clientes.length > 0 && (
+                              <div className="py-2">
+                                <div className="px-3 py-1.5 text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                  <Users className="w-3.5 h-3.5" />
+                                  Clientes ({searchResults.clientes.length})
+                                </div>
+                                <div className="space-y-1 mt-1">
+                                  {searchResults.clientes.map(c => (
+                                    <button
+                                      key={'cli-' + c.id}
+                                      onClick={() => {
+                                        setActiveTab('clientes');
+                                        setIsSearchFocused(false);
+                                        setSearchQuery('');
+                                      }}
+                                      className="w-full text-left p-2.5 rounded-xl hover:bg-white/5 transition-all flex items-center justify-between group cursor-pointer"
+                                    >
+                                      <div className="min-w-0 flex-1 pr-2">
+                                        <p className="text-xs font-semibold text-slate-200 group-hover:text-amber-400 transition-colors truncate">
+                                          {c.nome_empresa}
+                                        </p>
+                                        <p className="text-[11px] text-slate-500 truncate">
+                                          Contato: {c.contato || 'Não informado'}
+                                        </p>
+                                      </div>
+                                      <span className="shrink-0 text-[10px] font-mono px-2 py-1 rounded-lg bg-cyan-950/40 text-cyan-300 border border-cyan-500/20 group-hover:border-cyan-500/40 transition-all flex items-center gap-1">
+                                        Ver cliente
+                                        <ArrowRight className="w-3 h-3" />
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Gestão Financeira */}
+                            {searchResults.custos.length > 0 && (
+                              <div className="py-2">
+                                <div className="px-3 py-1.5 text-[10px] font-mono text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                  <Receipt className="w-3.5 h-3.5" />
+                                  Gestão Financeira ({searchResults.custos.length})
+                                </div>
+                                <div className="space-y-1 mt-1">
+                                  {searchResults.custos.map(c => (
+                                    <button
+                                      key={'cost-' + c.id}
+                                      onClick={() => {
+                                        setActiveTab('gestao');
+                                        setIsSearchFocused(false);
+                                        setSearchQuery('');
+                                      }}
+                                      className="w-full text-left p-2.5 rounded-xl hover:bg-white/5 transition-all flex items-center justify-between group cursor-pointer"
+                                    >
+                                      <div className="min-w-0 flex-1 pr-2">
+                                        <div className="flex items-center gap-2">
+                                          <p className="text-xs font-semibold text-slate-200 group-hover:text-amber-400 transition-colors truncate">
+                                            {c.descricao}
+                                          </p>
+                                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/5">
+                                            {c.categoria}
+                                          </span>
+                                        </div>
+                                        <p className="text-[11px] text-emerald-400 font-mono font-medium mt-0.5">
+                                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor || 0)}
+                                          <span className="text-slate-500 ml-2 text-[10px] font-sans">
+                                            • Vencimento: {c.data_pagamento ? new Date(c.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}
+                                          </span>
+                                        </p>
+                                      </div>
+                                      <span className="shrink-0 text-[10px] font-mono px-2 py-1 rounded-lg bg-amber-950/40 text-amber-300 border border-amber-500/20 group-hover:border-amber-500/40 transition-all flex items-center gap-1">
+                                        Ver Gestão
+                                        <ArrowRight className="w-3 h-3" />
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Telas / Dispositivos */}
+                            {searchResults.telas.length > 0 && (
+                              <div className="py-2">
+                                <div className="px-3 py-1.5 text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                  <Monitor className="w-3.5 h-3.5" />
+                                  Telas / Dispositivos ({searchResults.telas.length})
+                                </div>
+                                <div className="space-y-1 mt-1">
+                                  {searchResults.telas.map(t => (
+                                    <button
+                                      key={'tela-' + t.id}
+                                      onClick={() => {
+                                        setActiveTab('telas');
+                                        setIsSearchFocused(false);
+                                        setSearchQuery('');
+                                      }}
+                                      className="w-full text-left p-2.5 rounded-xl hover:bg-white/5 transition-all flex items-center justify-between group cursor-pointer"
+                                    >
+                                      <div className="min-w-0 flex-1 pr-2">
+                                        <p className="text-xs font-semibold text-slate-200 group-hover:text-amber-400 transition-colors truncate">
+                                          {t.nome_local}
+                                        </p>
+                                        <p className="text-[11px] font-mono text-slate-500 truncate">
+                                          ID: {t.identificador_unico} {t.clientes?.nome_empresa ? `• ${t.clientes.nome_empresa}` : ''}
+                                        </p>
+                                      </div>
+                                      <span className="shrink-0 text-[10px] font-mono px-2 py-1 rounded-lg bg-emerald-950/40 text-emerald-300 border border-emerald-500/20 group-hover:border-emerald-500/40 transition-all flex items-center gap-1">
+                                        Ver Tela
+                                        <ArrowRight className="w-3 h-3" />
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
