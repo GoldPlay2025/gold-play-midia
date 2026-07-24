@@ -12,6 +12,91 @@ pre {
   font-family: var(--font-mono);
 }
 
+/* ==========================================================================
+   Gold Play Manager Custom Scrollbar Theme (Global Vertical & Horizontal)
+   ========================================================================== */
+*,
+.custom-scrollbar,
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #f59e0b #0d0d0d;
+}
+
+::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar,
+.scrollbar-thin::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track,
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #0d0d0d;
+  border-radius: 9999px;
+  border: 1px solid #1f1f23;
+  margin: 2px;
+}
+
+::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: radial-gradient(circle at center, #fef08a 0%, #fbbf24 28%, #111111 32%, #111111 52%, #f97316 56%, #ea580c 100%) !important;
+  border-radius: 9999px;
+  border: 2px solid #0d0d0d;
+  min-height: 28px;
+  min-width: 28px;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+}
+
+::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: radial-gradient(circle at center, #ffffff 0%, #fef08a 32%, #111111 36%, #111111 50%, #fbbf24 54%, #f59e0b 100%) !important;
+  box-shadow: 0 0 14px rgba(251, 191, 36, 0.8);
+}
+
+::-webkit-scrollbar-corner {
+  background: #0d0d0d;
+}
+
+/* Scrollbar Buttons / Setas (Setas na mesma cor da bolinha / Amber Gold) */
+::-webkit-scrollbar-button:vertical:decrement {
+  display: block;
+  height: 16px;
+  background: #0d0d0d url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E") no-repeat center center;
+  border-radius: 9999px 9999px 0 0;
+  border: 1px solid #1f1f23;
+}
+
+::-webkit-scrollbar-button:vertical:increment {
+  display: block;
+  height: 16px;
+  background: #0d0d0d url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat center center;
+  border-radius: 0 0 9999px 9999px;
+  border: 1px solid #1f1f23;
+}
+
+::-webkit-scrollbar-button:horizontal:decrement {
+  display: block;
+  width: 16px;
+  background: #0d0d0d url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E") no-repeat center center;
+  border-radius: 9999px 0 0 9999px;
+  border: 1px solid #1f1f23;
+}
+
+::-webkit-scrollbar-button:horizontal:increment {
+  display: block;
+  width: 16px;
+  background: #0d0d0d url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") no-repeat center center;
+  border-radius: 0 9999px 9999px 0;
+  border: 1px solid #1f1f23;
+}
+
+::-webkit-scrollbar-button:hover {
+  background-color: #1a1a1e;
+}
+
 .glow-hover {
   transition: all 0.3s ease;
 }
