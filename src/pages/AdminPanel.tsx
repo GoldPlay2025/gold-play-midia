@@ -755,7 +755,6 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
       <div className="min-h-screen bg-[#050505] text-slate-300 font-sans flex items-center justify-center overflow-hidden selection:bg-amber-500/30 selection:text-amber-200 relative">
         {/* Background glow effects */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-600/5 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-900/10 via-transparent to-transparent pointer-events-none"></div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -1062,20 +1061,25 @@ create policy "Permitir deletar midias" on storage.objects
   return (
     <div className="min-h-screen bg-[#020202] text-slate-300 font-sans flex items-center justify-center p-6 selection:bg-amber-500/30 selection:text-amber-200">
       
-      {/* Mobile Top Header Menu */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 px-4 py-3">
-        <div className="bg-[#111111]/90 backdrop-blur-md rounded-xl border border-orange-200/30 shadow-lg p-3 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-                <img src={systemSettings.iconUrl || "/gpm.png"} alt="Logo" className="w-8 h-8 object-contain" />
-                <span className="text-sm font-semibold text-white tracking-widest">{systemSettings.systemName}</span>
-            </div>
-            <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="text-white p-2">
-                <Menu className="w-6 h-6" />
-            </button>
+      {/* Mobile Top Header Menu - Flutuante, Fixo e 70% transparente */}
+      <div className="lg:hidden fixed top-4 right-4 z-50">
+        <div className="bg-[#111111]/70 backdrop-blur-md rounded-2xl border border-amber-500/20 shadow-2xl p-2 px-3 flex items-center gap-3">
+          <img 
+            src={systemSettings.iconUrl || "/gpm.png"} 
+            alt="Logo" 
+            className="w-12 h-12 object-contain filter drop-shadow" 
+          />
+          <button 
+            onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} 
+            className="text-white p-2 hover:bg-white/10 rounded-xl transition-colors cursor-pointer active:scale-95 flex items-center justify-center"
+            aria-label="Abrir Menu"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
         </div>
       </div>
 
-      <div className="w-full max-w-[1400px] h-[90vh] bg-[#050505] rounded-3xl border border-white/10 flex overflow-hidden shadow-2xl mt-16 lg:mt-0">
+      <div className="w-full max-w-[1400px] h-[90vh] bg-[#050505] rounded-3xl border border-white/10 flex overflow-hidden shadow-2xl mt-10 lg:mt-0">
         
         <Sidebar 
           isOpen={isSidebarExpanded} 
