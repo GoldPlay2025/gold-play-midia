@@ -1299,8 +1299,8 @@ create policy "Permitir deletar midias" on storage.objects
                                           <p className="text-xs font-semibold text-slate-200 group-hover:text-amber-400 transition-colors truncate">
                                             {c.descricao}
                                           </p>
-                                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/5">
-                                            {c.categoria}
+                                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 whitespace-nowrap">
+                                            {c.categoria === 'Licença Fully Kiosk' || c.categoria?.includes('Fully Kiosk') ? 'Fully Kiosk' : c.categoria}
                                           </span>
                                         </div>
                                         <p className="text-[11px] text-emerald-400 font-mono font-medium mt-0.5">
