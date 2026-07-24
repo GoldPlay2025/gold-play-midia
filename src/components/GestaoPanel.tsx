@@ -551,15 +551,19 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
                         <div className="text-[11px] text-slate-500 truncate max-w-xs">{item.observacoes}</div>
                       )}
                     </td>
-                    <td className="py-3.5 px-4">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${
-                        item.categoria === 'Licença Fully Kiosk' 
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
-                          : item.categoria === 'Servidor'
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap inline-block ${
+                        item.categoria === 'Licença Fully Kiosk' || item.categoria?.includes('Fully Kiosk')
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-sm shadow-amber-500/10' 
+                          : item.categoria === 'Servidor' || item.categoria?.includes('Servidor')
                           ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          : item.categoria?.includes('Equipamento') || item.categoria?.includes('Hardware')
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                           : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
                       }`}>
-                        {item.categoria}
+                        {item.categoria === 'Licença Fully Kiosk' || item.categoria?.includes('Fully Kiosk')
+                          ? 'Fully Kiosk'
+                          : item.categoria}
                       </span>
                     </td>
                     <td className="py-3.5 px-4">
