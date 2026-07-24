@@ -23,7 +23,10 @@ import {
   ArrowDownRight,
   ShieldCheck,
   RefreshCw,
-  Tag
+  Tag,
+  FileCode,
+  Copy,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -58,6 +61,24 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
   const [categoria, setCategoria] = useState('Licença Fully Kiosk');
   const [observacoes, setObservacoes] = useState('');
 
+  // SQL Script & Table status states
+  const [showSqlInstruction, setShowSqlInstruction] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [isTableMissing, setIsTableMissing] = useState(false);
+
+  // Safe non-blocking API helper
+  const fetchApiWithTimeout = async (path: string, options?: RequestInit, timeoutMs = 2000): Promise<Response | null> => {
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetchApi(path, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return res;
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Carregar dados
   const loadAllData = async () => {
     setIsLoading(true);
@@ -70,54 +91,54 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
       const { data: dataTelas } = await supabase.from('telas').select('*');
       if (dataTelas) setTelas(dataTelas);
 
-      // 3. Carregar Custos com Resiliência Tripla (LocalStorage Cache + Server File API + Supabase)
+      // 3. Carregar Custos
       let loadedCustos: CustoItem[] = [];
+      let supabaseLoadedSuccess = false;
 
-      // Tentativa A: LocalStorage Cache imediato
-      const localCache = localStorage.getItem('gpm_custos_cache');
-      if (localCache) {
-        try {
-          const parsed = JSON.parse(localCache);
-          if (Array.isArray(parsed)) {
-            loadedCustos = parsed;
-          }
-        } catch (e) {}
-      }
-
-      // Tentativa B: API do Servidor (Persistente em custos_data.json)
-      try {
-        const resp = await fetchApi('/api/custos');
-        if (resp.ok) {
-          const dataCustos = await resp.json();
-          if (Array.isArray(dataCustos) && dataCustos.length > 0) {
-            const existingIds = new Set(loadedCustos.map(c => c.id));
-            dataCustos.forEach((item: CustoItem) => {
-              if (!existingIds.has(item.id)) {
-                loadedCustos.push(item);
-              }
-            });
-          }
-        }
-      } catch (err) {
-        console.warn("Consulta API custos:", err);
-      }
-
-      // Tentativa C: Supabase direto no banco
+      // Tentativa A: Supabase direto no banco
       try {
         const { data: dbCustos, error: dbErr } = await supabase
           .from('custos')
           .select('*')
           .order('data_pagamento', { ascending: false });
-        if (!dbErr && dbCustos && dbCustos.length > 0) {
-          const existingIds = new Set(loadedCustos.map(c => c.id));
-          dbCustos.forEach((item: CustoItem) => {
-            if (!existingIds.has(item.id)) {
-              loadedCustos.push(item);
-            }
-          });
+
+        if (dbErr) {
+          if (dbErr.code === '42P01' || dbErr.message?.includes('relation') || dbErr.message?.includes('does not exist')) {
+            setIsTableMissing(true);
+          }
+        } else if (dbCustos) {
+          setIsTableMissing(false);
+          loadedCustos = dbCustos;
+          supabaseLoadedSuccess = true;
         }
       } catch (err) {
         console.warn("Consulta Supabase custos:", err);
+      }
+
+      // Tentativa B: LocalStorage Cache se Supabase não respondeu ou não tem dados
+      if (!supabaseLoadedSuccess || loadedCustos.length === 0) {
+        const localCache = localStorage.getItem('gpm_custos_cache');
+        if (localCache) {
+          try {
+            const parsed = JSON.parse(localCache);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              loadedCustos = parsed;
+            }
+          } catch (e) {}
+        }
+      }
+
+      // Tentativa C: API do Servidor (com timeout rápido para não travar na Vercel)
+      if (loadedCustos.length === 0) {
+        try {
+          const resp = await fetchApiWithTimeout('/api/custos', {}, 2000);
+          if (resp && resp.ok) {
+            const dataCustos = await resp.json();
+            if (Array.isArray(dataCustos) && dataCustos.length > 0) {
+              loadedCustos = dataCustos;
+            }
+          }
+        } catch (err) {}
       }
 
       setCustos(loadedCustos);
@@ -193,68 +214,80 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
     }
 
     setIsSaving(true);
-    const tempId = "cost-" + Date.now();
-    const newCostPayload = {
-      id: tempId,
-      descricao,
-      valor: Number(valor),
-      data_pagamento: dataPagamento || new Date().toISOString().split('T')[0],
-      recorrencia: recorrencia || 'Anual',
-      categoria: categoria || 'Licença Fully Kiosk',
-      observacoes: observacoes || '',
-      criado_em: new Date().toISOString()
-    };
-
-    let savedItem: CustoItem = newCostPayload;
-
-    // 1. Grava na API do Servidor (Persiste em custos_data.json)
     try {
-      const resp = await fetchApi('/api/custos', {
+      const costId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : "cost-" + Date.now();
+      const newCostPayload: CustoItem = {
+        id: costId,
+        descricao,
+        valor: Number(valor),
+        data_pagamento: dataPagamento || new Date().toISOString().split('T')[0],
+        recorrencia: recorrencia || 'Anual',
+        categoria: categoria || 'Licença Fully Kiosk',
+        observacoes: observacoes || '',
+        criado_em: new Date().toISOString()
+      };
+
+      let savedToSupabase = false;
+
+      // 1. Tenta salvar diretamente no Supabase em primeiro lugar
+      try {
+        const { error } = await supabase
+          .from('custos')
+          .insert([{
+            id: newCostPayload.id,
+            descricao: newCostPayload.descricao,
+            valor: newCostPayload.valor,
+            data_pagamento: newCostPayload.data_pagamento,
+            recorrencia: newCostPayload.recorrencia,
+            categoria: newCostPayload.categoria,
+            observacoes: newCostPayload.observacoes
+          }]);
+
+        if (error) {
+          console.error("Erro ao salvar custo no Supabase:", error);
+          if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+            setIsTableMissing(true);
+            setShowSqlInstruction(true);
+            showToast?.('error', 'A tabela "custos" não foi encontrada no Supabase. Crie-a usando o Script SQL.');
+          } else {
+            showToast?.('error', `Erro ao gravar no Supabase: ${error.message}`);
+          }
+        } else {
+          savedToSupabase = true;
+          setIsTableMissing(false);
+        }
+      } catch (sbErr) {
+        console.warn("Conexão Supabase:", sbErr);
+      }
+
+      // 2. Tenta salvar na API do Servidor em segundo plano com timeout rápido (não bloqueia na Vercel)
+      fetchApiWithTimeout('/api/custos', {
         method: 'POST',
         body: JSON.stringify(newCostPayload)
+      }, 2000);
+
+      // 3. Atualiza Estado Local e Cache no LocalStorage
+      setCustos(prev => {
+        const updated = [newCostPayload, ...prev.filter(c => c.id !== newCostPayload.id)];
+        localStorage.setItem('gpm_custos_cache', JSON.stringify(updated));
+        return updated;
       });
-      if (resp.ok) {
-        const apiItem = await resp.json();
-        if (apiItem && apiItem.id) {
-          savedItem = apiItem;
-        }
+
+      if (savedToSupabase) {
+        showToast?.('success', 'Custo gravado no Banco Supabase com sucesso!');
+      } else {
+        showToast?.('success', 'Custo salvo localmente.');
       }
-    } catch (e) {
-      console.warn("Erro ao salvar custo na API do servidor:", e);
+
+      setIsModalOpen(false);
+      setDescricao('');
+      setValor('');
+      setObservacoes('');
+    } catch (err: any) {
+      showToast?.('error', 'Erro ao salvar custo: ' + (err.message || 'Desconhecido'));
+    } finally {
+      setIsSaving(false);
     }
-
-    // 2. Tenta salvar no Supabase se a tabela existir
-    try {
-      await supabase
-        .from('custos')
-        .insert([{
-          id: savedItem.id,
-          descricao: savedItem.descricao,
-          valor: savedItem.valor,
-          data_pagamento: savedItem.data_pagamento,
-          recorrencia: savedItem.recorrencia,
-          categoria: savedItem.categoria,
-          observacoes: savedItem.observacoes
-        }]);
-    } catch (e) {
-      console.warn("Erro ao gravar custo no Supabase:", e);
-    }
-
-    // 3. Atualiza Estado Local + LocalStorage Cache
-    setCustos(prev => {
-      const updated = [savedItem, ...prev.filter(c => c.id !== savedItem.id && c.id !== tempId)];
-      localStorage.setItem('gpm_custos_cache', JSON.stringify(updated));
-      return updated;
-    });
-
-    showToast?.('success', 'Custo cadastrado com sucesso!');
-    setIsModalOpen(false);
-    
-    // Limpa os campos do formulário
-    setDescricao('');
-    setValor('');
-    setObservacoes('');
-    setIsSaving(false);
   };
 
   // Modal de Exclusão de Custo (substitui window.confirm que trava em iframes)
@@ -317,6 +350,15 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setShowSqlInstruction(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white transition-all text-xs font-semibold flex items-center gap-2 cursor-pointer"
+            title="Script SQL da Tabela Custos"
+          >
+            <FileCode className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">Script SQL (Custos)</span>
+          </button>
+
+          <button
             onClick={loadAllData}
             className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-95"
             title="Atualizar Dados"
@@ -333,6 +375,28 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
           </button>
         </div>
       </div>
+
+      {/* Banner de aviso se a tabela "custos" não existir no Supabase */}
+      {isTableMissing && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">Tabela 'custos' não criada no Supabase</h4>
+              <p className="text-xs text-slate-300 mt-0.5">Os custos estão sendo mantidos no cache local. Execute o Script SQL no Supabase para sincronização em nuvem.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowSqlInstruction(true)}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20"
+          >
+            <FileCode className="w-4 h-4" />
+            <span>Copiar Script SQL</span>
+          </button>
+        </div>
+      )}
 
       {/* 1. KPIs Superiores em CARDS INFOGRÁFICOS COM FUNDO GRADIENTE VIBRANTE (Estilo Print 2 nas cores Gold Play) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -741,6 +805,89 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
             >
               <Trash2 className="w-4 h-4" />
               <span>Sim, Excluir Custo</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Instrução SQL do Banco Supabase */}
+      <Modal 
+        isOpen={showSqlInstruction} 
+        onClose={() => setShowSqlInstruction(false)} 
+        title="Script SQL para Criar Tabela 'custos' no Supabase"
+      >
+        <div className="space-y-4 text-left">
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Acesse seu painel do Supabase, vá em <strong className="text-amber-400 font-bold">SQL Editor</strong>, cole o comando abaixo e clique em <strong className="text-emerald-400 font-bold">Run</strong> para habilitar a tabela de custos com permissões ativas:
+          </p>
+
+          <div className="relative">
+            <pre className="p-4 rounded-xl bg-black/80 border border-white/10 text-[11px] text-amber-300 font-mono overflow-x-auto max-h-64 select-all leading-relaxed">
+{`CREATE TABLE IF NOT EXISTS public.custos (
+    id TEXT PRIMARY KEY,
+    descricao TEXT NOT NULL,
+    valor NUMERIC NOT NULL DEFAULT 0,
+    data_pagamento TEXT,
+    recorrencia TEXT DEFAULT 'Anual',
+    categoria TEXT DEFAULT 'Licença Fully Kiosk',
+    observacoes TEXT,
+    criado_em TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Habilitar Políticas de Segurança (RLS)
+ALTER TABLE public.custos ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir acesso custos" ON public.custos;
+CREATE POLICY "Permitir acesso custos" ON public.custos FOR ALL USING (true) WITH CHECK (true);`}
+            </pre>
+
+            <button
+              type="button"
+              onClick={() => {
+                const sqlScript = `CREATE TABLE IF NOT EXISTS public.custos (
+    id TEXT PRIMARY KEY,
+    descricao TEXT NOT NULL,
+    valor NUMERIC NOT NULL DEFAULT 0,
+    data_pagamento TEXT,
+    recorrencia TEXT DEFAULT 'Anual',
+    categoria TEXT DEFAULT 'Licença Fully Kiosk',
+    observacoes TEXT,
+    criado_em TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Habilitar Políticas de Segurança (RLS)
+ALTER TABLE public.custos ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir acesso custos" ON public.custos;
+CREATE POLICY "Permitir acesso custos" ON public.custos FOR ALL USING (true) WITH CHECK (true);`;
+                navigator.clipboard.writeText(sqlScript);
+                setCopiedSql(true);
+                showToast?.('success', 'Script SQL copiado com sucesso!');
+                setTimeout(() => setCopiedSql(false), 2000);
+              }}
+              className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg cursor-pointer"
+            >
+              {copiedSql ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-black" />
+                  <span>Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-black" />
+                  <span>Copiar SQL</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setShowSqlInstruction(false)}
+              className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all cursor-pointer"
+            >
+              Fechar
             </button>
           </div>
         </div>
