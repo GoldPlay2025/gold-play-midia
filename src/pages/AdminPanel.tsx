@@ -12,6 +12,7 @@ import { PillProgressButton } from "../components/PillProgressButton";
 import { MediaThumbnail, MediaModalPlayer } from "../components/MediaThumbnail";
 import { fetchApi } from '../lib/api';
 import { WeatherWidget } from '../components/WeatherWidget';
+import bgGoldplay from '../assets/images/bg_goldplay_1784916870431.jpg';
 import { 
   LayoutDashboard,
   Users, 
@@ -820,9 +821,13 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#050505] text-slate-300 font-sans flex items-center justify-center overflow-hidden selection:bg-amber-500/30 selection:text-amber-200 relative">
+      <div 
+        className="min-h-screen text-slate-300 font-sans flex items-center justify-center overflow-hidden selection:bg-amber-500/30 selection:text-amber-200 relative bg-cover bg-center bg-no-repeat bg-[#020202]"
+        style={{ backgroundImage: `url(${bgGoldplay})` }}
+      >
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-none" />
         {/* Background glow effects */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -1127,8 +1132,13 @@ create policy "Permitir deletar midias" on storage.objects
   }
 
   return (
-    <div className="min-h-screen bg-[#020202] text-slate-300 font-sans flex items-center justify-center p-6 selection:bg-amber-500/30 selection:text-amber-200">
-      
+    <div 
+      className="min-h-screen text-slate-300 font-sans flex items-center justify-center p-6 selection:bg-amber-500/30 selection:text-amber-200 relative bg-cover bg-center bg-fixed bg-no-repeat bg-[#020202]"
+      style={{ backgroundImage: `url(${bgGoldplay})` }}
+    >
+      {/* Dark overlay for optimal contrast */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] pointer-events-none" />
+
       {/* Mobile Top Header Menu - Flutuante, Fixo e 70% transparente */}
       <div className="lg:hidden fixed top-4 right-4 z-50">
         <div className="bg-[#111111]/70 backdrop-blur-md rounded-2xl border border-amber-500/20 shadow-2xl p-2 px-3 flex items-center gap-3">
@@ -1147,7 +1157,7 @@ create policy "Permitir deletar midias" on storage.objects
         </div>
       </div>
 
-      <div className="w-full max-w-[1400px] h-[90vh] bg-[#050505] rounded-3xl border border-white/10 flex overflow-hidden shadow-2xl mt-10 lg:mt-0">
+      <div className="w-full max-w-[1400px] h-[90vh] bg-[#050508]/80 backdrop-blur-2xl rounded-3xl border border-white/15 flex overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] mt-10 lg:mt-0 relative z-10">
         
         <Sidebar 
           isOpen={isSidebarExpanded} 
@@ -1164,7 +1174,7 @@ create policy "Permitir deletar midias" on storage.objects
         />
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#050505] via-[#0a0a0c] to-[#050505] w-full">
+        <main className="flex-1 flex flex-col relative overflow-hidden bg-[#030305]/60 backdrop-blur-xl w-full">
         
         {/* Top Header */}
         <header className="h-20 flex flex-shrink-0 items-center justify-between px-6 lg:px-10 border-b border-white/5 bg-[#0a0a0a]/50 backdrop-blur-md z-10">
@@ -1397,7 +1407,7 @@ create policy "Permitir deletar midias" on storage.objects
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                   <div className="flex flex-col gap-4 min-h-[200px]">
-                    <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-amber-500/30 transition-all">
                       <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <Monitor className="w-12 h-12 text-amber-500" />
                       </div>
@@ -1409,7 +1419,7 @@ create policy "Permitir deletar midias" on storage.objects
                       <WeatherWidget city={systemSettings.weatherCity || 'Paranavaí, Paraná'} />
                     </div>
                   </div>
-                  <div className="bg-[#0f0f11] border border-white/5 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px]">
+                  <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px] shadow-xl shadow-black/50 hover:border-emerald-500/30 transition-all">
                     <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                       <Link2 className="w-16 h-16 text-emerald-500" />
                     </div>
@@ -1449,7 +1459,7 @@ create policy "Permitir deletar midias" on storage.objects
                     </div>
                   </div>
                   <div className="flex flex-col gap-4 min-h-[200px]">
-                    <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-blue-500/30 transition-all">
                       <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <Users className="w-12 h-12 text-blue-500" />
                       </div>
@@ -1457,7 +1467,7 @@ create policy "Permitir deletar midias" on storage.objects
                       <p className="text-3xl font-display font-light text-white">{clientes.length}</p>
                     </div>
 
-                    <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-sky-500/30 transition-all">
                       <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <Cloud className="w-12 h-12 text-sky-500" />
                       </div>
@@ -1478,7 +1488,7 @@ create policy "Permitir deletar midias" on storage.objects
                 {/* Growth Charts */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Chart 1: Crescimento de Telas */}
-                  <div className="bg-[#0f0f11] border border-white/5 rounded-2xl p-6 shadow-2xl shadow-black/50">
+                  <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl shadow-black/50">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-sm font-medium text-white mb-1">Crescimento de Telas</h3>
@@ -1533,7 +1543,7 @@ create policy "Permitir deletar midias" on storage.objects
                   </div>
 
                   {/* Chart 2: Crescimento de Clientes */}
-                  <div className="bg-[#0f0f11] border border-white/5 rounded-2xl p-6 shadow-2xl shadow-black/50">
+                  <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl shadow-black/50">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-sm font-medium text-white mb-1">Crescimento de Clientes</h3>
