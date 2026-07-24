@@ -70,54 +70,58 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
       const { data: dataTelas } = await supabase.from('telas').select('*');
       if (dataTelas) setTelas(dataTelas);
 
-      // 3. Carregar Custos com Resiliência Tripla (Supabase + LocalStorage Cache + API)
+      // 3. Carregar Custos com Resiliência Tripla (LocalStorage Cache + Server File API + Supabase)
       let loadedCustos: CustoItem[] = [];
 
-      // Tentativa A: Supabase direto no banco
+      // Tentativa A: LocalStorage Cache imediato
+      const localCache = localStorage.getItem('gpm_custos_cache');
+      if (localCache) {
+        try {
+          const parsed = JSON.parse(localCache);
+          if (Array.isArray(parsed)) {
+            loadedCustos = parsed;
+          }
+        } catch (e) {}
+      }
+
+      // Tentativa B: API do Servidor (Persistente em custos_data.json)
+      try {
+        const resp = await fetchApi('/api/custos');
+        if (resp.ok) {
+          const dataCustos = await resp.json();
+          if (Array.isArray(dataCustos) && dataCustos.length > 0) {
+            const existingIds = new Set(loadedCustos.map(c => c.id));
+            dataCustos.forEach((item: CustoItem) => {
+              if (!existingIds.has(item.id)) {
+                loadedCustos.push(item);
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Consulta API custos:", err);
+      }
+
+      // Tentativa C: Supabase direto no banco
       try {
         const { data: dbCustos, error: dbErr } = await supabase
           .from('custos')
           .select('*')
           .order('data_pagamento', { ascending: false });
         if (!dbErr && dbCustos && dbCustos.length > 0) {
-          loadedCustos = dbCustos;
-        }
-      } catch (err) {
-        console.warn("Consulta Supabase custos:", err);
-      }
-
-      // Tentativa B: LocalStorage Cache se o banco ainda não respondeu
-      if (loadedCustos.length === 0) {
-        const localCache = localStorage.getItem('gpm_custos_cache');
-        if (localCache) {
-          try {
-            const parsed = JSON.parse(localCache);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              loadedCustos = parsed;
-            }
-          } catch (e) {}
-        }
-      }
-
-      // Tentativa C: Endpoint de API do Servidor
-      const resp = await fetchApi('/api/custos');
-      if (resp.ok) {
-        const dataCustos = await resp.json();
-        if (Array.isArray(dataCustos) && dataCustos.length > 0) {
-          // Mescla sem duplicatas por ID
           const existingIds = new Set(loadedCustos.map(c => c.id));
-          dataCustos.forEach((item: CustoItem) => {
+          dbCustos.forEach((item: CustoItem) => {
             if (!existingIds.has(item.id)) {
               loadedCustos.push(item);
             }
           });
         }
+      } catch (err) {
+        console.warn("Consulta Supabase custos:", err);
       }
 
       setCustos(loadedCustos);
-      if (loadedCustos.length > 0) {
-        localStorage.setItem('gpm_custos_cache', JSON.stringify(loadedCustos));
-      }
+      localStorage.setItem('gpm_custos_cache', JSON.stringify(loadedCustos));
     } catch (e) {
       console.error("Erro ao carregar painel financeiro:", e);
     } finally {
@@ -191,41 +195,54 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
     setIsSaving(true);
     const tempId = "cost-" + Date.now();
     const newCostPayload = {
+      id: tempId,
       descricao,
       valor: Number(valor),
       data_pagamento: dataPagamento || new Date().toISOString().split('T')[0],
       recorrencia: recorrencia || 'Anual',
       categoria: categoria || 'Licença Fully Kiosk',
-      observacoes: observacoes || ''
+      observacoes: observacoes || '',
+      criado_em: new Date().toISOString()
     };
 
-    let savedItem: CustoItem | null = null;
+    let savedItem: CustoItem = newCostPayload;
 
-    // 1. Tenta salvar diretamente no Supabase se a tabela existir
+    // 1. Grava na API do Servidor (Persiste em custos_data.json)
     try {
-      const { data, error } = await supabase
-        .from('custos')
-        .insert([newCostPayload])
-        .select('*');
-
-      if (!error && data && data.length > 0) {
-        savedItem = data[0] as CustoItem;
+      const resp = await fetchApi('/api/custos', {
+        method: 'POST',
+        body: JSON.stringify(newCostPayload)
+      });
+      if (resp.ok) {
+        const apiItem = await resp.json();
+        if (apiItem && apiItem.id) {
+          savedItem = apiItem;
+        }
       }
+    } catch (e) {
+      console.warn("Erro ao salvar custo na API do servidor:", e);
+    }
+
+    // 2. Tenta salvar no Supabase se a tabela existir
+    try {
+      await supabase
+        .from('custos')
+        .insert([{
+          id: savedItem.id,
+          descricao: savedItem.descricao,
+          valor: savedItem.valor,
+          data_pagamento: savedItem.data_pagamento,
+          recorrencia: savedItem.recorrencia,
+          categoria: savedItem.categoria,
+          observacoes: savedItem.observacoes
+        }]);
     } catch (e) {
       console.warn("Erro ao gravar custo no Supabase:", e);
     }
 
-    if (!savedItem) {
-      savedItem = {
-        id: tempId,
-        ...newCostPayload,
-        criado_em: new Date().toISOString()
-      };
-    }
-
-    // 2. Atualização Otimista no Estado + LocalStorage Cache
+    // 3. Atualiza Estado Local + LocalStorage Cache
     setCustos(prev => {
-      const updated = [savedItem!, ...prev.filter(c => c.id !== savedItem!.id && c.id !== tempId)];
+      const updated = [savedItem, ...prev.filter(c => c.id !== savedItem.id && c.id !== tempId)];
       localStorage.setItem('gpm_custos_cache', JSON.stringify(updated));
       return updated;
     });
@@ -238,16 +255,6 @@ export function GestaoPanel({ showToast }: { showToast?: (type: 'success' | 'err
     setValor('');
     setObservacoes('');
     setIsSaving(false);
-
-    // 3. Sincronização secundária via API do Servidor
-    try {
-      await fetchApi('/api/custos', {
-        method: 'POST',
-        body: JSON.stringify(newCostPayload)
-      });
-    } catch (e) {
-      console.warn("Sincronização API servidor concluída.");
-    }
   };
 
   // Modal de Exclusão de Custo (substitui window.confirm que trava em iframes)
