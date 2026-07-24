@@ -27,7 +27,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, systemName, iconUrl }: SidebarProps) {
   return (
     <aside 
-      className={`flex-col h-full bg-[#111111] border-r border-white/10 transition-all duration-300 ${isOpen ? 'fixed inset-0 z-50 w-full flex' : 'hidden lg:flex lg:w-64'}`}
+      className={`flex-col h-full bg-[#0a0a0d]/70 backdrop-blur-2xl border-r border-white/10 transition-all duration-300 ${isOpen ? 'fixed inset-0 z-50 w-full flex' : 'hidden lg:flex lg:w-64'}`}
     >
       <div className="py-6 flex flex-col items-center px-4 border-b border-white/10 text-center relative shrink-0">
         <button className="lg:hidden absolute top-4 right-4" onClick={() => setIsOpen(false)}>

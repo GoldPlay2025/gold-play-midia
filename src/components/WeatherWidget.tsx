@@ -75,7 +75,7 @@ export function WeatherWidget({ city }: WeatherWidgetProps) {
 
   if (loading) {
     return (
-      <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center items-center h-full min-h-[120px]">
+      <div className="bg-[#0f0f14]/60 backdrop-blur-md border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center items-center h-full min-h-[120px]">
         <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
       </div>
     );
@@ -83,7 +83,7 @@ export function WeatherWidget({ city }: WeatherWidgetProps) {
 
   if (error || !weather?.current_weather) {
     return (
-      <div className="bg-[#0f0f11] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+      <div className="bg-[#0f0f14]/60 backdrop-blur-md border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
         <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Previsão do Tempo</p>
         <p className="text-sm font-display font-medium text-slate-400">{error || 'Dados indisponíveis'}</p>
         <p className="text-xs text-slate-500 mt-1">{city || 'Configure em Perfil'}</p>
@@ -94,7 +94,7 @@ export function WeatherWidget({ city }: WeatherWidgetProps) {
   const { temperature, weathercode, windspeed } = weather.current_weather;
 
   return (
-    <div className="bg-gradient-to-br from-[#0f0f11] to-[#141416] border border-white/5 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-between min-h-[120px]">
+    <div className="bg-[#0f0f14]/60 backdrop-blur-md border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-between min-h-[120px] hover:border-amber-500/30 transition-all shadow-lg shadow-black/40">
       <div className="absolute -top-4 -right-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
         {getWeatherIcon(weathercode)}
       </div>
