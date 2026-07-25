@@ -179,6 +179,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   // Biblioteca de Mídias States
   const [midias, setMidias] = useState<any[]>([]);
   const [editingMidia, setEditingMidia] = useState<any | null>(null);
+  const [deletingMidia, setDeletingMidia] = useState<{ id: string; titulo: string; urlStorage: string } | null>(null);
   const [previewMidia, setPreviewMidia] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ titulo_video: '', tela_id: '' });
   const [editFile, setEditFile] = useState<File | null>(null);
@@ -384,7 +385,25 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
         .order('criado_em', { ascending: false });
 
       if (error) throw error;
-      setMidias(data || []);
+
+      const allMidias = data || [];
+      
+      // Auto-purge any invalid auto-generated media entries (e.g. Player Official or device player URLs)
+      const invalidMidias = allMidias.filter((m: any) => 
+        (m.titulo_video && m.titulo_video.includes('Player Official')) ||
+        (m.url_storage && m.url_storage.includes('/player?device='))
+      );
+
+      if (invalidMidias.length > 0) {
+        const invalidIds = invalidMidias.map((m: any) => m.id);
+        await supabase.from('playlists').delete().in('midia_id', invalidIds);
+        await supabase.from('midias').delete().in('id', invalidIds);
+        
+        const validMidias = allMidias.filter((m: any) => !invalidIds.includes(m.id));
+        setMidias(validMidias);
+      } else {
+        setMidias(allMidias);
+      }
     } catch (error: any) {
       console.error('Error fetching midias:', error);
       const errorMsg = error.message || error.details || JSON.stringify(error);
@@ -394,12 +413,21 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     }
   };
 
-  const handleDeletarMidia = async (midiaId: string, urlStorage: string) => {
-    if (!confirm('Deseja realmente excluir esta mídia? Ela será removida de todas as telas vinculadas.')) {
-      return;
-    }
+  const handleDeletarMidia = (midiaId: string, urlStorage: string) => {
+    const found = midias.find(m => m.id === midiaId || m.url_storage === urlStorage);
+    setDeletingMidia({
+      id: midiaId,
+      titulo: found?.titulo_video || 'Mídia Ativa',
+      urlStorage: urlStorage || ''
+    });
+  };
 
+  const confirmDeleteMidia = async () => {
+    if (!deletingMidia) return;
+    const { id: midiaId, urlStorage } = deletingMidia;
+    setDeletingMidia(null);
     setIsLoading(true);
+
     try {
       // 1. Deleta os vínculos na tabela 'playlists' primeiro para evitar violação de FK constraint
       if (midiaId) {
@@ -407,6 +435,12 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
           .from('playlists')
           .delete()
           .eq('midia_id', midiaId);
+      }
+      if (urlStorage) {
+        await supabase
+          .from('playlists')
+          .delete()
+          .eq('url_storage', urlStorage);
       }
 
       // 2. Deleta a mídia do banco de dados por ID ou por url_storage
@@ -416,13 +450,8 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
           .delete()
           .eq('id', midiaId);
 
-        if (deleteDbError) {
-          console.warn('Tentando deletar mídia por URL:', deleteDbError);
-          if (urlStorage) {
-            await supabase.from('midias').delete().eq('url_storage', urlStorage);
-          } else {
-            throw deleteDbError;
-          }
+        if (deleteDbError && urlStorage) {
+          await supabase.from('midias').delete().eq('url_storage', urlStorage);
         }
       } else if (urlStorage) {
         await supabase.from('midias').delete().eq('url_storage', urlStorage);
@@ -455,17 +484,13 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   };
 
   const handleLimparMidiasVazias = async () => {
-    if (!confirm('Deseja excluir automaticamente todas as mídias sem arquivo de vídeo (mídias vazias/registros temporários)?')) {
-      return;
-    }
-
     setIsLoading(true);
     try {
-      // Busca mídias que tem tamanho_mb == 0 ou null ou cujo título parece um UUID/sem vídeo
+      // Busca mídias que tem tamanho_mb == 0 ou null ou que são "Player Official"
       const { data: vazias } = await supabase
         .from('midias')
-        .select('id, url_storage, tamanho_mb')
-        .or('tamanho_mb.eq.0,tamanho_mb.is.null');
+        .select('id, url_storage, tamanho_mb, titulo_video')
+        .or('tamanho_mb.eq.0,tamanho_mb.is.null,titulo_video.ilike.%Player Official%');
 
       if (vazias && vazias.length > 0) {
         const ids = vazias.map(v => v.id);
@@ -1430,28 +1455,27 @@ create policy "Permitir deletar midias" on storage.objects
                           <p className="text-xs text-slate-500 italic">Nenhuma mídia ativa</p>
                         ) : (
                           midias.map(midia => (
-                            <div key={midia.id} className="flex items-center gap-3 bg-black/40 border border-white/5 p-2 rounded-xl">
-                              <div className="w-16 h-12 rounded overflow-hidden bg-white/5 shrink-0 flex items-center justify-center relative group/vid">
+                            <div 
+                              key={midia.id} 
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/campanha/${midia.id}`);
+                                showToast('success', `Link de "${midia.titulo_video || 'Campanha'}" copiado!`);
+                              }}
+                              title="Clique para copiar o link"
+                              className="flex items-center gap-3 bg-black/40 hover:bg-white/[0.05] border border-white/5 hover:border-emerald-500/30 p-2.5 rounded-xl cursor-pointer transition-all group/item"
+                            >
+                              <div className="w-16 h-12 rounded-lg overflow-hidden bg-white/5 shrink-0 flex items-center justify-center relative group-hover/item:scale-105 transition-transform">
                                 {midia.url_storage ? (
-                                  <video src={midia.url_storage} className="w-full h-full object-cover opacity-70 group-hover/vid:opacity-100 transition-opacity" />
+                                  <video src={midia.url_storage} className="w-full h-full object-cover opacity-80 group-hover/item:opacity-100 transition-opacity" />
                                 ) : (
                                   <Video className="w-4 h-4 text-slate-600" />
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-mono text-slate-300 truncate font-semibold uppercase">{midia.titulo_video || 'Campanha'}</p>
+                                <p className="text-[11px] font-mono text-slate-200 truncate font-semibold uppercase group-hover/item:text-emerald-400 transition-colors">
+                                  {midia.titulo_video || 'Campanha'}
+                                </p>
                               </div>
-                              <button 
-                                onClick={() => {
-                                  navigator.clipboard.writeText(`${window.location.origin}/campanha/${midia.id}`);
-                                  showToast('success', 'Link copiado!');
-                                }}
-                                className="shrink-0 flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg transition-colors text-[9px] font-mono relative z-10"
-                                title="Copiar ID"
-                              >
-                                <Copy className="w-3 h-3" />
-                                COPIAR ID
-                              </button>
                             </div>
                           ))
                         )}
@@ -2142,6 +2166,57 @@ create policy "Permitir deletar midias" on storage.objects
                     Tamanho: {previewMidia.tamanho_mb} MB
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação de Exclusão de Mídia */}
+      <AnimatePresence>
+        {deletingMidia && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-[#121216] border border-red-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Excluir Mídia</h3>
+                  <p className="text-xs text-slate-400">Esta ação irá remover a mídia do sistema.</p>
+                </div>
+              </div>
+
+              <div className="bg-black/50 border border-white/10 p-3 rounded-xl">
+                <p className="text-xs text-slate-300 font-mono">
+                  Título: <span className="text-white font-semibold">{deletingMidia.titulo}</span>
+                </p>
+              </div>
+
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Tem certeza de que deseja excluir esta mídia? O arquivo e as referências nas playlists vinculadas serão removidos.
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletingMidia(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteMidia}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-red-600/20 active:scale-95"
+                >
+                  Sim, Excluir
+                </button>
               </div>
             </motion.div>
           </div>
