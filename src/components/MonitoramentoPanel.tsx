@@ -225,15 +225,37 @@ ALTER TABLE telas ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN DEFAULT FALSE;`;
         })
       });
 
+      const contentType = response.headers.get('content-type') || '';
       const resText = await response.text();
+
+      if (!contentType.includes('application/json')) {
+        const errorMsg = 'Erro de ambiente: A rota da API não respondeu corretamente. Teste no ambiente de produção da Vercel.';
+        setTestResult({ success: false, msg: errorMsg });
+        setToast({
+          type: 'error',
+          title: 'Erro de Ambiente',
+          message: errorMsg
+        });
+        setIsTestingAlert(false);
+        return;
+      }
+
       let data: any = {};
       try {
         data = JSON.parse(resText);
       } catch (e) {
-        data = { success: false, error: 'Servidor retornou resposta não-JSON (código ' + response.status + ')' };
+        const errorMsg = 'Erro de ambiente: A rota da API não retornou um JSON válido. Teste no ambiente de produção da Vercel.';
+        setTestResult({ success: false, msg: errorMsg });
+        setToast({
+          type: 'error',
+          title: 'Erro de Formato',
+          message: errorMsg
+        });
+        setIsTestingAlert(false);
+        return;
       }
 
-      if (response.ok && data.success) {
+      if (response.ok && data.success === true) {
         setTestResult({ success: true, msg: 'Mensagem de teste enviada com sucesso para ' + adminPhone + '!' });
         setToast({
           type: 'success',
@@ -241,19 +263,21 @@ ALTER TABLE telas ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN DEFAULT FALSE;`;
           message: 'Verifique seu WhatsApp para confirmar o recebimento.'
         });
       } else {
-        setTestResult({ success: false, msg: data.error || 'Falha ao enviar mensagem de teste.' });
+        const errorMsg = data.error || data.message || 'Erro de ambiente: A rota da API não respondeu corretamente. Teste no ambiente de produção da Vercel.';
+        setTestResult({ success: false, msg: errorMsg });
         setToast({
           type: 'error',
           title: 'Falha no Envio',
-          message: data.error || 'Não foi possível enviar a mensagem de teste via WhatsApp.'
+          message: errorMsg
         });
       }
     } catch (err: any) {
-      setTestResult({ success: false, msg: 'Erro de conexão com o servidor de WhatsApp.' });
+      const errorMsg = 'Erro de ambiente: A rota da API não respondeu corretamente. Teste no ambiente de produção da Vercel.';
+      setTestResult({ success: false, msg: errorMsg });
       setToast({
         type: 'error',
         title: 'Erro de Conexão',
-        message: 'Verifique a rota da API ou conexão com o servidor WhatsApp.'
+        message: errorMsg
       });
     } finally {
       setIsTestingAlert(false);
@@ -275,43 +299,70 @@ ALTER TABLE telas ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN DEFAULT FALSE;`;
         }
       });
 
+      const contentType = response.headers.get('content-type') || '';
       const resText = await response.text();
-      let data: any = {};
 
+      if (!contentType.includes('application/json')) {
+        const errorMsg = 'Erro de ambiente: A rota da API não respondeu corretamente. Teste no ambiente de produção da Vercel.';
+        setCronResult({
+          success: false,
+          status: response.status,
+          message: errorMsg,
+          preview: resText.slice(0, 200)
+        });
+        setToast({
+          type: 'error',
+          title: 'Erro de Ambiente',
+          message: errorMsg
+        });
+        setIsRunningCron(false);
+        return;
+      }
+
+      let data: any = {};
       try {
         data = JSON.parse(resText);
       } catch (e) {
-        data = {
+        const errorMsg = 'Erro de ambiente: A rota da API não retornou um JSON válido. Teste no ambiente de produção da Vercel.';
+        setCronResult({
           success: false,
           status: response.status,
-          statusText: response.statusText,
-          message: 'A rota /api/cron/check-offline respondeu, mas retornou conteúdo não-JSON.',
+          message: errorMsg,
           preview: resText.slice(0, 200)
-        };
+        });
+        setToast({
+          type: 'error',
+          title: 'Erro de Formato',
+          message: errorMsg
+        });
+        setIsRunningCron(false);
+        return;
       }
 
       setCronResult(data);
       fetchData(); // Recarrega lista atualizada
 
-      if (response.ok && data.success !== false) {
+      if (response.ok && data.success === true) {
         setToast({
-          type: 'info',
+          type: 'success',
           title: 'Cron Executado',
-          message: 'A verificação de telas offline foi executada com sucesso.'
+          message: data.message || 'A verificação de telas offline foi executada com sucesso.'
         });
       } else {
+        const errorMsg = data.message || data.error || 'Erro de ambiente: A rota da API não respondeu corretamente. Teste no ambiente de produção da Vercel.';
         setToast({
-          type: 'warning',
-          title: 'Retorno da Execução do Cron',
-          message: data.message || data.error || 'Verifique os detalhes da execução abaixo.'
+          type: 'error',
+          title: 'Falha na Execução',
+          message: errorMsg
         });
       }
     } catch (err: any) {
-      setCronResult({ error: 'Erro ao executar rota do Cron: ' + err.message });
+      const errorMsg = 'Erro de ambiente: A rota da API não respondeu corretamente. Teste no ambiente de produção da Vercel.';
+      setCronResult({ error: errorMsg });
       setToast({
         type: 'error',
         title: 'Erro no Cron',
-        message: 'Não foi possível executar a verificação de cron.'
+        message: errorMsg
       });
     } finally {
       setIsRunningCron(false);
