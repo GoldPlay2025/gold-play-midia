@@ -15,7 +15,8 @@ import {
   Sparkles,
   FileText,
   CheckCircle,
-  Smartphone
+  Smartphone,
+  RefreshCw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -64,7 +65,10 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
     try {
       const res = await fetch(`${apiUrl}/status`, { headers: { 'x-api-key': apiKey } });
       const data = await res.json();
-      setIsConnected(data.connected);
+      setIsConnected(!!data.connected);
+      if (data.qrCode) {
+        setQrCode(data.qrCode);
+      }
     } catch (err) {
       console.error('Erro ao checar status:', err);
     }
@@ -171,11 +175,11 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
     reader.readAsDataURL(file);
   };
 
-  const handleConnect = async () => {
+  const handleConnect = async (force = false) => {
     setIsLoading(true);
-    setQrCode(null);
+    if (force) setQrCode(null);
     try {
-      const res = await fetch(`${apiUrl}/connect`, { headers: { 'x-api-key': apiKey } });
+      const res = await fetch(`${apiUrl}/connect${force ? '?force=true' : ''}`, { headers: { 'x-api-key': apiKey } });
       const data = await res.json();
       
       if (!res.ok) {
@@ -184,22 +188,33 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
       
       if (data.connected) {
         setIsConnected(true);
+        setQrCode(null);
         showToast('success', 'WhatsApp conectado com sucesso!');
       } else if (data.qrCode) {
         setQrCode(data.qrCode);
-        showToast('success', 'Escaneie o QR Code com seu WhatsApp.');
-        
-        const interval = setInterval(async () => {
+        showToast('success', 'Escaneie o QR Code com seu aplicativo do WhatsApp.');
+      } else {
+        showToast('success', 'Gerando QR Code... Aguarde um instante.');
+      }
+
+      // Inicia polling para atualizar QR Code e detectar pareamento
+      const interval = setInterval(async () => {
+        try {
           const statusRes = await fetch(`${apiUrl}/status`, { headers: { 'x-api-key': apiKey } });
           const statusData = await statusRes.json();
           if (statusData.connected) {
             setIsConnected(true);
             setQrCode(null);
             clearInterval(interval);
-            showToast('success', 'WhatsApp conectado!');
+            showToast('success', 'WhatsApp conectado com sucesso!');
+          } else if (statusData.qrCode) {
+            setQrCode(statusData.qrCode);
           }
-        }, 3000);
-      }
+        } catch (e) {}
+      }, 2500);
+
+      setTimeout(() => clearInterval(interval), 120000);
+
     } catch (error: any) {
       showToast('error', error.message || 'Erro ao iniciar conexão.');
     } finally {
@@ -345,7 +360,16 @@ export function WhatsappPanel({ showToast }: { showToast: (type: 'success' | 'er
                 <div className="bg-white p-2.5 rounded-xl mb-3 shadow-xl">
                   <img src={qrCode} alt="WhatsApp QR Code" className="w-44 h-44" />
                 </div>
-                <p className="text-[11px] text-slate-400 max-w-[210px]">Abra o WhatsApp &gt; Aparelhos Conectados &gt; Conectar um Aparelho.</p>
+                <p className="text-[11px] text-slate-400 max-w-[210px] mb-3">Abra o WhatsApp &gt; Aparelhos Conectados &gt; Conectar um Aparelho.</p>
+                <button
+                  type="button"
+                  onClick={() => handleConnect(true)}
+                  disabled={isLoading}
+                  className="text-xs text-slate-400 hover:text-emerald-400 underline flex items-center gap-1 transition-colors"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                  <span>Gerar novo QR Code</span>
+                </button>
               </div>
             ) : (
               <div className="relative z-10 flex flex-col items-center">
