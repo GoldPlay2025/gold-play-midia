@@ -47,6 +47,9 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
     if (!tela) return;
 
     let cleanTitle = newUrl.split('/').pop()?.split('?')[0] || 'Mídia Atualizada';
+    if (newUrl.includes('/player')) {
+      cleanTitle = `Player Official (${tela.nome_local || 'Tela'})`;
+    }
     try {
       cleanTitle = decodeURIComponent(cleanTitle);
     } catch (e) {}
@@ -76,7 +79,10 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
       if (existingMidias && existingMidias.length > 0) {
         midiaId = existingMidias[0].id;
         midiaTitle = existingMidias[0].titulo_video || cleanTitle;
+      }
 
+      if (midiaId) {
+        // Link existing media ID to this screen's playlist
         await supabase.from('playlists').delete().eq('tela_id', tela.id);
         await supabase.from('playlists').insert([{
           tela_id: tela.id,
@@ -89,6 +95,9 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
         if (fetchDashboardData) {
           fetchDashboardData();
         }
+      } else {
+        // Safe update for standalone URLs (do NOT insert into midias table)
+        updateScreenMediaState(tela.id, { id: 'url-' + Date.now(), titulo_video: cleanTitle, url_storage: newUrl });
       }
     } catch (err) {
       console.warn('Sincronização no banco falhou, mantendo mídia em cache local:', err);
@@ -111,7 +120,16 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
     }, 150);
 
     try {
-      const payload: any = { deviceId: fullyDeviceId, action };
+      const savedToken = localStorage.getItem('fully_api_token') || '';
+      const savedEmail = localStorage.getItem('fully_api_email') || '';
+
+      const payload: any = { 
+        deviceId: fullyDeviceId, 
+        action,
+        customApiToken: savedToken,
+        customApiEmail: savedEmail
+      };
+      
       if (extraData?.newUrl) {
         payload.newUrl = extraData.newUrl;
       }
@@ -132,11 +150,11 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
         throw new Error('O servidor retornou uma resposta inválida.');
       }
       
-      if (!response.ok) {
-        if (response.status === 401 || data?.requiresLogin) {
+      if (!response.ok || data.requiresConfig) {
+        if (data.requiresConfig || (data.error && data.error.includes('login'))) {
           setShowFullyLoginModal(true);
         }
-        throw new Error(data.error || 'Erro ao enviar comando para a API.');
+        throw new Error(data.error || 'Erro ao enviar comando para a API do Fully Cloud.');
       }
 
       // Conclui o progresso com 100%
@@ -160,9 +178,6 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
       clearInterval(progressInterval);
       console.error(err);
       let msg = err.message || 'Erro ao enviar comando.';
-      if (msg.includes('Sessão do Fully Cloud') || msg.includes('login') || msg.includes('Acesso negado')) {
-        setShowFullyLoginModal(true);
-      }
       if (msg === 'Failed to fetch' || err.name === 'TypeError') {
         msg = 'Falha de conexão com o servidor da aplicação. Verifique a chave FULLY_API_TOKEN ou se a API do Fully Cloud está acessível.';
       }
@@ -200,10 +215,36 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
   };
 
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(text);
-    showToast('success', `URL da ${label} copiada para a área de transferência!`);
-    setTimeout(() => setCopiedId(null), 2000);
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          setCopiedId(text);
+          showToast('success', `URL do Player de ${label} copiada para a área de transferência!`);
+          setTimeout(() => setCopiedId(null), 2000);
+        })
+        .catch(() => fallbackCopy(text, label));
+    } else {
+      fallbackCopy(text, label);
+    }
+  };
+
+  const fallbackCopy = (text: string, label: string) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedId(text);
+      showToast('success', `URL do Player de ${label} copiada para a área de transferência!`);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      showToast('error', 'Erro ao copiar a URL do player.');
+    }
   };
 
   return (
@@ -235,8 +276,12 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
           const dbMidiaRaw = playlists.length > 0 ? playlists[0]?.midias : null;
           const dbMidia = Array.isArray(dbMidiaRaw) ? dbMidiaRaw[0] : dbMidiaRaw;
           const activeMidia = updatedMidias[tela.id] || dbMidia;
-          const telaPlayerUrl = `${window.location.origin}/player/${tela.id}`;
-          const currentTargetUrl = activeMidia?.url_storage || telaPlayerUrl;
+
+          // Device ID atual para esta tela
+          const currentDeviceId = tela.fully_device_id || tela.identificador_unico || tela.id;
+          
+          // URL padrão estruturada do player do dispositivo no formato https://www.goldplaymanager.com.br/player?device=[DEVICE_ID_ATUAL]
+          const telaPlayerUrl = `https://www.goldplaymanager.com.br/player?device=${currentDeviceId}`;
 
           return (
             <div key={tela.id} className="bg-[#0f0f11] border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-white/10 transition-all flex flex-col shadow-xl">
@@ -289,24 +334,24 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                         <p className="text-sm font-semibold text-white truncate" title={activeMidia.titulo_video}>
                           {activeMidia.titulo_video}
                         </p>
-                        <p className="text-[11px] text-slate-500 truncate font-mono">
-                          {activeMidia.url_storage}
+                        <p className="text-[11px] text-slate-500 truncate font-mono" title={telaPlayerUrl}>
+                          {telaPlayerUrl}
                         </p>
                         <div className="flex items-center gap-2 pt-1 flex-wrap">
                           <button
                             onClick={() => {
-                              setNewUrls({ ...newUrls, [tela.id]: activeMidia.url_storage });
-                              showToast('success', `URL da mídia "${activeMidia.titulo_video}" inserida!`);
+                              setNewUrls({ ...newUrls, [tela.id]: telaPlayerUrl });
+                              showToast('success', `URL do Player de ${tela.nome_local} inserida!`);
                             }}
                             className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 shrink-0"
                           >
                             <Send className="w-3 h-3" /> Inserir já
                           </button>
                           <button
-                            onClick={() => copyToClipboard(activeMidia.url_storage, tela.nome_local)}
+                            onClick={() => copyToClipboard(telaPlayerUrl, tela.nome_local)}
                             className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 shrink-0 border border-white/5"
                           >
-                            {copiedId === activeMidia.url_storage ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            {copiedId === telaPlayerUrl ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                             Copiar
                           </button>
                         </div>
@@ -319,16 +364,23 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                       </div>
                       <div className="flex-1 min-w-0 space-y-1">
                         <p className="text-xs font-semibold text-slate-200 truncate">Player Oficial ({tela.nome_local})</p>
-                        <p className="text-[11px] text-slate-500 truncate font-mono">{telaPlayerUrl}</p>
-                        <div className="pt-1">
+                        <p className="text-[11px] text-slate-500 truncate font-mono" title={telaPlayerUrl}>{telaPlayerUrl}</p>
+                        <div className="flex items-center gap-2 pt-1 flex-wrap">
                           <button
                             onClick={() => {
                               setNewUrls({ ...newUrls, [tela.id]: telaPlayerUrl });
                               showToast('success', `URL do Player de ${tela.nome_local} inserida!`);
                             }}
-                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20"
+                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 shrink-0"
                           >
                             <Send className="w-3 h-3" /> Inserir já
+                          </button>
+                          <button
+                            onClick={() => copyToClipboard(telaPlayerUrl, tela.nome_local)}
+                            className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 shrink-0 border border-white/5"
+                          >
+                            {copiedId === telaPlayerUrl ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            Copiar
                           </button>
                         </div>
                       </div>
@@ -418,9 +470,9 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                           showToast('error', 'Digite ou insira uma URL válida antes de enviar.');
                           return;
                         }
-                        handleCommand(tela.id, tela.fully_device_id!, 'change_url', { newUrl: url.trim() });
+                        handleCommand(tela.id, currentDeviceId, 'change_url', { newUrl: url.trim() });
                       }}
-                      disabled={!tela.fully_device_id || !newUrls[tela.id]?.trim() || loadingAction !== null}
+                      disabled={!currentDeviceId || !newUrls[tela.id]?.trim() || loadingAction !== null}
                       className="w-full"
                     />
                   </div>
@@ -436,8 +488,8 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                   variant="emerald"
                   isLoading={loadingAction === `${tela.id}-loadStartUrl`}
                   progress={actionProgress[`${tela.id}-loadStartUrl`]}
-                  onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'loadStartUrl')}
-                  disabled={!tela.fully_device_id || loadingAction !== null}
+                  onClick={() => handleCommand(tela.id, currentDeviceId, 'loadStartUrl')}
+                  disabled={!currentDeviceId || loadingAction !== null}
                   className="w-full"
                 />
                 
@@ -448,8 +500,8 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                   variant="rose"
                   isLoading={loadingAction === `${tela.id}-restartApp`}
                   progress={actionProgress[`${tela.id}-restartApp`]}
-                  onClick={() => handleCommand(tela.id, tela.fully_device_id!, 'restartApp')}
-                  disabled={!tela.fully_device_id || loadingAction !== null}
+                  onClick={() => handleCommand(tela.id, currentDeviceId, 'restartApp')}
+                  disabled={!currentDeviceId || loadingAction !== null}
                   className="w-full"
                 />
               </div>
