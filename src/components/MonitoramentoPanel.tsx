@@ -22,11 +22,13 @@ import {
   Check,
   X,
   Database,
-  Info
+  Info,
+  QrCode,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export function MonitoramentoPanel() {
+export function MonitoramentoPanel({ onNavigateToWhatsapp }: { onNavigateToWhatsapp?: () => void }) {
   const [adminPhone, setAdminPhone] = useState('');
   const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
@@ -637,20 +639,48 @@ ALTER TABLE telas ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN DEFAULT FALSE;`;
 
           {testResult && (
             <div
-              className={`p-3.5 rounded-xl text-xs flex items-center gap-2 border ${
+              className={`p-4 rounded-xl text-xs border ${
                 testResult.success
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   : 'bg-red-500/10 border-red-500/20 text-red-400'
               }`}
             >
-              {testResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-              <span>{testResult.msg}</span>
+              <div className="flex items-center gap-2">
+                {testResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                <span className="font-medium">{testResult.msg}</span>
+              </div>
+
+              {!testResult.success && onNavigateToWhatsapp && (
+                <div className="mt-3 pt-3 border-t border-red-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <span className="text-slate-300">📱 Para reconectar ou sincronizar seu WhatsApp:</span>
+                  <button
+                    type="button"
+                    onClick={onNavigateToWhatsapp}
+                    className="px-3.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg font-sans text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    <QrCode className="w-4 h-4 text-emerald-400" />
+                    <span>Abrir Conexão WhatsApp / Escanear QR Code</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
           {cronResult && (
             <div className="p-4 bg-[#050507] border border-white/10 rounded-xl text-xs font-mono space-y-2 text-slate-300">
-              <p className="text-amber-400 font-bold">Resultado da Execução do Cron (/api/cron/check-offline):</p>
+              <div className="flex items-center justify-between">
+                <p className="text-amber-400 font-bold">Resultado da Execução do Cron (/api/cron/check-offline):</p>
+                {cronResult.error && cronResult.error.includes('conectado') && onNavigateToWhatsapp && (
+                  <button
+                    type="button"
+                    onClick={onNavigateToWhatsapp}
+                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-md font-sans text-[11px] font-semibold flex items-center gap-1.5 transition-all"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>Conectar WhatsApp</span>
+                  </button>
+                )}
+              </div>
               <pre className="text-[11px] overflow-x-auto whitespace-pre-wrap">{JSON.stringify(cronResult, null, 2)}</pre>
             </div>
           )}
