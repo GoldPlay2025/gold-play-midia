@@ -22,102 +22,166 @@ const authMiddleware = (req: any, res: any, next: any) => {
 let sock: any = null;
 let qrCodeBase64: string | null = null;
 let isConnected = false;
-let connectionPromise: Promise<void> | null = null;
-
-// Habilitando debug completo em arquivo para entender o loop de conexão
-const logger = pino({ level: 'debug' }, pino.destination('./baileys-debug.log'));
+let isConnecting = false;
+let connectPromise: Promise<void> | null = null;
 
 // Inicializa a conexão com o WhatsApp
-const connectToWhatsApp = async () => {
-  if (isConnected && sock) return;
+const connectToWhatsApp = async (forceReset = false) => {
+  if (isConnected && sock && !forceReset) return;
+  if (isConnecting && connectPromise && !forceReset) {
+    return connectPromise;
+  }
 
-  // Usa armazenamento local temporariamente para evitar gargalo do Supabase
-  const { state, saveCreds } = await useMultiFileAuthState('./wa-session');
-  const { version } = await fetchLatestBaileysVersion();
+  isConnecting = true;
 
-  sock = makeWASocket({
-    version,
-    auth: state,
-    logger,
-    printQRInTerminal: true,
-    syncFullHistory: false,
-    markOnlineOnConnect: true,
-    generateHighQualityLinkPreview: false,
-    getMessage: async (key) => {
-      return { conversation: '' };
-    },
-    browser: Browsers.macOS('Desktop'),
-  });
-
-  sock.ev.on('connection.update', async (update: any) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      qrCodeBase64 = await QRCode.toDataURL(qr);
-    }
-
-    if (connection === 'close') {
-      const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      isConnected = false;
-      qrCodeBase64 = null;
-      
-      console.log('Conexão fechada. Reconectar:', shouldReconnect, 'Código:', statusCode, 'Erro:', lastDisconnect?.error);
-      
-      if (shouldReconnect) {
-        // Se for erro de rate limit ou similar, espera um pouco antes de reconectar
-        setTimeout(connectToWhatsApp, 2000);
-      } else {
-        console.log('Deslogado. Limpando credenciais...');
-        fs.rmSync('./wa-session', { recursive: true, force: true });
+  connectPromise = (async () => {
+    try {
+      if (sock) {
+        try {
+          sock.ev.removeAllListeners('connection.update');
+          sock.ev.removeAllListeners('creds.update');
+          sock.end(undefined);
+        } catch (e) {}
         sock = null;
       }
-    } else if (connection === 'open') {
-      console.log('Conectado ao WhatsApp!');
-      isConnected = true;
-      qrCodeBase64 = null;
-    }
-  });
 
-  sock.ev.on('creds.update', saveCreds);
+      if (forceReset) {
+        qrCodeBase64 = null;
+        isConnected = false;
+        try {
+          fs.rmSync('./wa-session', { recursive: true, force: true });
+        } catch (e) {}
+      }
+
+      const { state, saveCreds } = await useMultiFileAuthState('./wa-session');
+      
+      let version: [number, number, number] = [2, 3000, 1015901307];
+      try {
+        const v = await fetchLatestBaileysVersion();
+        if (v?.version) version = v.version;
+      } catch (e) {
+        console.log('Versão remota indisponível, usando versão fallback de Baileys');
+      }
+
+      sock = makeWASocket({
+        version,
+        auth: state,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 60000,
+        keepAliveIntervalMs: 30000,
+        browser: ['Mac OS', 'Chrome', '10.15.7'],
+      });
+
+      sock.ev.on('creds.update', saveCreds);
+
+      sock.ev.on('connection.update', async (update: any) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+          try {
+            qrCodeBase64 = await QRCode.toDataURL(qr);
+            console.log('✅ WhatsApp: Novo QR Code gerado com sucesso!');
+          } catch (err) {
+            console.error('Erro ao converter QR Code para base64:', err);
+          }
+        }
+
+        if (connection === 'close') {
+          const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+          console.log(`❌ WhatsApp: Conexão fechada. Código: ${statusCode}`);
+          isConnected = false;
+          isConnecting = false;
+
+          const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401;
+
+          if (isLoggedOut) {
+            console.log('WhatsApp: Sessão deslogada/inválida. Limpando sessão local...');
+            qrCodeBase64 = null;
+            sock = null;
+            try {
+              fs.rmSync('./wa-session', { recursive: true, force: true });
+            } catch (e) {}
+          }
+        } else if (connection === 'open') {
+          console.log('🎉 WhatsApp: Conectado com sucesso!');
+          isConnected = true;
+          isConnecting = false;
+          qrCodeBase64 = null;
+        }
+      });
+    } catch (err: any) {
+      console.error('Erro na inicialização do Baileys:', err);
+      isConnecting = false;
+    } finally {
+      isConnecting = false;
+    }
+  })();
+
+  return connectPromise;
 };
 
 // 1. Inicia a conexão e retorna o QRCode
 whatsappRouter.get('/connect', authMiddleware, async (req, res) => {
   try {
-    if (!sock || (!isConnected && !qrCodeBase64)) {
-      await connectToWhatsApp();
-      // Aguarda um pouco para o QR Code ser gerado
-      await delay(2000);
+    const force = req.query.force === 'true';
+
+    if (force || (!sock && !isConnected && !isConnecting)) {
+      await connectToWhatsApp(force);
+    } else if (isConnecting && connectPromise) {
+      await connectPromise;
+    }
+
+    // Loop de aguardo por até 10s para ver se o QRCode é gerado ou a conexão estabelece
+    let attempts = 0;
+    while (!isConnected && !qrCodeBase64 && attempts < 20) {
+      await delay(500);
+      attempts++;
     }
 
     res.json({
       connected: isConnected,
-      qrCode: qrCodeBase64
+      qrCode: qrCodeBase64,
+      isConnecting
     });
   } catch (error: any) {
     console.error('Erro no /connect:', error);
-    res.status(500).json({ error: 'Erro ao conectar no WhatsApp.' });
+    res.status(500).json({ error: 'Erro ao conectar no WhatsApp: ' + (error.message || 'Erro interno') });
   }
 });
 
 // 2. Verifica status
 whatsappRouter.get('/status', authMiddleware, (req, res) => {
-  res.json({ connected: isConnected });
+  res.json({
+    connected: isConnected,
+    qrCode: qrCodeBase64,
+    isConnecting
+  });
 });
 
 // 3. Logout e limpa a sessão
 whatsappRouter.post('/logout', authMiddleware, async (req, res) => {
   try {
     if (sock) {
-      sock.logout();
+      try {
+        sock.logout();
+      } catch (e) {}
+      try {
+        sock.end(undefined);
+      } catch (e) {}
     }
-    fs.rmSync('./wa-session', { recursive: true, force: true });
     sock = null;
     isConnected = false;
+    isConnecting = false;
     qrCodeBase64 = null;
+    try {
+      fs.rmSync('./wa-session', { recursive: true, force: true });
+    } catch (e) {}
     
-    res.json({ success: true, message: 'Desconectado com sucesso.' });
+    res.json({ success: true, message: 'Sessão deslogada e limpa com sucesso.' });
   } catch (error: any) {
     res.status(500).json({ error: 'Erro ao desconectar.' });
   }
