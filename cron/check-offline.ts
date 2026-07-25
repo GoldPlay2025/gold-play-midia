@@ -35,21 +35,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // a) Busca configurações de alertas
-    const { data: configData } = await supabase
-      .from('configuracoes')
-      .select('admin_phone, alerts_enabled')
-      .eq('id', 'sistema')
-      .maybeSingle();
+    // a) Busca configurações de alertas de forma segura
+    let alertsEnabled = false;
+    let adminPhone = '';
 
-    const alertsEnabled = configData?.alerts_enabled ?? false;
-    const adminPhone = (configData?.admin_phone || '').trim();
+    try {
+      const { data: configData, error: configError } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('id', 'sistema')
+        .maybeSingle();
+
+      if (configData) {
+        alertsEnabled = configData.alerts_enabled ?? false;
+        adminPhone = (configData.admin_phone || '').trim();
+      }
+    } catch (errConfig) {
+      console.warn('Aviso ao consultar configuracoes no cron:', errConfig);
+    }
 
     if (!alertsEnabled || !adminPhone) {
       return res.status(200).json({
         success: true,
         action: 'skipped',
-        reason: !alertsEnabled ? 'Alertas desativados' : 'Número do administrador não configurado',
+        reason: !alertsEnabled ? 'Alertas desativados ou pendentes de criação no banco' : 'Número do administrador não configurado',
         alertsEnabled,
         adminPhone
       });
