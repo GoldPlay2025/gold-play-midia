@@ -96,6 +96,21 @@ monitoringRouter.get('/heartbeat', async (req, res) => {
 // 2. Rota de Cron para checagem de telas offline e disparo de alertas WhatsApp
 monitoringRouter.all('/check-offline', async (req, res) => {
   try {
+    // Validação de segurança via CRON_SECRET
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      const authHeader = req.headers.authorization || '';
+      const querySecret = req.query?.secret || req.headers['x-cron-secret'];
+      const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (authHeader as string);
+
+      if (token !== cronSecret && querySecret !== cronSecret) {
+        return res.status(401).json({ 
+          error: 'Não autorizado. Token CRON_SECRET inválido ou não fornecido.',
+          message: 'Envie o token no cabeçalho Authorization: Bearer <CRON_SECRET> ou parâmetro ?secret=<CRON_SECRET>'
+        });
+      }
+    }
+
     const supabase = getSupabaseClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase não configurado no servidor' });
