@@ -20,18 +20,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { deviceId, action, newUrl } = req.body || {};
+    const { deviceId, action, newUrl, customApiToken, customApiEmail } = req.body || {};
     
-    const apiToken = process.env.FULLY_API_TOKEN || process.env.FULLY_API_KEY;
-    const apiEmail = process.env.FULLY_API_EMAIL;
+    let apiToken = (customApiToken || process.env.FULLY_API_TOKEN || process.env.FULLY_API_KEY || '').trim();
+    let apiEmail = (customApiEmail || process.env.FULLY_API_EMAIL || '').trim();
+
+    if (apiToken === 'YOUR_FULLY_API_TOKEN' || apiToken === 'MY_FULLY_API_TOKEN') {
+      apiToken = '';
+    }
 
     if (!apiToken) {
-      return res.status(503).json({ error: 'FULLY_API_TOKEN (ou FULLY_API_KEY) não configurado nas variáveis da Vercel.' });
+      return res.status(400).json({ 
+        requiresConfig: true,
+        error: "O Token de API do Fully Cloud não está configurado. Por favor, clique em 'Login / Configurar Fully Cloud' para salvar seu API Token e E-mail da conta." 
+      });
     }
 
     if (!deviceId || !action) {
       return res.status(400).json({ error: 'O deviceId e a action são obrigatórios.' });
     }
+
+    const cleanDeviceId = String(deviceId).trim();
 
     // Mapeamento de comandos
     let fullyCmd = action;
@@ -44,32 +53,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'A propriedade newUrl é obrigatória para alterar a URL.' });
       }
       fullyCmd = 'loadURL';
-      extraParams = `&url=${encodeURIComponent(newUrl)}`;
+      extraParams = `&url=${encodeURIComponent(newUrl.trim())}`;
     }
 
-    const emailParam = apiEmail ? `&apiemail=${encodeURIComponent(apiEmail)}` : '';
-    const fullyUrl = `https://api.fully-kiosk.com/remote/?cmd=${fullyCmd}&devid=${encodeURIComponent(deviceId)}${emailParam}&apikey=${encodeURIComponent(apiToken)}${extraParams}&type=json`;
+    const emailParam = apiEmail ? `&email=${encodeURIComponent(apiEmail)}&apiemail=${encodeURIComponent(apiEmail)}` : '';
 
-    const response = await fetch(fullyUrl, {
-      method: 'GET',
-    });
+    // Tenta 1º endpoint: Cloud REST API
+    const cloudUrl = `https://cloud.fully-kiosk.com/api/?cmd=${fullyCmd}&devid=${encodeURIComponent(cleanDeviceId)}&password=${encodeURIComponent(apiToken)}&apikey=${encodeURIComponent(apiToken)}${emailParam}${extraParams}&type=json`;
 
-    const responseText = await response.text();
-    
-    if (responseText.includes("Sign in") || responseText.includes("Login") || responseText.includes("Access Denied")) {
-      return res.status(401).json({ 
-        error: "Acesso negado pelo Fully Cloud. Verifique se FULLY_API_EMAIL, FULLY_API_TOKEN e o Device ID estão corretos nas variáveis de ambiente da Vercel." 
-      });
-    }
+    let response = await fetch(cloudUrl, { method: 'GET' });
+    let responseText = await response.text();
 
-    let data;
+    let data: any;
     try {
-      data = responseText ? JSON.parse(responseText) : { status: 'Success', statustext: 'Comando enviado com sucesso' };
+      data = responseText ? JSON.parse(responseText) : {};
     } catch (e) {
-      data = { status: 'Success', statustext: 'Comando enviado para a Tela com sucesso.', rawResponse: responseText };
+      data = { status: 'Success', statustext: responseText };
     }
 
-    if (data && (data.status === 'Error' || data.statustext?.toLowerCase().includes('error'))) {
+    // Se falhar no 1º endpoint, tenta Remote Admin API
+    if (data?.status === 'Error' || (data?.statustext && data.statustext.toLowerCase().includes('login'))) {
+      const remoteUrl = `https://api.fully-kiosk.com/remote/?cmd=${fullyCmd}&devid=${encodeURIComponent(cleanDeviceId)}&password=${encodeURIComponent(apiToken)}&apikey=${encodeURIComponent(apiToken)}${emailParam}${extraParams}&type=json`;
+      const remoteResp = await fetch(remoteUrl, { method: 'GET' });
+      const remoteText = await remoteResp.text();
+      try {
+        const remoteData = JSON.parse(remoteText);
+        if (remoteData?.status === 'Success' || (remoteData?.statustext && !remoteData.statustext.toLowerCase().includes('login'))) {
+          data = remoteData;
+        }
+      } catch (e) {}
+    }
+
+    if (data && (data.status === 'Error' || data.statustext?.toLowerCase().includes('error') || data.statustext?.toLowerCase().includes('login'))) {
+      if (data.statustext?.toLowerCase().includes('login') || data.statustext?.toLowerCase().includes('key') || data.statustext?.toLowerCase().includes('access')) {
+        return res.status(400).json({ 
+          requiresConfig: true,
+          error: `Erro de Autenticação no Fully Cloud: "${data.statustext}". Por favor, clique no botão 'Login / Configurar Fully Cloud' e salve seu API Token/Senha e E-mail da conta.` 
+        });
+      }
       return res.status(400).json({ error: data.statustext || 'Erro retornado pela API do Fully Kiosk.' });
     }
 
