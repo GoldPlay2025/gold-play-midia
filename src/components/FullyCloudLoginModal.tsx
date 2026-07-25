@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Cloud, ExternalLink, Check, ShieldAlert, RefreshCw, KeyRound } from 'lucide-react';
+import { X, Cloud, ExternalLink, Check, KeyRound, Save, Mail, Key } from 'lucide-react';
 import { PillProgressButton } from './PillProgressButton';
 
 interface FullyCloudLoginModalProps {
@@ -10,16 +10,35 @@ interface FullyCloudLoginModalProps {
 }
 
 export function FullyCloudLoginModal({ isOpen, onClose, onSuccess }: FullyCloudLoginModalProps) {
-  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [tokenInput, setTokenInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setTokenInput(localStorage.getItem('fully_api_token') || '');
+      setEmailInput(localStorage.getItem('fully_api_email') || '');
+      setIsSaved(false);
+    }
+  }, [isOpen]);
+
+  const handleSaveCredentials = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    localStorage.setItem('fully_api_token', tokenInput.trim());
+    localStorage.setItem('fully_api_email', emailInput.trim());
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
+  };
+
   const handleDoneLogin = () => {
+    handleSaveCredentials();
     setIsVerifying(true);
     setTimeout(() => {
       setIsVerifying(false);
       if (onSuccess) onSuccess();
       onClose();
-    }, 1200);
+    }, 800);
   };
 
   return (
@@ -41,7 +60,7 @@ export function FullyCloudLoginModal({ isOpen, onClose, onSuccess }: FullyCloudL
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 20 }}
             transition={{ type: "spring", duration: 0.4 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-2xl max-h-[92vh] flex flex-col bg-[#0d0d0f] border border-amber-500/30 rounded-3xl shadow-[0_0_50px_rgba(245,158,11,0.15)] z-50 overflow-hidden"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-xl max-h-[92vh] flex flex-col bg-[#0d0d0f] border border-amber-500/30 rounded-3xl shadow-[0_0_50px_rgba(245,158,11,0.15)] z-50 overflow-hidden"
           >
             {/* Header */}
             <div className="px-6 py-4 border-b border-white/10 bg-gradient-to-r from-amber-500/10 via-black to-blue-500/10 flex items-center justify-between shrink-0">
@@ -51,12 +70,12 @@ export function FullyCloudLoginModal({ isOpen, onClose, onSuccess }: FullyCloudL
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white tracking-tight">Login no Fully Cloud</h3>
+                    <h3 className="text-base font-bold text-white tracking-tight">Configurar Fully Cloud API</h3>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-semibold border border-amber-500/30">
-                      Sessão Expirada
+                      Credenciais
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">Faça o login abaixo para revalidar os comandos dos dispositivos.</p>
+                  <p className="text-xs text-slate-400">Insira seu API Token/Senha para autorizar comandos aos dispositivos.</p>
                 </div>
               </div>
 
@@ -69,48 +88,79 @@ export function FullyCloudLoginModal({ isOpen, onClose, onSuccess }: FullyCloudL
               </button>
             </div>
 
-            {/* Sub-header notification */}
-            <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between text-xs text-amber-200 shrink-0">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>O Fully Cloud deslogou por inatividade. Faça login para reativar o envio.</span>
-              </div>
-              <a
-                href="https://cloud.fully-kiosk.com/cloud/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] font-semibold text-amber-300 hover:text-white underline flex items-center gap-1 shrink-0 ml-2"
-              >
-                Abrir em Nova Aba <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            {/* Iframe Viewport */}
-            <div className="p-4 flex-1 overflow-hidden relative bg-black/60 flex flex-col items-center justify-center min-h-[460px]">
-              {!iframeLoaded && (
-                <div className="absolute inset-0 bg-[#0d0d0f] z-10 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
-                  <p className="text-xs text-slate-400 font-mono">Carregando painel do Fully Cloud...</p>
+            {/* Main Area */}
+            <div className="p-6 flex-1 overflow-y-auto space-y-5 bg-black/60">
+              <form onSubmit={handleSaveCredentials} className="space-y-4">
+                <div className="bg-[#121215] border border-white/10 p-4 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                      <Key className="w-4 h-4 text-amber-400" />
+                      <span>API Token / Cloud Secret (Ou Senha Remote Admin)</span>
+                    </label>
+                    <a
+                      href="https://cloud.fully-kiosk.com/cloud/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-amber-400 hover:underline flex items-center gap-1"
+                    >
+                      <span>Obter na Conta</span> <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <input
+                    type="password"
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    placeholder="Cole seu FULLY_API_TOKEN ou Chave Cloud..."
+                    className="w-full bg-[#070709] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Sua chave é gerada em <strong>Cloud Settings &gt; Cloud Secret/API Key</strong> no painel do Fully Cloud.
+                  </p>
                 </div>
-              )}
 
-              <iframe
-                src="https://cloud.fully-kiosk.com/cloud/"
-                className="w-full h-full min-h-[440px] rounded-2xl border border-white/10 bg-white shadow-2xl"
-                onLoad={() => setIframeLoaded(true)}
-                title="Fully Cloud Login"
-                sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
-              />
+                <div className="bg-[#121215] border border-white/10 p-4 rounded-2xl space-y-3">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-amber-400" />
+                    <span>E-mail da Conta Fully Cloud</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="ex: seuemail@dominio.com"
+                    className="w-full bg-[#070709] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-all font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <a
+                    href="https://cloud.fully-kiosk.com/cloud/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
+                  >
+                    <span>Abrir Portal Fully Cloud</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20 active:scale-95"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSaved ? 'Credenciais Salvas!' : 'Salvar no Navegador'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
 
             {/* Footer controls */}
-            <div className="px-6 py-4 border-t border-white/10 bg-[#070709] flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <KeyRound className="w-4 h-4 text-amber-400" />
-                <span>Após digitar e clicar em OK no login, clique em <strong>Concluí o Login</strong>.</span>
-              </div>
+            <div className="px-6 py-4 border-t border-white/10 bg-[#070709] flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-400">
+                Salva suas credenciais localmente para autorizar o envio de comandos.
+              </span>
 
-              <div className="flex items-center gap-3 ml-auto">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={onClose}
@@ -121,8 +171,8 @@ export function FullyCloudLoginModal({ isOpen, onClose, onSuccess }: FullyCloudL
 
                 <PillProgressButton
                   onClick={handleDoneLogin}
-                  label="Concluí o Login"
-                  loadingLabel="Verificando Conexão..."
+                  label="Salvar &amp; Confirmar"
+                  loadingLabel="Verificando..."
                   icon={<Check className="w-4 h-4" />}
                   variant="amber"
                   isLoading={isVerifying}
