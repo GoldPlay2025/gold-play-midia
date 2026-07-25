@@ -17,9 +17,14 @@ import {
   Radio,
   ExternalLink,
   Power,
-  Zap
+  Zap,
+  Copy,
+  Check,
+  X,
+  Database,
+  Info
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export function MonitoramentoPanel() {
   const [adminPhone, setAdminPhone] = useState('');
@@ -37,34 +42,53 @@ export function MonitoramentoPanel() {
   const [isRunningCron, setIsRunningCron] = useState(false);
   const [cronResult, setCronResult] = useState<any | null>(null);
 
+  // Estados de notificação e auxílio de SQL
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
+  const [showSqlInstruction, setShowSqlInstruction] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const sqlScript = `-- Execute no SQL Editor do Supabase (Dashboard > SQL Editor):
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS admin_phone TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alerts_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE telas ADD COLUMN IF NOT EXISTS last_ping TIMESTAMP WITH TIME ZONE;
+ALTER TABLE telas ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN DEFAULT FALSE;`;
+
+  // Auto-dismiss do Toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   // Carrega configurações e lista de telas
   const fetchData = async () => {
     setIsLoadingLoadingTelas(true);
     try {
-      // 1. Garante que as colunas 'last_ping', 'alert_sent', 'admin_phone' e 'alerts_enabled' existam no Supabase
-      try {
-        await supabase.rpc('exec_sql', {
-          sql_query: `
-            alter table telas add column if not exists last_ping timestamp with time zone;
-            alter table telas add column if not exists alert_sent boolean default false;
-            alter table configuracoes add column if not exists admin_phone text;
-            alter table configuracoes add column if not exists alerts_enabled boolean default false;
-          `
-        });
-      } catch (e) {
-        // Ignora caso a RPC de SQL não esteja ativada, continua normalmente
+      // 1. Carrega backup local primeiro para não zerar os campos
+      const savedLocal = localStorage.getItem('gpm_monitoring_config');
+      if (savedLocal) {
+        try {
+          const parsed = JSON.parse(savedLocal);
+          if (parsed.admin_phone) setAdminPhone(parsed.admin_phone);
+          if (typeof parsed.alerts_enabled === 'boolean') setAlertsEnabled(parsed.alerts_enabled);
+        } catch (e) {}
       }
 
-      // 2. Busca configurações do sistema
-      const { data: config } = await supabase
+      // 2. Busca configurações do sistema no Supabase
+      const { data: config, error: configError } = await supabase
         .from('configuracoes')
         .select('*')
         .eq('id', 'sistema')
         .maybeSingle();
 
+      if (configError && (configError.message?.includes('schema cache') || configError.message?.includes('admin_phone'))) {
+        setShowSqlInstruction(true);
+      }
+
       if (config) {
-        setAdminPhone(config.admin_phone || '');
-        setAlertsEnabled(config.alerts_enabled ?? false);
+        if (config.admin_phone !== undefined) setAdminPhone(config.admin_phone || '');
+        if (config.alerts_enabled !== undefined) setAlertsEnabled(config.alerts_enabled ?? false);
       }
 
       // 3. Busca telas com informações do cliente
@@ -75,7 +99,7 @@ export function MonitoramentoPanel() {
 
       if (errTelas) throw errTelas;
       setTelas(dataTelas || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao carregar dados de monitoramento:', err);
     } finally {
       setIsLoadingLoadingTelas(false);
@@ -116,6 +140,13 @@ export function MonitoramentoPanel() {
         cleanPhone = `55${cleanPhone}`;
       }
 
+      // 1. Salva localmente como backup garantido
+      localStorage.setItem('gpm_monitoring_config', JSON.stringify({
+        admin_phone: cleanPhone,
+        alerts_enabled: alertsEnabled
+      }));
+
+      // 2. Tenta salvar no Supabase
       const { error } = await supabase
         .from('configuracoes')
         .upsert({
@@ -124,23 +155,56 @@ export function MonitoramentoPanel() {
           alerts_enabled: alertsEnabled
         }, { onConflict: 'id' });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes('admin_phone') || error.message?.includes('schema cache') || error.code === 'PGRST204' || error.code === '42703') {
+          setShowSqlInstruction(true);
+          setAdminPhone(cleanPhone);
+          setToast({
+            type: 'warning',
+            title: 'Salvo em Backup Local',
+            message: 'A configuração foi salva localmente. Para sincronizar no banco Supabase, execute o script SQL exibido abaixo no seu painel do Supabase.'
+          });
+          return;
+        }
+        throw error;
+      }
 
       setAdminPhone(cleanPhone);
+      setShowSqlInstruction(false);
       setSaveSuccess(true);
+      setToast({
+        type: 'success',
+        title: 'Configurações Salvas!',
+        message: 'Número do WhatsApp e preferências de alertas salvas com sucesso no Supabase.'
+      });
       setTimeout(() => setSaveSuccess(false), 4000);
     } catch (err: any) {
       console.error('Erro ao salvar configurações de alerta:', err);
-      alert('Erro ao salvar configurações: ' + (err.message || 'Erro desconhecido'));
+      setToast({
+        type: 'error',
+        title: 'Erro ao Salvar no Banco',
+        message: err.message || 'Não foi possível salvar no Supabase. Os dados foram mantidos localmente.'
+      });
     } finally {
       setIsSavingConfig(false);
     }
   };
 
+  // Copiar SQL
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(sqlScript);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
+
   // Testar Disparo de Alerta via WhatsApp
   const handleTestAlert = async () => {
     if (!adminPhone) {
-      alert('Por favor, informe o número do WhatsApp para alertas antes de testar.');
+      setToast({
+        type: 'warning',
+        title: 'Campo Obrigatório',
+        message: 'Por favor, informe o número do WhatsApp para alertas antes de testar.'
+      });
       return;
     }
 
@@ -164,11 +228,26 @@ export function MonitoramentoPanel() {
       const data = await response.json();
       if (response.ok && data.success) {
         setTestResult({ success: true, msg: 'Mensagem de teste enviada com sucesso para ' + adminPhone + '!' });
+        setToast({
+          type: 'success',
+          title: 'Teste Enviado!',
+          message: 'Verifique seu WhatsApp para confirmar o recebimento.'
+        });
       } else {
         setTestResult({ success: false, msg: data.error || 'Falha ao enviar mensagem de teste.' });
+        setToast({
+          type: 'error',
+          title: 'Falha no Envio',
+          message: data.error || 'Não foi possível enviar a mensagem de teste via WhatsApp.'
+        });
       }
     } catch (err: any) {
       setTestResult({ success: false, msg: 'Erro de conexão com o servidor de WhatsApp.' });
+      setToast({
+        type: 'error',
+        title: 'Erro de Conexão',
+        message: 'Verifique a rota da API ou conexão com o servidor WhatsApp.'
+      });
     } finally {
       setIsTestingAlert(false);
     }
@@ -180,14 +259,28 @@ export function MonitoramentoPanel() {
     setCronResult(null);
 
     try {
+      const cronSecret = import.meta.env.VITE_CRON_SECRET || 'minha-chave-secreta';
       const response = await fetch('/api/cron/check-offline', {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cronSecret}`
+        }
       });
       const data = await response.json();
       setCronResult(data);
       fetchData(); // Recarrega lista atualizada
+      setToast({
+        type: 'info',
+        title: 'Cron Executado',
+        message: 'A verificação de telas offline foi executada com sucesso.'
+      });
     } catch (err: any) {
       setCronResult({ error: 'Erro ao executar rota do Cron: ' + err.message });
+      setToast({
+        type: 'error',
+        title: 'Erro no Cron',
+        message: 'Não foi possível executar a verificação de cron.'
+      });
     } finally {
       setIsRunningCron(false);
     }
@@ -196,14 +289,27 @@ export function MonitoramentoPanel() {
   // Enviar Heartbeat de Teste Manual para uma tela
   const handleSendTestHeartbeat = async (deviceId: string) => {
     try {
-      await fetch('/api/devices/heartbeat', {
+      const res = await fetch('/api/devices/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId })
       });
+      if (res.ok) {
+        setToast({
+          type: 'success',
+          title: 'Heartbeat Recebido',
+          message: `Sinal de heartbeat enviado com sucesso para o dispositivo ${deviceId}.`
+        });
+      } else {
+        throw new Error('Falha no servidor');
+      }
       fetchData();
     } catch (e) {
-      alert('Erro ao enviar sinal de heartbeat.');
+      setToast({
+        type: 'error',
+        title: 'Erro no Heartbeat',
+        message: 'Não foi possível enviar o sinal de teste para a tela.'
+      });
     }
   };
 
@@ -245,6 +351,94 @@ export function MonitoramentoPanel() {
 
   return (
     <div className="space-y-8 pb-12">
+      {/* Toast Notification Flutuante Elegante */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={`p-4 rounded-2xl border backdrop-blur-xl shadow-2xl flex items-start gap-3.5 relative ${
+              toast.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
+                : toast.type === 'warning'
+                ? 'bg-amber-950/90 border-amber-500/40 text-amber-300'
+                : toast.type === 'info'
+                ? 'bg-blue-950/90 border-blue-500/40 text-blue-300'
+                : 'bg-red-950/90 border-red-500/40 text-red-300'
+            }`}
+          >
+            <div className="p-2 rounded-xl bg-white/10 shrink-0 mt-0.5">
+              {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+              {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
+              {toast.type === 'info' && <Info className="w-5 h-5 text-blue-400" />}
+              {toast.type === 'error' && <ShieldAlert className="w-5 h-5 text-red-400" />}
+            </div>
+            <div className="flex-1 pr-6">
+              <h4 className="text-sm font-bold text-white tracking-tight">{toast.title}</h4>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">{toast.message}</p>
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors absolute top-3 right-3"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Instrução do Banco de Dados Supabase (SQL) */}
+      <AnimatePresence>
+        {showSqlInstruction && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-5 space-y-4"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Sincronização com o Banco de Dados (Supabase)</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    As colunas <code className="text-amber-400">admin_phone</code> e <code className="text-amber-400">alerts_enabled</code> foram salvas localmente, mas precisam ser criadas no Supabase.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowSqlInstruction(false)}
+                className="p-1 text-slate-500 hover:text-slate-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-[#050507] border border-white/10 rounded-xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-mono text-[11px] text-amber-500/80">SQL Script para o Supabase Editor</span>
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg text-xs font-medium border border-amber-500/30 transition-all"
+                >
+                  {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedSql ? 'Copiado!' : 'Copiar Script SQL'}</span>
+                </button>
+              </div>
+
+              <pre className="text-[11px] font-mono text-slate-300 overflow-x-auto p-2 bg-black/40 rounded-lg whitespace-pre-wrap">
+                {sqlScript}
+              </pre>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0a0a0d]/70 p-6 rounded-2xl border border-white/10 backdrop-blur-xl">
         <div className="flex items-center gap-4">
