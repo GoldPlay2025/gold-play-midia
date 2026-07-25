@@ -225,7 +225,14 @@ ALTER TABLE telas ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN DEFAULT FALSE;`;
         })
       });
 
-      const data = await response.json();
+      const resText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch (e) {
+        data = { success: false, error: 'Servidor retornou resposta não-JSON (código ' + response.status + ')' };
+      }
+
       if (response.ok && data.success) {
         setTestResult({ success: true, msg: 'Mensagem de teste enviada com sucesso para ' + adminPhone + '!' });
         setToast({
@@ -260,20 +267,45 @@ ALTER TABLE telas ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN DEFAULT FALSE;`;
 
     try {
       const cronSecret = import.meta.env.VITE_CRON_SECRET || 'minha-chave-secreta';
-      const response = await fetch('/api/cron/check-offline', {
+      const response = await fetch(`/api/cron/check-offline?secret=${encodeURIComponent(cronSecret)}`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${cronSecret}`
         }
       });
-      const data = await response.json();
+
+      const resText = await response.text();
+      let data: any = {};
+
+      try {
+        data = JSON.parse(resText);
+      } catch (e) {
+        data = {
+          success: false,
+          status: response.status,
+          statusText: response.statusText,
+          message: 'A rota /api/cron/check-offline respondeu, mas retornou conteúdo não-JSON.',
+          preview: resText.slice(0, 200)
+        };
+      }
+
       setCronResult(data);
       fetchData(); // Recarrega lista atualizada
-      setToast({
-        type: 'info',
-        title: 'Cron Executado',
-        message: 'A verificação de telas offline foi executada com sucesso.'
-      });
+
+      if (response.ok && data.success !== false) {
+        setToast({
+          type: 'info',
+          title: 'Cron Executado',
+          message: 'A verificação de telas offline foi executada com sucesso.'
+        });
+      } else {
+        setToast({
+          type: 'warning',
+          title: 'Retorno da Execução do Cron',
+          message: data.message || data.error || 'Verifique os detalhes da execução abaixo.'
+        });
+      }
     } catch (err: any) {
       setCronResult({ error: 'Erro ao executar rota do Cron: ' + err.message });
       setToast({
