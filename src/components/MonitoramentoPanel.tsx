@@ -1,0 +1,569 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { PillProgressButton } from './PillProgressButton';
+import { 
+  Activity, 
+  Bell, 
+  CheckCircle2, 
+  AlertTriangle, 
+  RefreshCw, 
+  Send, 
+  Phone, 
+  Wifi, 
+  WifiOff, 
+  Clock, 
+  ShieldAlert, 
+  Search, 
+  Radio,
+  ExternalLink,
+  Power,
+  Zap
+} from 'lucide-react';
+import { motion } from 'motion/react';
+
+export function MonitoramentoPanel() {
+  const [adminPhone, setAdminPhone] = useState('');
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const [telas, setTelas] = useState<any[]>([]);
+  const [isLoadingTelas, setIsLoadingLoadingTelas] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [isTestingAlert, setIsTestingAlert] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; msg: string } | null>(null);
+
+  const [isRunningCron, setIsRunningCron] = useState(false);
+  const [cronResult, setCronResult] = useState<any | null>(null);
+
+  // Carrega configurações e lista de telas
+  const fetchData = async () => {
+    setIsLoadingLoadingTelas(true);
+    try {
+      // 1. Garante que as colunas 'last_ping', 'alert_sent', 'admin_phone' e 'alerts_enabled' existam no Supabase
+      try {
+        await supabase.rpc('exec_sql', {
+          sql_query: `
+            alter table telas add column if not exists last_ping timestamp with time zone;
+            alter table telas add column if not exists alert_sent boolean default false;
+            alter table configuracoes add column if not exists admin_phone text;
+            alter table configuracoes add column if not exists alerts_enabled boolean default false;
+          `
+        });
+      } catch (e) {
+        // Ignora caso a RPC de SQL não esteja ativada, continua normalmente
+      }
+
+      // 2. Busca configurações do sistema
+      const { data: config } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('id', 'sistema')
+        .maybeSingle();
+
+      if (config) {
+        setAdminPhone(config.admin_phone || '');
+        setAlertsEnabled(config.alerts_enabled ?? false);
+      }
+
+      // 3. Busca telas com informações do cliente
+      const { data: dataTelas, error: errTelas } = await supabase
+        .from('telas')
+        .select('*, clientes(nome_empresa)')
+        .order('nome_local', { ascending: true });
+
+      if (errTelas) throw errTelas;
+      setTelas(dataTelas || []);
+    } catch (err) {
+      console.error('Erro ao carregar dados de monitoramento:', err);
+    } finally {
+      setIsLoadingLoadingTelas(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    // Inscrição em tempo real para atualizações na tabela de telas
+    const channel = supabase
+      .channel('monitoramento-telas-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'telas' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    // Auto-refresh a cada 30 segundos
+    const refreshInterval = setInterval(() => {
+      fetchData();
+    }, 30000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(refreshInterval);
+    };
+  }, []);
+
+  // Salvar Configurações de Alerta
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingConfig(true);
+    setSaveSuccess(false);
+
+    try {
+      let cleanPhone = adminPhone.replace(/\D/g, '');
+      if (cleanPhone && !cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+        cleanPhone = `55${cleanPhone}`;
+      }
+
+      const { error } = await supabase
+        .from('configuracoes')
+        .upsert({
+          id: 'sistema',
+          admin_phone: cleanPhone,
+          alerts_enabled: alertsEnabled
+        }, { onConflict: 'id' });
+
+      if (error) throw error;
+
+      setAdminPhone(cleanPhone);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 4000);
+    } catch (err: any) {
+      console.error('Erro ao salvar configurações de alerta:', err);
+      alert('Erro ao salvar configurações: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  // Testar Disparo de Alerta via WhatsApp
+  const handleTestAlert = async () => {
+    if (!adminPhone) {
+      alert('Por favor, informe o número do WhatsApp para alertas antes de testar.');
+      return;
+    }
+
+    setIsTestingAlert(true);
+    setTestResult(null);
+
+    try {
+      const apiKey = import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta';
+      const response = await fetch('/api/whatsapp/send-manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          numero: adminPhone,
+          mensagem: `🧪 *TESTE DE ALERTA GOLD PLAY MÍDIA*\n\nEste é um disparo de teste do sistema de monitoramento de telas.\n\nSeu WhatsApp está configurado corretamente para receber alertas automatizados de queda de telas!`
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setTestResult({ success: true, msg: 'Mensagem de teste enviada com sucesso para ' + adminPhone + '!' });
+      } else {
+        setTestResult({ success: false, msg: data.error || 'Falha ao enviar mensagem de teste.' });
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, msg: 'Erro de conexão com o servidor de WhatsApp.' });
+    } finally {
+      setIsTestingAlert(false);
+    }
+  };
+
+  // Executar Checagem de Cron Manualmente
+  const handleRunCron = async () => {
+    setIsRunningCron(true);
+    setCronResult(null);
+
+    try {
+      const response = await fetch('/api/cron/check-offline', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      setCronResult(data);
+      fetchData(); // Recarrega lista atualizada
+    } catch (err: any) {
+      setCronResult({ error: 'Erro ao executar rota do Cron: ' + err.message });
+    } finally {
+      setIsRunningCron(false);
+    }
+  };
+
+  // Enviar Heartbeat de Teste Manual para uma tela
+  const handleSendTestHeartbeat = async (deviceId: string) => {
+    try {
+      await fetch('/api/devices/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId })
+      });
+      fetchData();
+    } catch (e) {
+      alert('Erro ao enviar sinal de heartbeat.');
+    }
+  };
+
+  // Função auxiliar para calcular status da tela (< 15 min = Online)
+  const isScreenOnline = (lastPing: string | null) => {
+    if (!lastPing) return false;
+    const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+    return new Date(lastPing).getTime() > fifteenMinutesAgo;
+  };
+
+  // Função para formatar o tempo decorrido do último ping
+  const formatTimeAgo = (lastPing: string | null) => {
+    if (!lastPing) return 'Nunca conectou';
+    
+    const diffMs = Date.now() - new Date(lastPing).getTime();
+    const diffMin = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMin < 1) return 'Agora mesmo (há menos de 1 min)';
+    if (diffMin < 60) return `Há ${diffMin} min`;
+    if (diffHours < 24) return `Há ${diffHours} hora${diffHours > 1 ? 's' : ''}`;
+    return `Há ${diffDays} dia${diffDays > 1 ? 's' : ''}`;
+  };
+
+  // Filtro de pesquisa de telas
+  const filteredTelas = telas.filter((t) => {
+    const term = searchTerm.toLowerCase();
+    const nome = (t.nome_local || '').toLowerCase();
+    const cliente = (t.clientes?.nome_empresa || '').toLowerCase();
+    const deviceId = (t.fully_device_id || t.identificador_unico || '').toLowerCase();
+    return nome.includes(term) || cliente.includes(term) || deviceId.includes(term);
+  });
+
+  const totalTelas = telas.length;
+  const onlineCount = telas.filter(t => isScreenOnline(t.last_ping)).length;
+  const offlineCount = totalTelas - onlineCount;
+  const alertedCount = telas.filter(t => t.alert_sent).length;
+
+  return (
+    <div className="space-y-8 pb-12">
+      {/* Cabeçalho */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0a0a0d]/70 p-6 rounded-2xl border border-white/10 backdrop-blur-xl">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500">
+            <Activity className="w-7 h-7" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white tracking-tight">Monitoramento & Alertas de Queda</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Painel de integridade das telas da rede com notificações automáticas via WhatsApp (Vercel Cron)
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={fetchData}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl border border-white/10 text-xs font-medium transition-all"
+        >
+          <RefreshCw className={`w-4 h-4 ${isLoadingTelas ? 'animate-spin' : ''}`} />
+          <span>Atualizar Dados</span>
+        </button>
+      </div>
+
+      {/* Cards de Métricas em Tempo Real */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-[#0a0a0d]/60 border border-white/10 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Total de Telas</p>
+            <h3 className="text-2xl font-bold text-white mt-1">{totalTelas}</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Cadastradas na rede</p>
+          </div>
+          <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
+            <Radio className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-[#0a0a0d]/60 border border-emerald-500/20 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-400">Telas Online</p>
+            <h3 className="text-2xl font-bold text-emerald-400 mt-1">{onlineCount}</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Ping nos últimos 15 min</p>
+          </div>
+          <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+            <Wifi className="w-6 h-6 animate-pulse" />
+          </div>
+        </div>
+
+        <div className="bg-[#0a0a0d]/60 border border-red-500/20 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-red-400">Telas Offline</p>
+            <h3 className="text-2xl font-bold text-red-400 mt-1">{offlineCount}</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Sem ping {'>'} 15 min</p>
+          </div>
+          <div className="p-3 bg-red-500/10 text-red-400 rounded-xl border border-red-500/20">
+            <WifiOff className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-[#0a0a0d]/60 border border-amber-500/20 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-amber-400">Alertas Disparados</p>
+            <h3 className="text-2xl font-bold text-amber-400 mt-1">{alertedCount}</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Aguardando reconexão</p>
+          </div>
+          <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+        </div>
+      </div>
+
+      {/* Seção 1: Form de Configurações de Notificação */}
+      <div className="bg-[#0a0a0d]/70 border border-white/10 rounded-2xl p-6 backdrop-blur-xl space-y-6">
+        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+          <Bell className="w-5 h-5 text-amber-500" />
+          <div>
+            <h3 className="text-base font-bold text-white">Configurações de Alertas de Queda (WhatsApp)</h3>
+            <p className="text-xs text-slate-400">Configure o número de destino e ative o monitoramento contínuo.</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveConfig} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+            {/* Campo WhatsApp */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-slate-300 flex items-center gap-2">
+                <Phone className="w-3.5 h-3.5 text-amber-500" />
+                Número do WhatsApp para Alertas (admin_phone)
+              </label>
+              <input
+                type="text"
+                value={adminPhone}
+                onChange={(e) => setAdminPhone(e.target.value)}
+                placeholder="Ex: 5511999999999"
+                className="w-full bg-[#050507] border border-white/10 focus:border-amber-500 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all placeholder:text-slate-600 font-mono"
+              />
+              <p className="text-[11px] text-slate-500">
+                Inclua o código do país e DDD sem espaços ou traços (ex: 5511999999999).
+              </p>
+            </div>
+
+            {/* Switch Toggle */}
+            <div className="space-y-2 bg-[#050507] border border-white/10 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-white block">Ativar Alertas de Queda (alerts_enabled)</span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">
+                  Enviar mensagens de WhatsApp automaticamente quando uma tela ficar offline por mais de 20 minutos.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAlertsEnabled(!alertsEnabled)}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  alertsEnabled ? 'bg-amber-500' : 'bg-slate-800'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    alertsEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Botões de Ação */}
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <PillProgressButton
+              type="submit"
+              label="Salvar Configurações"
+              loadingLabel="Salvando..."
+              variant="amber"
+              isLoading={isSavingConfig}
+              className="px-6"
+            />
+
+            <button
+              type="button"
+              onClick={handleTestAlert}
+              disabled={isTestingAlert || !adminPhone}
+              className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 disabled:opacity-40 text-slate-300 hover:text-white rounded-xl border border-white/10 text-xs font-medium transition-all"
+            >
+              <Send className="w-4 h-4 text-amber-500" />
+              <span>{isTestingAlert ? 'Enviando Teste...' : 'Testar Alerta no WhatsApp'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRunCron}
+              disabled={isRunningCron}
+              className="flex items-center gap-2 px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30 text-xs font-medium transition-all ml-auto"
+            >
+              <Zap className={`w-4 h-4 ${isRunningCron ? 'animate-bounce' : ''}`} />
+              <span>{isRunningCron ? 'Executando Cron...' : 'Rodar Checagem do Cron Agora'}</span>
+            </button>
+          </div>
+
+          {/* Feedback Messages */}
+          {saveSuccess && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Configurações salvas com sucesso!</span>
+            </div>
+          )}
+
+          {testResult && (
+            <div
+              className={`p-3.5 rounded-xl text-xs flex items-center gap-2 border ${
+                testResult.success
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-red-500/10 border-red-500/20 text-red-400'
+              }`}
+            >
+              {testResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              <span>{testResult.msg}</span>
+            </div>
+          )}
+
+          {cronResult && (
+            <div className="p-4 bg-[#050507] border border-white/10 rounded-xl text-xs font-mono space-y-2 text-slate-300">
+              <p className="text-amber-400 font-bold">Resultado da Execução do Cron (/api/cron/check-offline):</p>
+              <pre className="text-[11px] overflow-x-auto whitespace-pre-wrap">{JSON.stringify(cronResult, null, 2)}</pre>
+            </div>
+          )}
+        </form>
+      </div>
+
+      {/* Seção 2: Dashboard de Saúde da Rede */}
+      <div className="bg-[#0a0a0d]/70 border border-white/10 rounded-2xl p-6 backdrop-blur-xl space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <Radio className="w-5 h-5 text-emerald-400" />
+            <div>
+              <h3 className="text-base font-bold text-white">Dashboard de Saúde da Rede</h3>
+              <p className="text-xs text-slate-400">
+                Acompanhamento individual de pings e heartbeat de cada dispositivo conectado.
+              </p>
+            </div>
+          </div>
+
+          {/* Barra de Pesquisa */}
+          <div className="relative w-full md:w-72">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por tela, cliente ou ID..."
+              className="w-full bg-[#050507] border border-white/10 focus:border-amber-500 rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none transition-all placeholder:text-slate-600"
+            />
+          </div>
+        </div>
+
+        {/* Tabela de Dispositivos / Telas */}
+        {isLoadingTelas ? (
+          <div className="py-12 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
+            <RefreshCw className="w-6 h-6 animate-spin text-amber-500" />
+            <p className="text-xs font-mono">Carregando status das telas...</p>
+          </div>
+        ) : filteredTelas.length === 0 ? (
+          <div className="py-12 text-center text-slate-500">
+            <p className="text-xs font-mono uppercase tracking-widest">Nenhuma tela encontrada.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/10 text-slate-400 font-mono text-[10px] uppercase tracking-wider">
+                  <th className="pb-3 px-3">Status</th>
+                  <th className="pb-3 px-3">Tela / Local</th>
+                  <th className="pb-3 px-3">Cliente</th>
+                  <th className="pb-3 px-3">Device ID</th>
+                  <th className="pb-3 px-3">Último Ping (Heartbeat)</th>
+                  <th className="pb-3 px-3">Alerta Enviado</th>
+                  <th className="pb-3 px-3 text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {filteredTelas.map((tela) => {
+                  const online = isScreenOnline(tela.last_ping);
+                  const deviceId = tela.fully_device_id || tela.identificador_unico || tela.id;
+
+                  return (
+                    <tr key={tela.id} className="hover:bg-white/[0.02] transition-colors">
+                      {/* Badge Status */}
+                      <td className="py-3.5 px-3">
+                        {online ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                            Online
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                            Offline
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Nome da Tela */}
+                      <td className="py-3.5 px-3 font-medium text-white">
+                        {tela.nome_local}
+                      </td>
+
+                      {/* Cliente */}
+                      <td className="py-3.5 px-3 text-slate-300">
+                        {tela.clientes?.nome_empresa || 'Sem cliente'}
+                      </td>
+
+                      {/* Device ID */}
+                      <td className="py-3.5 px-3 font-mono text-slate-400 text-[11px]">
+                        {deviceId}
+                      </td>
+
+                      {/* Último Ping */}
+                      <td className="py-3.5 px-3">
+                        <div className="flex flex-col">
+                          <span className="text-white font-medium flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            {formatTimeAgo(tela.last_ping)}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-500 mt-0.5">
+                            {tela.last_ping
+                              ? new Date(tela.last_ping).toLocaleString('pt-BR')
+                              : 'Sem histórico'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Alerta Enviado */}
+                      <td className="py-3.5 px-3">
+                        {tela.alert_sent ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            <ShieldAlert className="w-3 h-3" />
+                            Sim (Enviado)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-slate-600">Não</span>
+                        )}
+                      </td>
+
+                      {/* Ação */}
+                      <td className="py-3.5 px-3 text-right">
+                        <button
+                          onClick={() => handleSendTestHeartbeat(deviceId)}
+                          title="Simular Ping (Heartbeat) para esta tela"
+                          className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg border border-white/10 text-[11px] transition-all inline-flex items-center gap-1"
+                        >
+                          <Zap className="w-3 h-3 text-amber-500" />
+                          <span>Simular Ping</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
