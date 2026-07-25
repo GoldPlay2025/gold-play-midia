@@ -6,7 +6,6 @@ import { TelasList } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
 import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
-import { WhatsappPanel } from "../components/WhatsappPanel";
 import { MonitoramentoPanel } from "../components/MonitoramentoPanel";
 import { GestaoPanel } from "../components/GestaoPanel";
 import { PillProgressButton } from "../components/PillProgressButton";
@@ -101,7 +100,7 @@ type Toast = {
   message: string;
 };
 
-export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'whatsapp' }) {
+export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('gpm_authenticated') === 'true';
@@ -111,7 +110,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'whatsapp' | 'monitoramento'>(initialTab || 'dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'monitoramento'>(initialTab || 'dashboard');
   const [telas, setTelas] = useState<Tela[]>([]);
   const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -1709,17 +1708,10 @@ create policy "Permitir deletar midias" on storage.objects
               </motion.div>
             )}
 
-            {/* WhatsApp Tab */}
-            {activeTab === 'whatsapp' && (
-              <motion.div key="whatsapp" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <WhatsappPanel showToast={showToast} />
-              </motion.div>
-            )}
-
             {/* Monitoramento Tab */}
             {activeTab === 'monitoramento' && (
               <motion.div key="monitoramento" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <MonitoramentoPanel onNavigateToWhatsapp={() => setActiveTab('whatsapp')} />
+                <MonitoramentoPanel />
               </motion.div>
             )}
 
