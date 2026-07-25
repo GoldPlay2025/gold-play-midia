@@ -69,6 +69,11 @@ export default function Player() {
       })) || [];
 
       setPlaylist(typedData);
+      
+      // Envia heartbeat com o targetScreenId resolvido do banco
+      if (targetScreenId) {
+        sendHeartbeat(targetScreenId);
+      }
     } catch (err: any) {
       console.error('Erro ao buscar playlist:', err);
       setError('Falha ao conectar. Tentando novamente...');
@@ -77,10 +82,29 @@ export default function Player() {
     }
   };
 
+  const sendHeartbeat = async (idToSend: string) => {
+    if (!idToSend) return;
+    try {
+      await fetch('/api/devices/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: idToSend }),
+      });
+    } catch (err) {
+      // Falha silenciosa em background
+    }
+  };
+
   useEffect(() => {
     if (!screenId) return;
 
     fetchPlaylist();
+    sendHeartbeat(screenId);
+
+    // Heartbeat silencioso a cada 5 minutos (300.000 ms)
+    const heartbeatInterval = setInterval(() => {
+      sendHeartbeat(screenId);
+    }, 5 * 60 * 1000);
 
     // Subscribe to realtime changes on playlists table for this screen
     const channel = supabase
@@ -131,6 +155,7 @@ export default function Player() {
       supabase.removeChannel(channel);
       supabase.removeChannel(presenceChannel);
       clearInterval(retryInterval);
+      clearInterval(heartbeatInterval);
     };
   }, [screenId]);
 
