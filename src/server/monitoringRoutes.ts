@@ -116,21 +116,30 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       return res.status(503).json({ error: 'Supabase não configurado no servidor' });
     }
 
-    // a) Busca configurações de alertas
-    const { data: configData } = await supabase
-      .from('configuracoes')
-      .select('admin_phone, alerts_enabled')
-      .eq('id', 'sistema')
-      .maybeSingle();
+    // a) Busca configurações de alertas de forma segura
+    let alertsEnabled = false;
+    let adminPhone = '';
 
-    const alertsEnabled = configData?.alerts_enabled ?? false;
-    const adminPhone = (configData?.admin_phone || '').trim();
+    try {
+      const { data: configData } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('id', 'sistema')
+        .maybeSingle();
+
+      if (configData) {
+        alertsEnabled = configData.alerts_enabled ?? false;
+        adminPhone = (configData.admin_phone || '').trim();
+      }
+    } catch (errConfig) {
+      console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
+    }
 
     if (!alertsEnabled || !adminPhone) {
       return res.json({
         success: true,
         action: 'skipped',
-        reason: !alertsEnabled ? 'Alertas desativados nas configurações' : 'Número do WhatsApp do Administrador não configurado',
+        reason: !alertsEnabled ? 'Alertas desativados ou pendentes de criação no banco' : 'Número do WhatsApp do Administrador não configurado',
         alertsEnabled,
         adminPhone
       });
