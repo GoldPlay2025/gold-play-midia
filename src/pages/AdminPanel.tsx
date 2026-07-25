@@ -1719,7 +1719,7 @@ create policy "Permitir deletar midias" on storage.objects
             {/* Monitoramento Tab */}
             {activeTab === 'monitoramento' && (
               <motion.div key="monitoramento" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <MonitoramentoPanel />
+                <MonitoramentoPanel onNavigateToWhatsapp={() => setActiveTab('whatsapp')} />
               </motion.div>
             )}
 
