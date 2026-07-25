@@ -7,6 +7,7 @@ import { PerfilSettings, SystemSettings, defaultSettings } from "../components/P
 import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
 import { WhatsappPanel } from "../components/WhatsappPanel";
+import { MonitoramentoPanel } from "../components/MonitoramentoPanel";
 import { GestaoPanel } from "../components/GestaoPanel";
 import { PillProgressButton } from "../components/PillProgressButton";
 import { MediaThumbnail, MediaModalPlayer } from "../components/MediaThumbnail";
@@ -110,7 +111,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'whatsapp'>(initialTab || 'dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'whatsapp' | 'monitoramento'>(initialTab || 'dashboard');
   const [telas, setTelas] = useState<Tela[]>([]);
   const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -987,6 +988,8 @@ create table configuracoes (
   icon_url text,
   backend_url text,
   weather_city text,
+  admin_phone text,
+  alerts_enabled boolean default false,
   criado_em timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -1005,6 +1008,8 @@ create table telas (
   nome_local text not null,
   identificador_unico text not null unique,
   status_online boolean default false,
+  last_ping timestamp with time zone,
+  alert_sent boolean default false,
   cliente_id uuid references clientes(id) on delete cascade not null,
   endereco text,
   whatsapp text,
@@ -1708,6 +1713,13 @@ create policy "Permitir deletar midias" on storage.objects
             {activeTab === 'whatsapp' && (
               <motion.div key="whatsapp" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
                 <WhatsappPanel showToast={showToast} />
+              </motion.div>
+            )}
+
+            {/* Monitoramento Tab */}
+            {activeTab === 'monitoramento' && (
+              <motion.div key="monitoramento" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
+                <MonitoramentoPanel />
               </motion.div>
             )}
 
