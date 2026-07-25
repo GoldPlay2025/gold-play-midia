@@ -84,13 +84,6 @@ export default function CampanhaPlayer() {
     }
   }, [midia]);
 
-  const handleVideoEnded = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      videoRef.current.play().catch(e => console.warn('Autoplay loop blocked:', e));
-    }
-  };
-
   const handleVideoError = () => {
     console.error('Erro ao carregar o vídeo atual. Recarregando página em 5s...');
     setTimeout(() => {
@@ -124,9 +117,9 @@ export default function CampanhaPlayer() {
         src={midia.url_storage}
         className="w-full h-full object-cover"
         autoPlay
+        loop
         muted
         playsInline
-        onEnded={handleVideoEnded}
         onError={handleVideoError}
       />
       

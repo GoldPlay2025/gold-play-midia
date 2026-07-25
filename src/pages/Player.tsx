@@ -29,7 +29,21 @@ export default function Player() {
   const fetchPlaylist = async () => {
     try {
       setError(null);
-      
+      let targetScreenId = screenId;
+
+      // Check if screenId is not a standard UUID (e.g., if it's fully_device_id or identificador_unico)
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(screenId || '');
+      if (!isUuid && screenId) {
+        const { data: telaData } = await supabase
+          .from('telas')
+          .select('id')
+          .or(`fully_device_id.eq.${screenId},identificador_unico.eq.${screenId.toUpperCase()}`)
+          .maybeSingle();
+        if (telaData?.id) {
+          targetScreenId = telaData.id;
+        }
+      }
+
       const { data, error } = await supabase
         .from('playlists')
         .select(`
@@ -41,7 +55,7 @@ export default function Player() {
             titulo_video
           )
         `)
-        .eq('tela_id', screenId)
+        .eq('tela_id', targetScreenId)
         .order('ordem_exibicao', { ascending: true });
 
       if (error) throw error;
@@ -130,7 +144,7 @@ export default function Player() {
   }, [playlist, currentIndex]);
 
   const handleVideoEnded = () => {
-    if (playlist.length === 0) return;
+    if (playlist.length <= 1) return;
     
     // Move to next video, loop back to 0 if at the end
     const nextIndex = (currentIndex + 1) % playlist.length;
@@ -178,6 +192,7 @@ export default function Player() {
           src={currentMedia.url_storage}
           className="w-full h-full object-cover"
           autoPlay
+          loop={playlist.length <= 1}
           muted
           playsInline
           onEnded={handleVideoEnded}
