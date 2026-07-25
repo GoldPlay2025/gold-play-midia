@@ -43,13 +43,33 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
     });
   };
 
+  const removeScreenMediaCache = (telaId: string) => {
+    setUpdatedMidias(prev => {
+      const next = { ...prev };
+      delete next[telaId];
+      try {
+        localStorage.setItem('fully_screen_media_cache', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   const syncNewMediaToDatabase = async (tela: any, newUrl: string) => {
     if (!tela) return;
 
-    let cleanTitle = newUrl.split('/').pop()?.split('?')[0] || 'Mídia Atualizada';
-    if (newUrl.includes('/player')) {
-      cleanTitle = `Player Official (${tela.nome_local || 'Tela'})`;
+    const isPlayerUrl = newUrl.includes('/player');
+
+    if (isPlayerUrl) {
+      // Se for a URL padrão do Player, limpa a mídia ativa customizada
+      removeScreenMediaCache(tela.id);
+      try {
+        await supabase.from('playlists').delete().eq('tela_id', tela.id);
+        if (fetchDashboardData) fetchDashboardData();
+      } catch (e) {}
+      return;
     }
+
+    let cleanTitle = newUrl.split('/').pop()?.split('?')[0] || 'Mídia Atualizada';
     try {
       cleanTitle = decodeURIComponent(cleanTitle);
     } catch (e) {}
@@ -96,7 +116,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
           fetchDashboardData();
         }
       } else {
-        // Safe update for standalone URLs (do NOT insert into midias table)
+        // Safe update for standalone URLs
         updateScreenMediaState(tela.id, { id: 'url-' + Date.now(), titulo_video: cleanTitle, url_storage: newUrl });
       }
     } catch (err) {
@@ -271,11 +291,26 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {telas.map((tela) => {
-          // Identifica a mídia ativa cadastrada especificamente para esta tela (ou a mídia recém-atualizada pelo Fully)
+          // Identifica a mídia ativa cadastrada especificamente para esta tela (ou a mídia recém-atualizada)
           const playlists = tela.playlists || [];
-          const dbMidiaRaw = playlists.length > 0 ? playlists[0]?.midias : null;
+          const validPlaylists = playlists.filter((p: any) => {
+            const m = Array.isArray(p.midias) ? p.midias[0] : p.midias;
+            if (!m) return false;
+            if (m.titulo_video && m.titulo_video.includes('Player Official')) return false;
+            if (m.url_storage && m.url_storage.includes('/player')) return false;
+            return true;
+          });
+
+          const dbMidiaRaw = validPlaylists.length > 0 ? validPlaylists[0]?.midias : null;
           const dbMidia = Array.isArray(dbMidiaRaw) ? dbMidiaRaw[0] : dbMidiaRaw;
-          const activeMidia = updatedMidias[tela.id] || dbMidia;
+
+          // Verifica se há mídia em cache local (sanitizando URLs de player)
+          let cachedMedia = updatedMidias[tela.id];
+          if (cachedMedia && (cachedMedia.url_storage?.includes('/player') || cachedMedia.titulo_video?.includes('Player Official'))) {
+            cachedMedia = undefined;
+          }
+
+          const activeMidia = dbMidia || cachedMedia;
 
           // Device ID atual para esta tela
           const currentDeviceId = tela.fully_device_id || tela.identificador_unico || tela.id;
