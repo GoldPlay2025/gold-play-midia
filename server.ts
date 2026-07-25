@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { whatsappRouter } from "./src/server/whatsappRoutes";
+import { monitoringRouter } from "./src/server/monitoringRoutes";
 
 dotenv.config();
 
@@ -14,8 +15,10 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Rotas do WhatsApp
+  // Rotas do WhatsApp e Monitoramento
   app.use('/api/whatsapp', whatsappRouter);
+  app.use('/api/devices', monitoringRouter);
+  app.use('/api/cron', monitoringRouter);
 
   // CORS Middleware to allow cross-origin requests (e.g. from Vercel frontend deployments)
   app.use((req, res, next) => {
