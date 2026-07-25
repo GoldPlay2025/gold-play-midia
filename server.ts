@@ -13,24 +13,24 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
-
-  // Rotas do WhatsApp e Monitoramento
-  app.use('/api/whatsapp', whatsappRouter);
-  app.use('/api/devices', monitoringRouter);
-  app.use('/api/cron', monitoringRouter);
-
   // CORS Middleware to allow cross-origin requests (e.g. from Vercel frontend deployments)
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, x-cron-secret');
     if (req.method === 'OPTIONS') {
       res.sendStatus(200);
       return;
     }
     next();
   });
+
+  app.use(express.json());
+
+  // Rotas do WhatsApp e Monitoramento
+  app.use('/api/whatsapp', whatsappRouter);
+  app.use('/api/devices', monitoringRouter);
+  app.use('/api/cron', monitoringRouter);
 
   // Initialize Gemini client using backend key
   const apiKey = process.env.GEMINI_API_KEY;
