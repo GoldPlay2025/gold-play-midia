@@ -4,13 +4,28 @@ import { createClient } from '@supabase/supabase-js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-cron-secret');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   try {
+    // Validação de segurança via CRON_SECRET
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      const authHeader = req.headers.authorization || '';
+      const querySecret = req.query?.secret || req.headers['x-cron-secret'];
+      const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (authHeader as string);
+
+      if (token !== cronSecret && querySecret !== cronSecret) {
+        return res.status(401).json({ 
+          error: 'Não autorizado. Token CRON_SECRET inválido ou não fornecido.',
+          message: 'Envie o token no cabeçalho Authorization: Bearer <CRON_SECRET> ou parâmetro ?secret=<CRON_SECRET>'
+        });
+      }
+    }
+
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
