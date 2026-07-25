@@ -60,12 +60,8 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
     const isPlayerUrl = newUrl.includes('/player');
 
     if (isPlayerUrl) {
-      // Se for a URL padrão do Player, limpa a mídia ativa customizada
+      // Se for a URL padrão do Player, limpa a mídia ativa em cache local mas não deleta a playlist do banco
       removeScreenMediaCache(tela.id);
-      try {
-        await supabase.from('playlists').delete().eq('tela_id', tela.id);
-        if (fetchDashboardData) fetchDashboardData();
-      } catch (e) {}
       return;
     }
 
