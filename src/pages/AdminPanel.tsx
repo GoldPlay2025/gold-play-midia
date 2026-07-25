@@ -387,6 +387,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
       if (error) throw error;
 
       const allMidias = data || [];
+      let validMidias = allMidias;
       
       // Auto-purge any invalid auto-generated media entries (e.g. Player Official or device player URLs)
       const invalidMidias = allMidias.filter((m: any) => 
@@ -398,12 +399,59 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
         const invalidIds = invalidMidias.map((m: any) => m.id);
         await supabase.from('playlists').delete().in('midia_id', invalidIds);
         await supabase.from('midias').delete().in('id', invalidIds);
-        
-        const validMidias = allMidias.filter((m: any) => !invalidIds.includes(m.id));
-        setMidias(validMidias);
-      } else {
-        setMidias(allMidias);
+        validMidias = allMidias.filter((m: any) => !invalidIds.includes(m.id));
       }
+
+      // Auto-associate unlinked media with screens matching the same cliente_id
+      const unlinkedMidias = validMidias.filter((m: any) => !m.playlists || m.playlists.length === 0);
+      if (unlinkedMidias.length > 0) {
+        const { data: currentTelas } = await supabase.from('telas').select('*, clientes(nome_empresa)');
+        if (currentTelas && currentTelas.length > 0) {
+          let reassociated = false;
+          for (const m of unlinkedMidias) {
+            let targetTela = currentTelas.find((t: any) => t.cliente_id && t.cliente_id === m.cliente_id);
+            if (!targetTela && m.clientes?.nome_empresa) {
+              targetTela = currentTelas.find((t: any) => t.clientes?.nome_empresa?.toLowerCase() === m.clientes?.nome_empresa?.toLowerCase());
+            }
+
+            if (targetTela) {
+              // Delete any broken or empty playlist entries for target screen
+              await supabase.from('playlists').delete().eq('tela_id', targetTela.id);
+              const { error: insErr } = await supabase.from('playlists').insert([{
+                tela_id: targetTela.id,
+                midia_id: m.id,
+                ordem_exibicao: 0
+              }]);
+              if (!insErr) reassociated = true;
+            }
+          }
+
+          if (reassociated) {
+            // Re-fetch midias with new playlist associations
+            const { data: refreshedMidias } = await supabase
+              .from('midias')
+              .select(`
+                *,
+                clientes (nome_empresa),
+                playlists (
+                  id,
+                  tela_id,
+                  telas (id, nome_local, identificador_unico)
+                )
+              `)
+              .order('criado_em', { ascending: false });
+
+            if (refreshedMidias) {
+              validMidias = refreshedMidias.filter((m: any) => 
+                !(m.titulo_video && m.titulo_video.includes('Player Official')) &&
+                !(m.url_storage && m.url_storage.includes('/player?device='))
+              );
+            }
+          }
+        }
+      }
+
+      setMidias(validMidias);
     } catch (error: any) {
       console.error('Error fetching midias:', error);
       const errorMsg = error.message || error.details || JSON.stringify(error);
