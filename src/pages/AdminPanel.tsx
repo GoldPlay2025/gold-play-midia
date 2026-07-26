@@ -172,7 +172,9 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   // Form States
   const [clienteForm, setClienteForm] = useState({ nome: '', whatsapp: '', email: '' });
   const [telaForm, setTelaForm] = useState({ nome_local: '', identificador_unico: '', cliente_id: '' });
-  const [midiaForm, setMidiaForm] = useState({ titulo_video: '', tela_id: '' });
+  const [midiaForm, setMidiaForm] = useState({ titulo_video: '', tela_ids: [] as string[] });
+  const [searchTelaQuery, setSearchTelaQuery] = useState('');
+  const [showTelaDropdown, setShowTelaDropdown] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -181,7 +183,9 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   const [editingMidia, setEditingMidia] = useState<any | null>(null);
   const [deletingMidia, setDeletingMidia] = useState<{ id: string; titulo: string; urlStorage: string } | null>(null);
   const [previewMidia, setPreviewMidia] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState({ titulo_video: '', tela_id: '' });
+  const [editForm, setEditForm] = useState({ titulo_video: '', tela_ids: [] as string[] });
+  const [editSearchTelaQuery, setEditSearchTelaQuery] = useState('');
+  const [showEditTelaDropdown, setShowEditTelaDropdown] = useState(false);
   const [editFile, setEditFile] = useState<File | null>(null);
   const [isUpdatingMidia, setIsUpdatingMidia] = useState(false);
   const [currentMidiaPage, setCurrentMidiaPage] = useState(1);
@@ -567,18 +571,20 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
 
   const handleOpenEditMidiaModal = (midia: any) => {
     setEditingMidia(midia);
+    const existingTelaIds = (midia.playlists || []).map((p: any) => p.tela_id).filter(Boolean);
     setEditForm({
       titulo_video: midia.titulo_video || '',
-      tela_id: midia.playlists?.[0]?.tela_id || ''
+      tela_ids: existingTelaIds
     });
     setEditFile(null);
+    setEditSearchTelaQuery('');
   };
 
   const handleUpdateMidiaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMidia) return;
-    if (!editForm.titulo_video || !editForm.tela_id) {
-      showToast('error', 'Preencha todos os campos obrigatórios.');
+    if (!editForm.titulo_video) {
+      showToast('error', 'Preencha o título do vídeo.');
       return;
     }
 
@@ -622,8 +628,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
         }
       }
 
-      const targetTela = telas.find(t => t.id === editForm.tela_id);
-      if (!targetTela) throw new Error("Tela de destino inválida.");
+      const firstTela = editForm.tela_ids.length > 0 ? telas.find(t => t.id === editForm.tela_ids[0]) : null;
 
       // Atualiza a tabela 'midias'
       const { error: dbError } = await supabase
@@ -632,31 +637,24 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
           titulo_video: editForm.titulo_video,
           url_storage: finalUrl,
           tamanho_mb: finalSize,
-          cliente_id: targetTela.cliente_id
+          cliente_id: firstTela ? firstTela.cliente_id : (editingMidia.cliente_id || clientes[0]?.id || null)
         })
         .eq('id', editingMidia.id);
 
       if (dbError) throw dbError;
 
-      // Atualiza ou insere o vínculo de playlist
-      const playlistId = editingMidia.playlists?.[0]?.id;
-      if (playlistId) {
-        const { error: playlistError } = await supabase
-          .from('playlists')
-          .update({
-            tela_id: editForm.tela_id
-          })
-          .eq('id', playlistId);
+      // Remove all existing playlist entries and insert new ones for all selected screens
+      await supabase.from('playlists').delete().eq('midia_id', editingMidia.id);
 
-        if (playlistError) throw playlistError;
-      } else {
+      if (editForm.tela_ids.length > 0) {
+        const playlistInserts = editForm.tela_ids.map(telaId => ({
+          tela_id: telaId,
+          midia_id: editingMidia.id,
+          ordem_exibicao: 0
+        }));
         const { error: playlistError } = await supabase
           .from('playlists')
-          .insert([{
-            tela_id: editForm.tela_id,
-            midia_id: editingMidia.id,
-            ordem_exibicao: 0
-          }]);
+          .insert(playlistInserts);
 
         if (playlistError) throw playlistError;
       }
@@ -815,16 +813,15 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
 
   const handleMidiaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!midiaForm.titulo_video || !midiaForm.tela_id || !selectedFile) {
-      showToast('error', 'Preencha todos os campos e selecione um arquivo.');
+    if (!midiaForm.titulo_video || !selectedFile) {
+      showToast('error', 'Preencha o título do vídeo e escolha um arquivo.');
       return;
     }
 
     setIsSubmitting(true);
     
     try {
-      const selectedTela = telas.find(t => t.id === midiaForm.tela_id);
-      if (!selectedTela) throw new Error("Tela não encontrada.");
+      const firstTela = midiaForm.tela_ids.length > 0 ? telas.find(t => t.id === midiaForm.tela_ids[0]) : null;
 
       // Upload file
       const fileExt = selectedFile.name.split('.').pop();
@@ -856,29 +853,31 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
           titulo_video: midiaForm.titulo_video,
           url_storage: publicUrl,
           tamanho_mb: sizeMb,
-          cliente_id: selectedTela.cliente_id
+          cliente_id: firstTela ? firstTela.cliente_id : (clientes[0]?.id || null)
         }])
         .select();
         
       if (midiaError) throw midiaError;
       
-      if (midiaData && midiaData.length > 0) {
+      if (midiaData && midiaData.length > 0 && midiaForm.tela_ids.length > 0) {
         const novaMidia = midiaData[0];
-        // Save to playlists table
+        // Save to playlists table for all selected screens
+        const playlistInserts = midiaForm.tela_ids.map(telaId => ({
+          tela_id: telaId,
+          midia_id: novaMidia.id,
+          ordem_exibicao: 0
+        }));
         const { error: playlistError } = await supabase
           .from('playlists')
-          .insert([{
-            tela_id: midiaForm.tela_id,
-            midia_id: novaMidia.id,
-            ordem_exibicao: 0
-          }]);
+          .insert(playlistInserts);
           
         if (playlistError) throw playlistError;
       }
 
-      showToast('success', 'Mídia enviada e vinculada com sucesso.');
-      setMidiaForm({ titulo_video: '', tela_id: '' });
+      showToast('success', 'Mídia enviada com sucesso.');
+      setMidiaForm({ titulo_video: '', tela_ids: [] });
       setSelectedFile(null);
+      setSearchTelaQuery('');
       setActiveTab('dashboard');
     } catch (error: any) {
       console.error(error);
@@ -1777,23 +1776,105 @@ create policy "Permitir deletar midias" on storage.objects
                         </div>
                         
                         <div>
-                          <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">Tela de Destino</label>
-                          <div className="relative">
-                            <select 
-                              value={midiaForm.tela_id}
-                              onChange={e => setMidiaForm({...midiaForm, tela_id: e.target.value})}
-                              className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all appearance-none cursor-pointer"
-                              required
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest">Telas de Destino (1, 2 ou Todas)</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const allIds = telas.map(t => t.id);
+                                if (midiaForm.tela_ids.length === allIds.length) {
+                                  setMidiaForm({...midiaForm, tela_ids: []});
+                                } else {
+                                  setMidiaForm({...midiaForm, tela_ids: allIds});
+                                }
+                              }}
+                              className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors"
+                              title={midiaForm.tela_ids.length === telas.length ? 'Remover seleção de todas' : 'Selecionar todas as telas'}
                             >
-                              <option value="" disabled className="text-slate-500">Selecione a tela alvo...</option>
-                              {telas.map(t => (
-                                <option key={t.id} value={t.id}>{t.nome_local} ({t.identificador_unico})</option>
-                              ))}
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                              <ChevronRight className="w-4 h-4 rotate-90" />
-                            </div>
+                              {midiaForm.tela_ids.length === telas.length ? 'Limpar Todas' : 'Todos'}
+                            </button>
                           </div>
+                          
+                          <div className="relative mb-2">
+                            <input 
+                              type="text"
+                              value={searchTelaQuery}
+                              onChange={e => {
+                                setSearchTelaQuery(e.target.value);
+                                setShowTelaDropdown(true);
+                              }}
+                              onFocus={() => setShowTelaDropdown(true)}
+                              className="w-full bg-[#050505] border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-600"
+                              placeholder="Pesquisar tela por nome ou ID..."
+                            />
+                            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            
+                            {showTelaDropdown && (
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-40" 
+                                  onClick={() => setShowTelaDropdown(false)}
+                                />
+                                <div className="absolute left-0 right-0 mt-1.5 max-h-52 overflow-y-auto bg-[#0a0a0c] border border-white/10 rounded-xl shadow-2xl z-50 divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/10">
+                                  {telas.filter(t => !midiaForm.tela_ids.includes(t.id) && (t.nome_local?.toLowerCase().includes(searchTelaQuery.toLowerCase()) || t.identificador_unico?.toLowerCase().includes(searchTelaQuery.toLowerCase()))).length === 0 ? (
+                                    <div className="p-4 text-xs text-slate-500 text-center">Nenhuma tela disponível encontrada</div>
+                                  ) : (
+                                    telas.filter(t => !midiaForm.tela_ids.includes(t.id) && (t.nome_local?.toLowerCase().includes(searchTelaQuery.toLowerCase()) || t.identificador_unico?.toLowerCase().includes(searchTelaQuery.toLowerCase()))).map(t => (
+                                      <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setMidiaForm(prev => ({...prev, tela_ids: [...prev.tela_ids, t.id]}));
+                                          setSearchTelaQuery('');
+                                          setShowTelaDropdown(false);
+                                        }}
+                                        className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-between font-medium"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-5 h-5 rounded bg-white/5 text-slate-400 flex items-center justify-center text-[10px] font-bold font-mono">
+                                            <Tv className="w-3 h-3" />
+                                          </div>
+                                          <div>
+                                            <span>{t.nome_local}</span>
+                                            <span className="text-xs text-slate-500 ml-2 font-mono">({t.identificador_unico})</span>
+                                          </div>
+                                        </div>
+                                      </button>
+                                    ))
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {midiaForm.tela_ids.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 p-2 bg-[#050505] border border-white/10 rounded-xl max-h-36 overflow-y-auto">
+                              {midiaForm.tela_ids.map(id => {
+                                const tela = telas.find(t => t.id === id);
+                                if (!tela) return null;
+                                return (
+                                  <div 
+                                    key={id} 
+                                    className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-500 px-3 py-1.5 rounded-lg text-xs font-medium"
+                                  >
+                                    <Tv className="w-3.5 h-3.5" />
+                                    <span>{tela.nome_local} ({tela.identificador_unico})</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setMidiaForm(prev => ({...prev, tela_ids: prev.tela_ids.filter(i => i !== id)}));
+                                      }}
+                                      className="ml-1 p-0.5 text-amber-500/70 hover:text-amber-400 rounded transition-colors"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-500 italic px-1">Nenhuma tela selecionada (clique em "Todos" ou busque acima)</p>
+                          )}
                         </div>
 
                         <div>
@@ -1896,7 +1977,7 @@ create policy "Permitir deletar midias" on storage.objects
                           <div className="space-y-6">
                             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
                               {paginatedMidias.map((m: any) => {
-                                const playlistTela = m.playlists?.[0]?.telas;
+                                const linkedTelas = (m.playlists || []).map((p: any) => p.telas).filter(Boolean);
                                 return (
                                   <div key={m.id} className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex flex-col md:flex-row gap-4 hover:border-white/10 transition-colors group relative">
                                     {/* Prévia do vídeo (reproduz com som desativado em hover) */}
@@ -1929,9 +2010,9 @@ create policy "Permitir deletar midias" on storage.objects
                                       <div className="hidden lg:flex mt-2 bg-[#0c0c0e] border border-white/5 rounded-xl p-2.5 items-center gap-2">
                                         <Tv className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                                         <div className="min-w-0 flex-1">
-                                          <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider mb-0.5">Veiculação Ativa</p>
+                                          <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider mb-0.5">Veiculação Ativa ({linkedTelas.length} telas)</p>
                                           <p className="text-xs text-slate-300 font-medium truncate">
-                                            {playlistTela ? `${playlistTela.nome_local} (${playlistTela.identificador_unico})` : 'Sem tela associada'}
+                                            {linkedTelas.length === 0 ? 'Sem tela associada' : linkedTelas.length === 1 ? `${linkedTelas[0].nome_local} (${linkedTelas[0].identificador_unico})` : `${linkedTelas.length} Telas: ${linkedTelas.map((t: any) => t.nome_local).join(', ')}`}
                                           </p>
                                         </div>
                                       </div>
@@ -2087,23 +2168,105 @@ create policy "Permitir deletar midias" on storage.objects
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">Tela de Destino</label>
-                  <div className="relative">
-                    <select 
-                      value={editForm.tela_id}
-                      onChange={e => setEditForm({...editForm, tela_id: e.target.value})}
-                      className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all appearance-none cursor-pointer"
-                      required
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-widest">Telas de Destino (1, 2 ou Todas)</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allIds = telas.map(t => t.id);
+                        if (editForm.tela_ids.length === allIds.length) {
+                          setEditForm({...editForm, tela_ids: []});
+                        } else {
+                          setEditForm({...editForm, tela_ids: allIds});
+                        }
+                      }}
+                      className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors"
+                      title={editForm.tela_ids.length === telas.length ? 'Remover seleção de todas' : 'Selecionar todas as telas'}
                     >
-                      <option value="" disabled className="text-slate-500">Selecione a tela alvo...</option>
-                      {telas.map(t => (
-                        <option key={t.id} value={t.id}>{t.nome_local} ({t.identificador_unico})</option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                      <ChevronRight className="w-4 h-4 rotate-90" />
-                    </div>
+                      {editForm.tela_ids.length === telas.length ? 'Limpar Todas' : 'Todos'}
+                    </button>
                   </div>
+                  
+                  <div className="relative mb-2">
+                    <input 
+                      type="text"
+                      value={editSearchTelaQuery}
+                      onChange={e => {
+                        setEditSearchTelaQuery(e.target.value);
+                        setShowEditTelaDropdown(true);
+                      }}
+                      onFocus={() => setShowEditTelaDropdown(true)}
+                      className="w-full bg-[#050505] border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-600"
+                      placeholder="Pesquisar tela por nome ou ID..."
+                    />
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    
+                    {showEditTelaDropdown && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setShowEditTelaDropdown(false)}
+                        />
+                        <div className="absolute left-0 right-0 mt-1.5 max-h-52 overflow-y-auto bg-[#0a0a0c] border border-white/10 rounded-xl shadow-2xl z-50 divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/10">
+                          {telas.filter(t => !editForm.tela_ids.includes(t.id) && (t.nome_local?.toLowerCase().includes(editSearchTelaQuery.toLowerCase()) || t.identificador_unico?.toLowerCase().includes(editSearchTelaQuery.toLowerCase()))).length === 0 ? (
+                            <div className="p-4 text-xs text-slate-500 text-center">Nenhuma tela disponível encontrada</div>
+                          ) : (
+                            telas.filter(t => !editForm.tela_ids.includes(t.id) && (t.nome_local?.toLowerCase().includes(editSearchTelaQuery.toLowerCase()) || t.identificador_unico?.toLowerCase().includes(editSearchTelaQuery.toLowerCase()))).map(t => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => {
+                                  setEditForm(prev => ({...prev, tela_ids: [...prev.tela_ids, t.id]}));
+                                  setEditSearchTelaQuery('');
+                                  setShowEditTelaDropdown(false);
+                                }}
+                                className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-between font-medium"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-5 h-5 rounded bg-white/5 text-slate-400 flex items-center justify-center text-[10px] font-bold font-mono">
+                                    <Tv className="w-3 h-3" />
+                                  </div>
+                                  <div>
+                                    <span>{t.nome_local}</span>
+                                    <span className="text-xs text-slate-500 ml-2 font-mono">({t.identificador_unico})</span>
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {editForm.tela_ids.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 p-2 bg-[#050505] border border-white/10 rounded-xl max-h-36 overflow-y-auto">
+                      {editForm.tela_ids.map(id => {
+                        const tela = telas.find(t => t.id === id);
+                        if (!tela) return null;
+                        return (
+                          <div 
+                            key={id} 
+                            className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-500 px-3 py-1.5 rounded-lg text-xs font-medium"
+                          >
+                            <Tv className="w-3.5 h-3.5" />
+                            <span>{tela.nome_local} ({tela.identificador_unico})</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditForm(prev => ({...prev, tela_ids: prev.tela_ids.filter(i => i !== id)}));
+                              }}
+                              className="ml-1 p-0.5 text-amber-500/70 hover:text-amber-400 rounded transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500 italic px-1">Nenhuma tela selecionada (clique em "Todos" ou busque acima)</p>
+                  )}
                 </div>
 
                 <div>
@@ -2210,7 +2373,14 @@ create policy "Permitir deletar midias" on storage.objects
                 <div className="flex items-center gap-2">
                   <Tv className="w-4 h-4 text-amber-500 shrink-0" />
                   <span>
-                    Destino: <span className="text-white font-medium">{previewMidia.playlists?.[0]?.telas ? `${previewMidia.playlists[0].telas.nome_local} (${previewMidia.playlists[0].telas.identificador_unico})` : 'Sem tela vinculada'}</span>
+                    Destino: <span className="text-white font-medium">
+                      {(() => {
+                        const previewTelas = (previewMidia.playlists || []).map((p: any) => p.telas).filter(Boolean);
+                        if (previewTelas.length === 0) return 'Sem tela vinculada';
+                        if (previewTelas.length === 1) return `${previewTelas[0].nome_local} (${previewTelas[0].identificador_unico})`;
+                        return `${previewTelas.length} telas (${previewTelas.map((t: any) => t.nome_local).join(', ')})`;
+                      })()}
+                    </span>
                   </span>
                 </div>
                 {previewMidia.tamanho_mb && (
