@@ -14,7 +14,7 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   isLoading: boolean;
   emptyMessage?: string;
-  title: string;
+  title: string | React.ReactNode;
   onAdd?: () => void;
   addActionLabel?: string;
   onSearch?: (term: string) => void;

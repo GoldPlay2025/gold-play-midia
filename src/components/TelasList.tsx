@@ -517,7 +517,14 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       </div>
 
       <DataTable
-        title="Base de Telas"
+        title={
+          <div className="flex items-center gap-3">
+            <span>Base de Telas</span>
+            <span className="text-xs font-mono font-medium text-amber-500/70 select-text">
+              https://www.goldplaymanager.com.br/player?device=[DEVICE_ID_ATUAL]
+            </span>
+          </div>
+        }
         data={filteredTelas}
         columns={columns}
         isLoading={isLoading}
