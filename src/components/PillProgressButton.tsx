@@ -10,7 +10,7 @@ export type PillProgressButtonProps = {
   label: string;
   loadingLabel?: string;
   icon?: React.ReactNode;
-  variant?: 'amber' | 'emerald' | 'rose' | 'slate' | 'gold';
+  variant?: 'amber' | 'emerald' | 'rose' | 'slate' | 'gold' | 'blue';
   className?: string;
 };
 
@@ -59,6 +59,8 @@ export function PillProgressButton({
               ? 'bg-gradient-to-r from-rose-700 via-rose-500 to-rose-400 animate-stripes shadow-rose-500/40'
               : variant === 'emerald'
               ? 'bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-400 animate-stripes shadow-emerald-500/40'
+              : variant === 'blue'
+              ? 'bg-gradient-to-r from-cyan-600 via-blue-500 to-blue-400 animate-stripes shadow-blue-500/40'
               : 'bg-gradient-to-r from-amber-600 via-amber-500 to-amber-400 animate-stripes shadow-amber-500/50'
           }`}
           style={{ width: `${Math.max(currentProgress, 14)}%` }}
@@ -91,6 +93,8 @@ export function PillProgressButton({
     colorStyles = "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-emerald-500/20 hover:shadow-emerald-500/35 border border-emerald-400/30";
   } else if (variant === 'rose') {
     colorStyles = "bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white shadow-rose-500/20 hover:shadow-rose-500/35 border border-rose-400/30";
+  } else if (variant === 'blue') {
+    colorStyles = "bg-gradient-to-r from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-white shadow-blue-500/20 hover:shadow-blue-500/35 border border-blue-400/30";
   } else if (variant === 'slate') {
     colorStyles = "bg-white/5 hover:bg-white/10 text-white border border-white/10";
   }
