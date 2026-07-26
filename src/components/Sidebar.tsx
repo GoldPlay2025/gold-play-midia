@@ -48,7 +48,6 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
         <MenuButton icon={Users} label="Clientes" active={activeTab === 'clientes'} onClick={() => { setActiveTab('clientes'); setIsOpen(false); }} />
         <MenuButton icon={Monitor} label="Telas" active={activeTab === 'telas'} onClick={() => { setActiveTab('telas'); setIsOpen(false); }} />
         <MenuButton icon={Cloud} label="Cloud Manager" active={activeTab === 'cloud'} onClick={() => { setActiveTab('cloud'); setIsOpen(false); }} />
-        <MenuButton icon={Activity} label="⚙️ Monitoramento e Alertas" active={activeTab === 'monitoramento'} onClick={() => { setActiveTab('monitoramento'); setIsOpen(false); }} />
         <MenuButton icon={Film} label="Gerenciar Mídias" active={activeTab === 'nova-midia'} onClick={() => { setActiveTab('nova-midia'); setIsOpen(false); }} />
         <MenuButton icon={Settings} label="Perfil" active={activeTab === 'perfil'} onClick={() => { setActiveTab('perfil'); setIsOpen(false); }} />
       </div>
