@@ -518,11 +518,14 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
 
       <DataTable
         title={
-          <div className="flex items-center gap-3">
-            <span>Base de Telas</span>
-            <span className="text-xs font-mono font-medium text-amber-500/70 select-text">
-              https://www.goldplaymanager.com.br/player?device=[DEVICE_ID_ATUAL]
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+            <span className="shrink-0">Base de Telas</span>
+            <div className="flex flex-col bg-[#050505] border border-white/5 rounded-xl px-3.5 py-2.5">
+              <span className="text-[10px] font-medium tracking-wide text-amber-500 mb-1 uppercase">Link Dinâmico</span>
+              <span className="text-xs font-mono font-medium text-amber-500/70 select-text leading-none">
+                https://www.goldplaymanager.com.br/player?device=[DEVICE_ID_ATUAL]
+              </span>
+            </div>
           </div>
         }
         data={filteredTelas}
@@ -530,7 +533,6 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
         isLoading={isLoading}
         onAdd={() => handleOpenModal()}
         addActionLabel="Nova Tela"
-        onSearch={setSearch}
         renderMobileCard={(row) => {
           const isOnline = (onlineScreenIds || []).includes(row.id) || row.status_online;
           return (
