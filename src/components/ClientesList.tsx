@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PillProgressButton } from './PillProgressButton';
 
@@ -71,6 +71,31 @@ const getVencimentoStatus = (vencimento?: string) => {
   return 'ok';
 };
 
+const getCobrancaText = (cliente: Cliente, sysSettings: any) => {
+  const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-';
+  const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
+  const pixKeyStr = sysSettings?.pixKey || 'Não configurada';
+  const favorecidoStr = sysSettings?.pixReceiver ? `\n  Favorecido: ${sysSettings.pixReceiver}` : '';
+
+  return `Olá *${cliente.nome_empresa}!* 
+
+⏰ *Passando para lembrar que sua mensalidade:*
+     *Midia TV* 
+     *GOLD MÍDIA*
+---------------------------------
+📌 *Vence:* ${vencStr}
+🛒 *Valor:* ${valorStr}
+--------------------------------
+ ╰⊱❖ *Gold Play* ❖⊱╯
+
+*Pagamento*:
+ Utilize chave Pix:
+  ${pixKeyStr}${favorecidoStr}
+
+📞 *Estamos à disposição.* 
+-------------------------`;
+};
+
 export function ClientesList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [telas, setTelas] = useState<any[]>([]);
@@ -93,6 +118,66 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
   const [isDeleting, setIsDeleting] = useState(false);
   const [renewingId, setRenewingId] = useState<string | null>(null);
   const [renewSuccessId, setRenewSuccessId] = useState<string | null>(null);
+  const [cobrancaModalOpen, setCobrancaModalOpen] = useState(false);
+  const [cobrancaCliente, setCobrancaCliente] = useState<Cliente | null>(null);
+  const [settings, setSettings] = useState<any>(null);
+
+  const fetchSettings = async () => {
+    try {
+      let localObj: any = {};
+      const local = typeof window !== 'undefined' ? localStorage.getItem('gpm_system_settings') : null;
+      if (local) {
+        try { localObj = JSON.parse(local); } catch(e){}
+      }
+      const { data } = await supabase.from('configuracoes').select('*').eq('id', 'sistema').maybeSingle();
+      const merged = {
+        pixKey: data?.pix_key || localObj?.pixKey || '',
+        pixReceiver: data?.pix_receiver || localObj?.pixReceiver || '',
+        cobrancaImageUrl: data?.cobranca_image_url || localObj?.cobrancaImageUrl || '',
+        systemName: data?.system_name || localObj?.systemName || 'GOLD PLAY',
+      };
+      setSettings(merged);
+    } catch(e) {}
+  };
+
+  const handleCopyImage = async (imageUrl: string) => {
+    if (!imageUrl) return false;
+    try {
+      let blob: Blob | null = null;
+      if (imageUrl.startsWith('data:')) {
+        const res = await fetch(imageUrl);
+        blob = await res.blob();
+      } else {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imageUrl;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/png'));
+        }
+      }
+
+      if (blob) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type || 'image/png']: blob })
+        ]);
+        showToast('success', 'Imagem do template copiada para a área de transferência! Cole (Ctrl+V) no WhatsApp.');
+        return true;
+      }
+    } catch (e) {
+      console.error('Copy image failed:', e);
+      showToast('error', 'Não foi possível copiar a imagem automaticamente para a área de transferência.');
+    }
+    return false;
+  };
 
   const fetchTelas = async () => {
     try {
@@ -151,6 +236,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
   };
 
   useEffect(() => {
+    fetchSettings();
     fetchClientes();
     fetchTelas();
     fetchMidias();
@@ -581,15 +667,26 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                     Renovado!
                   </div>
                 ) : (
-                  <PillProgressButton
-                    label="Confirmar Pagamento"
-                    loadingLabel="Renovando..."
-                    isLoading={renewingId === row.id}
-                    onClick={() => handleRenewPayment(row)}
-                    variant="emerald"
-                    className="h-9 text-[11px] w-fit"
-                    disabled={getDaysToVencimento(row.vencimento) > 5}
-                  />
+                  <div className="flex items-center gap-2">
+                    <PillProgressButton
+                      label="Enviar Cobrança"
+                      onClick={() => {
+                        setCobrancaCliente(row);
+                        setCobrancaModalOpen(true);
+                      }}
+                      variant="blue"
+                      className="h-9 text-[11px] w-fit"
+                    />
+                    <PillProgressButton
+                      label="Confirmar Pagamento"
+                      loadingLabel="Renovando..."
+                      isLoading={renewingId === row.id}
+                      onClick={() => handleRenewPayment(row)}
+                      variant="emerald"
+                      className="h-9 text-[11px] w-fit"
+                      disabled={getDaysToVencimento(row.vencimento) > 5}
+                    />
+                  </div>
                 )}
               </div>
 
@@ -884,7 +981,110 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
         </div>
       </Modal>
 
-      {/* Slide-Over Drawer de Detalhes do Cliente (Modo Responsivo / Touch) */}
+      {/* Modal de Enviar Cobrança */}
+      <Modal
+        isOpen={cobrancaModalOpen}
+        onClose={() => {
+          setCobrancaModalOpen(false);
+          setCobrancaCliente(null);
+        }}
+        title="Enviar Cobrança"
+      >
+        {cobrancaCliente && (
+          <div className="space-y-6">
+            {/* Informational tip if template image exists */}
+            {settings?.cobrancaImageUrl ? (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 flex items-start gap-3">
+                <ImageIcon className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-emerald-200/90 leading-relaxed">
+                  <strong className="text-emerald-400">Imagem de Template ativa!</strong> Ao clicar em Enviar, a imagem será copiada para sua área de transferência. No WhatsApp, basta pressionar <kbd className="bg-black/50 px-1.5 py-0.5 rounded text-[10px] border border-emerald-500/30 font-mono text-white">Ctrl + V</kbd> (Colar) para enviar com a imagem.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-3 text-xs text-slate-400">
+                💡 Dica: Você pode cadastrar uma imagem de template para o topo da cobrança em <strong className="text-amber-400">Perfil</strong>.
+              </div>
+            )}
+
+            {/* iPhone Mockup Preview */}
+            <div className="mx-auto w-[320px] max-w-full bg-[#1c1c1e] rounded-[40px] border-[8px] border-[#0a0a0c] overflow-hidden shadow-xl shadow-black relative pb-6">
+              {/* Notch */}
+              <div className="absolute top-0 inset-x-0 h-6 bg-[#0a0a0c] rounded-b-3xl w-40 mx-auto z-10" />
+              
+              {/* Screen Content */}
+              <div className="bg-[#1c1c1e] h-full pt-10 px-4 flex flex-col gap-3">
+                <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <img src="https://goldplaysky.com.br/whats.png" className="w-6 h-6 object-contain" alt="WA" />
+                  </div>
+                  <div>
+                    <div className="text-white text-sm font-semibold">{cobrancaCliente.nome_empresa}</div>
+                    <div className="text-emerald-500 text-[10px] font-medium">Online</div>
+                  </div>
+                </div>
+
+                {/* Message Bubble */}
+                <div className="bg-[#26252a] rounded-2xl rounded-tl-sm p-2 w-fit max-w-[95%] shadow-md">
+                  {settings?.cobrancaImageUrl && (
+                    <img src={settings.cobrancaImageUrl} className="w-full h-36 object-cover rounded-xl mb-2 border border-white/10" alt="Template Cobrança" />
+                  )}
+                  <div className="text-white text-[12px] leading-relaxed whitespace-pre-wrap px-1 font-sans">
+                    {getCobrancaText(cobrancaCliente, settings)}
+                  </div>
+                  <div className="text-[10px] text-white/50 text-right mt-1 px-1">Agora</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/5 flex-wrap sm:flex-nowrap">
+              {settings?.cobrancaImageUrl ? (
+                <button
+                  type="button"
+                  onClick={() => handleCopyImage(settings.cobrancaImageUrl)}
+                  className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition-all"
+                  title="Copiar Imagem"
+                >
+                  <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Copiar Imagem</span>
+                </button>
+              ) : <div />}
+
+              <div className="flex items-center gap-3 ml-auto">
+                <button
+                  onClick={() => {
+                    setCobrancaModalOpen(false);
+                    setCobrancaCliente(null);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+                <PillProgressButton
+                  onClick={async () => {
+                    if (!cobrancaCliente.whatsapp) {
+                      showToast('error', 'Cliente sem WhatsApp cadastrado.');
+                      return;
+                    }
+
+                    if (settings?.cobrancaImageUrl) {
+                      await handleCopyImage(settings.cobrancaImageUrl);
+                    }
+                    
+                    const msg = getCobrancaText(cobrancaCliente, settings);
+                    const rawNumbers = cobrancaCliente.whatsapp.replace(/\D/g, '');
+                    const waLink = `https://wa.me/${rawNumbers.startsWith('55') ? rawNumbers : '55' + rawNumbers}?text=${encodeURIComponent(msg)}`;
+                    window.open(waLink, '_blank');
+                    setCobrancaModalOpen(false);
+                  }}
+                  label="Enviar WhatsApp"
+                  icon={<CheckCircle2 className="w-4 h-4" />}
+                  variant="emerald"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
       <AnimatePresence>
         {slideCliente && (
           <div className="fixed inset-0 z-[100] overflow-hidden">

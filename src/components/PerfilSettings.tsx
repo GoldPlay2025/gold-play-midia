@@ -22,6 +22,9 @@ export type SystemSettings = {
   iconUrl: string;
   backendUrl?: string;
   weatherCity?: string;
+  pixKey?: string;
+  pixReceiver?: string;
+  cobrancaImageUrl?: string;
 };
 
 export const defaultSettings: SystemSettings = {
@@ -30,6 +33,9 @@ export const defaultSettings: SystemSettings = {
   iconUrl: '/gpm.png',
   backendUrl: '',
   weatherCity: 'Paranavaí, Paraná',
+  pixKey: '',
+  pixReceiver: '',
+  cobrancaImageUrl: '',
 };
 
 interface PerfilSettingsProps {
@@ -70,12 +76,20 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
       }
 
       if (data) {
+        const localSaved = localStorage.getItem('gpm_system_settings');
+        let localObj: any = {};
+        if (localSaved) {
+          try { localObj = JSON.parse(localSaved); } catch(e){}
+        }
         const loadedSettings: SystemSettings = {
-          systemName: data.system_name || 'GOLD PLAY',
-          logoUrl: data.logo_url || '/gpm.png',
-          iconUrl: data.icon_url || '/gpm.png',
-          backendUrl: data.backend_url || '',
-          weatherCity: data.weather_city || 'Paranavaí, Paraná',
+          systemName: data.system_name || localObj.systemName || 'GOLD PLAY',
+          logoUrl: data.logo_url || localObj.logoUrl || '/gpm.png',
+          iconUrl: data.icon_url || localObj.iconUrl || '/gpm.png',
+          backendUrl: data.backend_url || localObj.backendUrl || '',
+          weatherCity: data.weather_city || localObj.weatherCity || 'Paranavaí, Paraná',
+          pixKey: data.pix_key || localObj.pixKey || '',
+          pixReceiver: data.pix_receiver || localObj.pixReceiver || '',
+          cobrancaImageUrl: data.cobranca_image_url || localObj.cobrancaImageUrl || '',
         };
         setForm(loadedSettings);
         onSettingsChange(loadedSettings);
@@ -95,7 +109,7 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
     fetchDbSettings();
   }, []);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'iconUrl') => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'iconUrl' | 'cobrancaImageUrl') => {
     const file = e.target.files?.[0];
     if (!file) return;
     
@@ -131,6 +145,9 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             icon_url: form.iconUrl,
             backend_url: form.backendUrl || '',
             weather_city: form.weatherCity || 'Paranavaí, Paraná',
+            pix_key: form.pixKey || '',
+            pix_receiver: form.pixReceiver || '',
+            cobranca_image_url: form.cobrancaImageUrl || '',
           });
 
         if (error) {
@@ -138,22 +155,17 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             setShowSqlInstruction(true);
             throw new Error("A tabela 'configuracoes' não existe no Supabase. Por favor, crie a tabela rodando o script SQL.");
           }
-          if (error.message?.includes('weather_city')) {
-            setShowSqlInstruction(true);
-            // Salva sem a nova coluna
-            const { error: errorFallback } = await supabase
-              .from('configuracoes')
-              .upsert({
-                id: 'sistema',
-                system_name: form.systemName,
-                logo_url: form.logoUrl,
-                icon_url: form.iconUrl,
-                backend_url: form.backendUrl || '',
-              });
-            if (errorFallback) throw errorFallback;
-            throw new Error("Configuração salva, mas a cidade não pôde ser sincronizada. Atualize sua tabela no Supabase com o script abaixo (falta a coluna weather_city).");
-          }
-          throw error;
+          // Try fallback without new columns if Supabase schema isn't updated yet
+          const { error: errorFallback } = await supabase
+            .from('configuracoes')
+            .upsert({
+              id: 'sistema',
+              system_name: form.systemName,
+              logo_url: form.logoUrl,
+              icon_url: form.iconUrl,
+              backend_url: form.backendUrl || '',
+            });
+          if (errorFallback) throw errorFallback;
         }
         
         setDbStatus('synced');
@@ -358,6 +370,59 @@ ON CONFLICT (id) DO NOTHING;`);
                 </div>
               </div>
               <p className="text-[10px] text-slate-500 text-center">Tamanho recomendado: 150x150px.<br/>Formato quadrado (1:1).</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-6 border-t border-white/5 space-y-8">
+          <h3 className="text-lg font-bold text-white mb-4">Configurações de Pagamento / Cobrança</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Chave Pix</label>
+              <input 
+                type="text" 
+                value={form.pixKey || ''}
+                onChange={e => setForm({...form, pixKey: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder-slate-700"
+                placeholder="Ex: 12.345.678/0001-90"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Nome do Recebedor (Gestor)</label>
+              <input 
+                type="text" 
+                value={form.pixReceiver || ''}
+                onChange={e => setForm({...form, pixReceiver: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder-slate-700"
+                placeholder="Ex: João da Silva"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-4">Imagem de Fundo (Template de Cobrança)</label>
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-64 h-36 bg-[#050505] border border-white/10 rounded-2xl flex items-center justify-center overflow-hidden relative group">
+                {form.cobrancaImageUrl ? (
+                  <img src={form.cobrancaImageUrl} alt="Cobranca Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon className="w-8 h-8 text-white/20" />
+                )}
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                  <label className="cursor-pointer flex flex-col items-center gap-2 text-white hover:text-emerald-500 transition-colors">
+                    <Upload className="w-6 h-6" />
+                    <span className="text-xs font-medium">Upload Imagem</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => handleImageUpload(e, 'cobrancaImageUrl')}
+                    />
+                  </label>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 text-center">Será enviada anexada junto com a mensagem de cobrança.<br/>Recomendado proporção de capa ou cabeçalho.</p>
             </div>
           </div>
         </div>
