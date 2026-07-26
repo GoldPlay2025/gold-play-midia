@@ -32,6 +32,16 @@ async function startServer() {
   app.use('/api/devices', monitoringRouter);
   app.use('/api/cron', monitoringRouter);
 
+  // Rota dedicada de teste do WhatsApp compatível com Vercel (/api/test-whatsapp)
+  app.all('/api/test-whatsapp', async (req, res) => {
+    try {
+      const handlerModule = await import('./api/test-whatsapp.ts');
+      return await handlerModule.default(req as any, res as any);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || 'Erro ao carregar /api/test-whatsapp' });
+    }
+  });
+
   // Initialize Gemini client using backend key
   const apiKey = process.env.GEMINI_API_KEY;
   let ai: GoogleGenAI | null = null;
