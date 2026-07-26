@@ -219,7 +219,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
         const currentlyLinkedDbIds = currentlyLinkedDb.map(t => t.id);
 
         const toLink = linkedTelaIds.filter(id => !currentlyLinkedDbIds.includes(id));
-        const toUnlink = currentlyLinkedDbIds.filter(id => !currentlyLinkedDbIds.includes(id));
+        const toUnlink = currentlyLinkedDbIds.filter(id => !linkedTelaIds.includes(id));
 
         // Link new screens to this client
         for (const screenId of toLink) {
@@ -252,6 +252,15 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 .update({ 
                   cliente_id: newClientIds[0], 
                   endereco: cleanAddr + "|||" + JSON.stringify(newClientIds) 
+                })
+                .eq('id', screenId);
+              if (unlinkErr) throw unlinkErr;
+            } else {
+              const { error: unlinkErr } = await supabase
+                .from('telas')
+                .update({ 
+                  cliente_id: null, 
+                  endereco: cleanAddr 
                 })
                 .eq('id', screenId);
               if (unlinkErr) throw unlinkErr;
@@ -787,7 +796,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       {/* Slide-Over Drawer de Detalhes do Cliente (Modo Responsivo / Touch) */}
       <AnimatePresence>
         {slideCliente && (
-          <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="fixed inset-0 z-[100] overflow-hidden">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -796,7 +805,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
               className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity"
             />
 
-            <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="fixed inset-y-0 right-0 max-w-full flex pl-6">
               <motion.div 
                 initial={{ x: '100%' }}
                 animate={{ x: 0 }}
@@ -805,8 +814,8 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 className="w-screen max-w-md bg-[#0c0c0e] border-l border-white/10 shadow-2xl flex flex-col justify-between overflow-y-auto"
               >
                 {/* Header do Drawer */}
-                <div className="p-6 border-b border-white/10 bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent relative">
-                  <div className="flex items-center justify-between mb-3">
+                <div className="pt-8 pb-6 px-6 border-b border-white/10 bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent relative">
+                  <div className="flex items-center justify-between mb-4">
                     <span className="px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.2)]">
                       <Tv className="w-3.5 h-3.5" />
                       Visão Detalhada em Slide
@@ -819,7 +828,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                     </button>
                   </div>
 
-                  <h3 className="text-2xl font-black text-white tracking-tight">{slideCliente.nome_empresa}</h3>
+                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight break-words pr-2">{slideCliente.nome_empresa}</h3>
                   <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
                     <span>Cadastrado em {slideCliente.criado_em ? new Date(slideCliente.criado_em).toLocaleDateString('pt-BR') : '-'}</span>
                   </p>
