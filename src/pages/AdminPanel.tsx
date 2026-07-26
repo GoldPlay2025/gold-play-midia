@@ -2466,7 +2466,7 @@ create policy "Permitir deletar midias" on storage.objects
       </div>
       
       <div className="absolute bottom-2 right-4 text-[10px] text-slate-500/40 font-mono pointer-events-none select-none z-10">
-        Gold Play Mídia - Desenvolvido por Gold Play. Direitos reservados.
+        Desenvolvido por Gold Play.
       </div>
     </div>
   );
