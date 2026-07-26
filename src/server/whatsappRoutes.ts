@@ -110,24 +110,26 @@ export const sendWhatsAppNotification = async ({
       body: JSON.stringify(payload)
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.warn(`[Botbot.chat Response] Status ${response.status}:`, errText);
+    const resText = await response.text();
+    let resData: any = {};
+    try {
+      resData = JSON.parse(resText);
+    } catch (e) {
+      resData = { raw: resText };
     }
 
-    const resData = await response.json().catch(() => ({ success: true }));
+    if (!response.ok) {
+      throw new Error(resData.error || resData.message || `Erro na API do Botbot.chat (${response.status}): ${resText}`);
+    }
+
     return {
       success: true,
       message: 'Mensagem enviada para a API do Botbot.chat com sucesso.',
       data: resData
     };
   } catch (err: any) {
-    console.warn('[Botbot.chat Notice]: External API unreachable in sandbox (normal for test environment):', err?.message || err);
-    return {
-      success: true,
-      message: 'Disparo simulado com sucesso na sandbox.',
-      details: err?.message
-    };
+    console.error('[Botbot.chat Erro]:', err?.message || err);
+    throw new Error(err?.message || 'Falha ao conectar com a API do Botbot.chat');
   }
 };
 
