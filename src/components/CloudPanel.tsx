@@ -22,6 +22,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
   const [newUrls, setNewUrls] = useState<Record<string, string>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showFullyLoginModal, setShowFullyLoginModal] = useState(false);
+  const [activeMediaIndices, setActiveMediaIndices] = useState<Record<string, number>>({});
 
   // Persistence for screen active media in localStorage
   const [updatedMidias, setUpdatedMidias] = useState<Record<string, { id: string; titulo_video: string; url_storage: string }>>(() => {
@@ -287,7 +288,6 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {telas.map((tela) => {
-          // Identifica a mídia ativa cadastrada especificamente para esta tela (ou a mídia recém-atualizada)
           const playlists = tela.playlists || [];
           const validPlaylists = playlists.filter((p: any) => {
             const m = Array.isArray(p.midias) ? p.midias[0] : p.midias;
@@ -297,16 +297,20 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
             return true;
           });
 
-          const dbMidiaRaw = validPlaylists.length > 0 ? validPlaylists[0]?.midias : null;
-          const dbMidia = Array.isArray(dbMidiaRaw) ? dbMidiaRaw[0] : dbMidiaRaw;
+          const validMidias = validPlaylists.map((p: any) => {
+            const m = Array.isArray(p.midias) ? p.midias[0] : p.midias;
+            return m;
+          }).filter(Boolean);
 
-          // Verifica se há mídia em cache local (sanitizando URLs de player)
-          let cachedMedia = updatedMidias[tela.id];
+          const currentIndex = activeMediaIndices[tela.id] || 0;
+          const currentDbMidia = validMidias.length > 0 ? validMidias[currentIndex % validMidias.length] : null;
+
+          let cachedMedia = validMidias.length > 0 ? undefined : updatedMidias[tela.id];
           if (cachedMedia && (cachedMedia.url_storage?.includes('/player') || cachedMedia.titulo_video?.includes('Player Official'))) {
             cachedMedia = undefined;
           }
 
-          const activeMidia = dbMidia || cachedMedia;
+          const activeMidia = currentDbMidia || cachedMedia;
 
           // Device ID atual para esta tela
           const currentDeviceId = tela.fully_device_id || tela.identificador_unico || tela.id;
@@ -353,40 +357,76 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
                   </div>
 
                   {activeMidia ? (
-                    <div className="flex items-center gap-4 p-3 bg-white/[0.02] rounded-2xl border border-white/5">
-                      {/* Miniatura Aumentada e Arredondada */}
-                      <MediaThumbnail
-                        url={activeMidia.url_storage}
-                        title={activeMidia.titulo_video}
-                        className="w-20 h-20"
-                      />
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-4 p-3 bg-white/[0.02] rounded-2xl border border-white/5">
+                        {/* Miniatura Aumentada e Arredondada */}
+                        <MediaThumbnail
+                          url={activeMidia.url_storage}
+                          title={activeMidia.titulo_video}
+                          className="w-20 h-20"
+                        />
 
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <p className="text-sm font-semibold text-white truncate" title={activeMidia.titulo_video}>
-                          {activeMidia.titulo_video}
-                        </p>
-                        <p className="text-[11px] text-slate-500 truncate font-mono" title={telaPlayerUrl}>
-                          {telaPlayerUrl}
-                        </p>
-                        <div className="flex items-center gap-2 pt-1 flex-wrap">
-                          <button
-                            onClick={() => {
-                              setNewUrls({ ...newUrls, [tela.id]: telaPlayerUrl });
-                              showToast('success', `URL do Player de ${tela.nome_local} inserida!`);
-                            }}
-                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 shrink-0"
-                          >
-                            <Send className="w-3 h-3" /> Inserir já
-                          </button>
-                          <button
-                            onClick={() => copyToClipboard(telaPlayerUrl, tela.nome_local)}
-                            className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 shrink-0 border border-white/5"
-                          >
-                            {copiedId === telaPlayerUrl ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                            Copiar
-                          </button>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className="text-sm font-semibold text-white truncate" title={activeMidia.titulo_video}>
+                            {activeMidia.titulo_video}
+                          </p>
+                          <p className="text-[11px] text-slate-500 truncate font-mono" title={telaPlayerUrl}>
+                            {telaPlayerUrl}
+                          </p>
+                          <div className="flex items-center gap-2 pt-1 flex-wrap">
+                            <button
+                              onClick={() => {
+                                setNewUrls({ ...newUrls, [tela.id]: telaPlayerUrl });
+                                showToast('success', `URL do Player de ${tela.nome_local} inserida!`);
+                              }}
+                              className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 shrink-0"
+                            >
+                              <Send className="w-3 h-3" /> Inserir já
+                            </button>
+                            <button
+                              onClick={() => copyToClipboard(telaPlayerUrl, tela.nome_local)}
+                              className="text-[11px] font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 shrink-0 border border-white/5"
+                            >
+                              {copiedId === telaPlayerUrl ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              Copiar
+                            </button>
+                          </div>
                         </div>
                       </div>
+
+                      {validMidias.length > 1 && (
+                        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/[0.01] border border-white/5">
+                          <span className="text-[10px] font-mono text-slate-400">
+                            Playlist: Mídia {(currentIndex % validMidias.length) + 1} de {validMidias.length}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setActiveMediaIndices(prev => ({
+                                  ...prev,
+                                  [tela.id]: (currentIndex - 1 + validMidias.length) % validMidias.length
+                                }));
+                              }}
+                              className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-[10px] font-mono transition-colors flex items-center gap-1"
+                              title="Mídia anterior"
+                            >
+                              Anterior
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveMediaIndices(prev => ({
+                                  ...prev,
+                                  [tela.id]: (currentIndex + 1) % validMidias.length
+                                }));
+                              }}
+                              className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-amber-400 text-[10px] font-mono transition-colors flex items-center gap-1"
+                              title="Próxima mídia"
+                            >
+                              Próxima
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center gap-4 p-3 bg-white/[0.02] rounded-2xl border border-white/5">
