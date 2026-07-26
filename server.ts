@@ -42,6 +42,16 @@ async function startServer() {
     }
   });
 
+  // Rota dedicada de envio do WhatsApp compatível com Vercel (/api/send-whatsapp)
+  app.all('/api/send-whatsapp', async (req, res) => {
+    try {
+      const handlerModule = await import('./api/send-whatsapp.ts');
+      return await handlerModule.default(req as any, res as any);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || 'Erro ao carregar /api/send-whatsapp' });
+    }
+  });
+
   // Initialize Gemini client using backend key
   const apiKey = process.env.GEMINI_API_KEY;
   let ai: GoogleGenAI | null = null;
