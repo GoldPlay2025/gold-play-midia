@@ -6,7 +6,7 @@ import { TelasList } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
 import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
-import { MonitoramentoPanel } from "../components/MonitoramentoPanel";
+
 import { GestaoPanel } from "../components/GestaoPanel";
 import { PillProgressButton } from "../components/PillProgressButton";
 import { MediaThumbnail, MediaModalPlayer } from "../components/MediaThumbnail";
@@ -110,7 +110,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' | 'monitoramento'>(initialTab || 'dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud'>(initialTab || 'dashboard');
   const [telas, setTelas] = useState<Tela[]>([]);
   const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -1704,13 +1704,6 @@ create policy "Permitir deletar midias" on storage.objects
             {activeTab === 'cloud' && (
               <motion.div key="cloud" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
                 <CloudPanel telas={telas} showToast={showToast} fetchDashboardData={fetchDashboardData} />
-              </motion.div>
-            )}
-
-            {/* Monitoramento Tab */}
-            {activeTab === 'monitoramento' && (
-              <motion.div key="monitoramento" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <MonitoramentoPanel />
               </motion.div>
             )}
 
