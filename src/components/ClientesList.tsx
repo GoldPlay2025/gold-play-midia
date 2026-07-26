@@ -49,6 +49,28 @@ const getCleanEndereco = (endereco?: string): string => {
   return endereco;
 };
 
+const getDaysToVencimento = (vencimento?: string) => {
+  if (!vencimento) return 999;
+  
+  const today = new Date();
+  const utcToday = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  
+  const vDate = new Date(vencimento);
+  const utcVDate = Date.UTC(vDate.getUTCFullYear(), vDate.getUTCMonth(), vDate.getUTCDate());
+  
+  const diffTime = utcVDate - utcToday;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const getVencimentoStatus = (vencimento?: string) => {
+  if (!vencimento) return 'ok';
+  const diffDays = getDaysToVencimento(vencimento);
+  
+  if (diffDays < 0) return 'vencido';
+  if (diffDays <= 3) return 'vencendo';
+  return 'ok';
+};
+
 export function ClientesList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [telas, setTelas] = useState<any[]>([]);
@@ -69,6 +91,8 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [renewingId, setRenewingId] = useState<string | null>(null);
+  const [renewSuccessId, setRenewSuccessId] = useState<string | null>(null);
 
   const fetchTelas = async () => {
     try {
@@ -280,6 +304,35 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
     }
   };
 
+  const handleRenewPayment = async (cliente: Cliente) => {
+    setRenewingId(cliente.id);
+    setRenewSuccessId(null);
+    try {
+      const currentVencimento = cliente.vencimento ? new Date(cliente.vencimento) : new Date();
+      currentVencimento.setUTCMonth(currentVencimento.getUTCMonth() + 1);
+      const newVencimento = currentVencimento.toISOString().split('T')[0];
+
+      const { error } = await supabase
+        .from('clientes')
+        .update({ vencimento: newVencimento })
+        .eq('id', cliente.id);
+
+      if (error) throw error;
+      
+      setRenewingId(null);
+      setRenewSuccessId(cliente.id);
+      setTimeout(() => {
+        setRenewSuccessId(null);
+      }, 3000);
+      
+      fetchClientes();
+    } catch (error: any) {
+      console.error('Error renewing:', error);
+      setRenewingId(null);
+      showToast('error', 'Erro ao confirmar pagamento: ' + error.message);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
     setIsDeleting(true);
@@ -310,7 +363,22 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
     { 
       key: 'nome_empresa', 
       header: 'Nome da Empresa',
-      render: (row) => <span className="text-xs font-semibold text-slate-200">{row.nome_empresa}</span>
+      render: (row) => {
+        const status = getVencimentoStatus(row.vencimento);
+        return (
+          <div className="flex items-center w-[240px]">
+            <span className="text-xs font-semibold text-slate-200 truncate flex-1 pr-4">{row.nome_empresa}</span>
+            <div className="w-[80px] flex items-center justify-center">
+              {status === 'vencido' && (
+                <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-lg shadow-rose-500/20 border border-rose-400/20">Vencido</span>
+              )}
+              {status === 'vencendo' && (
+                <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/20 border border-orange-400/20">Vencendo</span>
+              )}
+            </div>
+          </div>
+        );
+      }
     },
     { 
       key: 'whatsapp', 
@@ -493,13 +561,36 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
           return (
             <div className={`px-6 py-6 bg-[#0a0a0c]/80 rounded-2xl border border-white/5 mx-4 mb-4 mt-2 grid grid-cols-1 ${gridCols} gap-6 text-sm`}>
               {/* Vencimento */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-amber-500/70" /> Vencimento
-                </span>
-                <span className="text-slate-200 font-medium">
-                  {row.vencimento ? new Date(row.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}
-                </span>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-amber-500/70" /> Vencimento
+                  </span>
+                  <span className={`font-medium ${
+                    getVencimentoStatus(row.vencimento) === 'vencido' ? 'text-rose-400' :
+                    getVencimentoStatus(row.vencimento) === 'vencendo' ? 'text-orange-400' :
+                    'text-slate-200'
+                  }`}>
+                    {row.vencimento ? new Date(row.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}
+                  </span>
+                </div>
+                
+                {renewSuccessId === row.id ? (
+                  <div className="h-9 px-4 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center gap-2 text-emerald-400 text-xs font-bold w-fit shadow-inner">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Renovado!
+                  </div>
+                ) : (
+                  <PillProgressButton
+                    label="Confirmar Pagamento"
+                    loadingLabel="Renovando..."
+                    isLoading={renewingId === row.id}
+                    onClick={() => handleRenewPayment(row)}
+                    variant="emerald"
+                    className="h-9 text-[11px] w-fit"
+                    disabled={getDaysToVencimento(row.vencimento) > 5}
+                  />
+                )}
               </div>
 
               {/* Valor */}
@@ -847,7 +938,11 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] text-slate-500 uppercase font-mono tracking-wider block">Vencimento</span>
-                        <span className="text-xs font-semibold text-slate-200">
+                        <span className={`text-xs font-semibold ${
+                          getVencimentoStatus(slideCliente.vencimento) === 'vencido' ? 'text-rose-400' :
+                          getVencimentoStatus(slideCliente.vencimento) === 'vencendo' ? 'text-orange-400' :
+                          'text-slate-200'
+                        }`}>
                           {slideCliente.vencimento ? new Date(slideCliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'A combinar'}
                         </span>
                       </div>
