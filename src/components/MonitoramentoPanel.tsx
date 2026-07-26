@@ -213,7 +213,7 @@ ALTER TABLE telas ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN DEFAULT FALSE;`;
 
     try {
       const apiKey = import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta';
-      const response = await fetch('/api/whatsapp/send-manual', {
+      const response = await fetch('/api/test-whatsapp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
