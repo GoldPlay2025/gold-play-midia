@@ -93,6 +93,12 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const handleCopyId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const fetchTelas = async () => {
     setIsLoading(true);
     try {
@@ -668,7 +674,24 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
             />
           </div>
           <div>
-            <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Clientes Vinculados</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest">Clientes Vinculados</label>
+              <button
+                type="button"
+                onClick={() => {
+                  const allIds = clientes.map(c => c.id);
+                  if (linkedClientIds.length === allIds.length) {
+                    setLinkedClientIds([]);
+                  } else {
+                    setLinkedClientIds(allIds);
+                  }
+                }}
+                className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors"
+                title={linkedClientIds.length === clientes.length ? 'Remover seleção de todos' : 'Selecionar todos os clientes'}
+              >
+                {linkedClientIds.length === clientes.length ? 'Limpar Todos' : 'Todos'}
+              </button>
+            </div>
             
             <div className="relative mb-3">
               <input 
@@ -876,7 +899,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       {/* Slide-Over Drawer de Detalhes da Tela (Modo Responsivo / Touch) */}
       <AnimatePresence>
         {slideTela && (
-          <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="fixed inset-0 z-[100] overflow-hidden">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -885,7 +908,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
               className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity"
             />
 
-            <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="fixed inset-y-0 right-0 max-w-full flex pl-6">
               <motion.div 
                 initial={{ x: '100%' }}
                 animate={{ x: 0 }}
@@ -894,8 +917,8 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
                 className="w-screen max-w-md bg-[#0c0c0e] border-l border-white/10 shadow-2xl flex flex-col justify-between overflow-y-auto"
               >
                 {/* Header do Drawer */}
-                <div className="p-6 border-b border-white/10 bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent relative">
-                  <div className="flex items-center justify-between mb-3">
+                <div className="pt-8 pb-6 px-6 border-b border-white/10 bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent relative">
+                  <div className="flex items-center justify-between mb-4">
                     <span className="px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.2)]">
                       <Tv className="w-3.5 h-3.5" />
                       Visão Detalhada em Slide
@@ -909,7 +932,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-2xl font-black text-white tracking-tight">{slideTela.nome_local}</h3>
+                    <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight break-words pr-2">{slideTela.nome_local}</h3>
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold shrink-0">
                       <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
                       <span>PUBLICADO</span>
