@@ -36,14 +36,18 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
 
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idToSearch);
     if (isUuid) {
-      const { data } = await supabase.from('telas').select('id, nome_local').eq('id', idToSearch).maybeSingle();
+      const { data } = await supabase
+        .from('telas')
+        .select('id, nome_local, status_online, alert_sent, identificador_unico, clientes(nome_empresa)')
+        .eq('id', idToSearch)
+        .maybeSingle();
       if (data) screen = data;
     }
 
     if (!screen) {
       const { data } = await supabase
         .from('telas')
-        .select('id, nome_local')
+        .select('id, nome_local, status_online, alert_sent, identificador_unico, clientes(nome_empresa)')
         .or(`fully_device_id.eq.${idToSearch},identificador_unico.eq.${idToSearch.toUpperCase()},identificador_unico.eq.${idToSearch}`)
         .maybeSingle();
       if (data) screen = data;
@@ -52,6 +56,8 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
     if (!screen) {
       return res.status(404).json({ error: 'Tela não encontrada para heartbeat', deviceId: idToSearch });
     }
+
+    const wasOffline = screen.status_online === false || screen.alert_sent === true;
 
     // Atualiza last_ping, status_online e reseta alert_sent para false
     const nowIso = new Date().toISOString();
@@ -67,6 +73,97 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
     if (updateErr) {
       console.error('Erro ao atualizar heartbeat:', updateErr);
       return res.status(500).json({ error: updateErr.message });
+    }
+
+    // Se estava offline, dispara alerta de reconexão ONLINE
+    if (wasOffline) {
+      try {
+        const { data: configData } = await supabase
+          .from('configuracoes')
+          .select('alerts_enabled, admin_phone')
+          .eq('id', 'sistema')
+          .maybeSingle();
+
+        if (configData?.alerts_enabled && configData?.admin_phone?.trim()) {
+          const adminPhone = configData.admin_phone.trim();
+          const nomeTela = screen.nome_local || 'Tela sem nome';
+          const nomeCliente = (screen as any).clientes?.nome_empresa || '';
+          const idUnico = screen.identificador_unico || screen.id;
+          const horarioText = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+          const onlineAlertMessage = `✅ *ALERTA GOLD PLAY MÍDIA*\n\n` +
+            `A tela *${nomeTela}*${nomeCliente ? ` (${nomeCliente})` : ''} voltou a ficar *ONLINE*!\n` +
+            `📍 *ID:* ${idUnico}\n` +
+            `🕒 *Horário:* ${horarioText}\n` +
+            `✅ *Status:* Conexão reestabelecida.`;
+
+          const cleaned = adminPhone.replace(/\D/g, '');
+          const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
+
+          // Envio de SMS via GTI SMS
+          if (process.env.GTISMS_API_TOKEN) {
+            try {
+              let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
+              if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
+                smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
+              }
+              const smsToken = process.env.GTISMS_API_TOKEN;
+              const senderId = process.env.GTISMS_SENDER_ID || '';
+
+              const sanitizeSms = (text: string) => {
+                let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
+                sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
+                return sanitized;
+              };
+
+              const payload: any = {
+                recipient: fullNumber,
+                message: sanitizeSms(onlineAlertMessage),
+                type: 'plain'
+              };
+              if (senderId) payload.sender_id = senderId;
+
+              await fetch(smsUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': `Bearer ${smsToken}`
+                },
+                body: JSON.stringify(payload)
+              });
+            } catch (smsErr) {
+              console.error('Erro ao enviar SMS de reconexão:', smsErr);
+            }
+          }
+
+          // Envio via WhatsApp interno ou BotBot
+          try {
+            const port = process.env.PORT || 3000;
+            const apiDomain = process.env.VERCEL_URL 
+              ? `https://${process.env.VERCEL_URL}` 
+              : `http://localhost:${port}`;
+            const apiKey = process.env.VITE_WHATSAPP_API_KEY || process.env.API_KEY || 'minha-chave-secreta';
+
+            await fetch(`${apiDomain}/api/whatsapp/send-manual`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey
+              },
+              body: JSON.stringify({
+                numero: fullNumber,
+                mensagem: onlineAlertMessage
+              })
+            });
+          } catch (waErr) {
+            console.warn('Erro ao disparar WhatsApp de reconexão:', waErr);
+          }
+        }
+      } catch (errAlert) {
+        console.error('Erro ao processar alerta online:', errAlert);
+      }
     }
 
     return res.json({
