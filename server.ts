@@ -44,6 +44,16 @@ async function startServer() {
     }
   });
 
+  // Rota para envio de e-mail SMTP / Gmail
+  app.all('/api/email/send', async (req, res) => {
+    try {
+      const handlerModule = await import('./api/email/send.ts');
+      return await handlerModule.default(req as any, res as any);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || 'Erro ao carregar /api/email/send' });
+    }
+  });
+
   // Initialize Gemini client using backend key
   const apiKey = process.env.GEMINI_API_KEY;
   let ai: GoogleGenAI | null = null;
