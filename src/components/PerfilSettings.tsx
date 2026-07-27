@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Upload, Save, Loader2, Image as ImageIcon, Database, Link, AlertCircle, CheckCircle, FileCode, Copy, Check, Lock, Unlock } from 'lucide-react';
+import { Settings, Upload, Save, Loader2, Image as ImageIcon, Database, Link, AlertCircle, CheckCircle, FileCode, Copy, Check, Lock, Unlock, Mail, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { PillProgressButton } from './PillProgressButton';
@@ -27,6 +27,10 @@ export type SystemSettings = {
   cobrancaImageUrl?: string;
   adminPhone?: string;
   alertsEnabled?: boolean;
+  smtpEmail?: string;
+  smtpPassword?: string;
+  smtpPort?: string;
+  smtpHost?: string;
 };
 
 export const defaultSettings: SystemSettings = {
@@ -40,6 +44,10 @@ export const defaultSettings: SystemSettings = {
   cobrancaImageUrl: '',
   adminPhone: '',
   alertsEnabled: false,
+  smtpEmail: '',
+  smtpPassword: '',
+  smtpPort: '587',
+  smtpHost: 'smtp.gmail.com',
 };
 
 interface PerfilSettingsProps {
@@ -96,6 +104,10 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           cobrancaImageUrl: data.cobranca_image_url || localObj.cobrancaImageUrl || '',
           adminPhone: data.admin_phone !== undefined && data.admin_phone !== null ? data.admin_phone : (localObj.adminPhone || ''),
           alertsEnabled: data.alerts_enabled !== undefined && data.alerts_enabled !== null ? data.alerts_enabled : (localObj.alertsEnabled || false),
+          smtpEmail: data.smtp_email !== undefined && data.smtp_email !== null ? data.smtp_email : (localObj.smtpEmail || ''),
+          smtpPassword: data.smtp_password !== undefined && data.smtp_password !== null ? data.smtp_password : (localObj.smtpPassword || ''),
+          smtpPort: data.smtp_port || localObj.smtpPort || '587',
+          smtpHost: data.smtp_host || localObj.smtpHost || 'smtp.gmail.com',
         };
         setForm(loadedSettings);
         onSettingsChange(loadedSettings);
@@ -108,6 +120,53 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
     } catch (err) {
       console.error('Error fetching settings from db:', err);
       setDbStatus('error');
+    }
+  };
+
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+
+  const handleTestEmail = async () => {
+    if (!form.smtpEmail) {
+      showToast('error', 'Por favor, informe o e-mail do remetente.');
+      return;
+    }
+    if (!form.smtpPassword) {
+      showToast('error', 'Por favor, informe a Senha de Aplicativo Google.');
+      return;
+    }
+
+    setIsTestingEmail(true);
+    try {
+      const response = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: form.smtpEmail,
+          subject: 'Teste de E-mail - GOLD PLAY Digital Signage',
+          html: `<div style="font-family: Arial, sans-serif; padding: 20px; background: #0f0f11; color: #fff; borderRadius: 12px;">
+            <h2 style="color: #f59e0b; margin-bottom: 10px;">GOLD PLAY - Teste de Envio SMTP</h2>
+            <p style="color: #cbd5e1; font-size: 14px;">Parabéns! Sua integração com a API do Gmail/SMTP via Nodemailer foi configurada com sucesso.</p>
+            <hr style="border-color: #334155; margin: 15px 0;" />
+            <p style="font-size: 12px; color: #64748b;">E-mail remetente: <strong>${form.smtpEmail}</strong><br/>Data/Hora: ${new Date().toLocaleString('pt-BR')}</p>
+          </div>`,
+          smtpEmail: form.smtpEmail,
+          smtpPassword: form.smtpPassword,
+          smtpPort: form.smtpPort || '587',
+          smtpHost: form.smtpHost || 'smtp.gmail.com'
+        })
+      });
+
+      const resData = await response.json();
+      if (response.ok && resData.success) {
+        showToast('success', `E-mail de teste enviado com sucesso para ${form.smtpEmail}! Check sua caixa de entrada.`);
+      } else {
+        showToast('error', resData.error || 'Falha ao enviar e-mail de teste.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao testar envio de email:', err);
+      showToast('error', 'Erro ao conectar ao servidor de e-mail: ' + (err?.message || String(err)));
+    } finally {
+      setIsTestingEmail(false);
     }
   };
 
@@ -156,6 +215,10 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             cobranca_image_url: form.cobrancaImageUrl || '',
             admin_phone: form.adminPhone || '',
             alerts_enabled: form.alertsEnabled || false,
+            smtp_email: form.smtpEmail || '',
+            smtp_password: form.smtpPassword || '',
+            smtp_port: form.smtpPort || '587',
+            smtp_host: form.smtpHost || 'smtp.gmail.com',
           });
 
         if (error) {
@@ -264,6 +327,10 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
   cobranca_image_url TEXT,
   admin_phone TEXT,
   alerts_enabled BOOLEAN DEFAULT false,
+  smtp_email TEXT,
+  smtp_password TEXT,
+  smtp_port TEXT DEFAULT '587',
+  smtp_host TEXT DEFAULT 'smtp.gmail.com',
   criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
 );
 
@@ -272,6 +339,10 @@ ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_receiver TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS cobranca_image_url TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS admin_phone TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alerts_enabled BOOLEAN DEFAULT false;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_email TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_password TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_port TEXT DEFAULT '587';
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_host TEXT DEFAULT 'smtp.gmail.com';
 
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
@@ -294,6 +365,10 @@ ON CONFLICT (id) DO NOTHING;`}
   cobranca_image_url TEXT,
   admin_phone TEXT,
   alerts_enabled BOOLEAN DEFAULT false,
+  smtp_email TEXT,
+  smtp_password TEXT,
+  smtp_port TEXT DEFAULT '587',
+  smtp_host TEXT DEFAULT 'smtp.gmail.com',
   criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
 );
 
@@ -302,6 +377,10 @@ ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_receiver TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS cobranca_image_url TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS admin_phone TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alerts_enabled BOOLEAN DEFAULT false;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_email TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_password TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_port TEXT DEFAULT '587';
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_host TEXT DEFAULT 'smtp.gmail.com';
 
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
@@ -457,6 +536,77 @@ ON CONFLICT (id) DO NOTHING;`);
                   onChange={e => setForm({...form, alertsEnabled: e.target.checked})}
                 />
               </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-6 border-t border-white/5 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Mail className="w-5 h-5 text-amber-500" />
+                Configurações de E-mail (Gmail / SMTP)
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Configure o serviço de disparo de e-mails usando a Senha de Aplicativo do Google.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestEmail}
+              disabled={isTestingEmail}
+              className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto disabled:opacity-50"
+            >
+              {isTestingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              {isTestingEmail ? 'Enviando...' : 'Testar Envio de E-mail'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">E-mail Remetente</label>
+              <input 
+                type="email" 
+                value={form.smtpEmail || ''}
+                onChange={e => setForm({...form, smtpEmail: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700"
+                placeholder="Ex: seu-email@gmail.com"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">Endereço de e-mail do Gmail cadastrado para envio de relatórios e faturas.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Senha de APP Google</label>
+              <input 
+                type="password" 
+                value={form.smtpPassword || ''}
+                onChange={e => setForm({...form, smtpPassword: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700 font-mono"
+                placeholder="Ex: djzu xbpk whit uzck"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">Senha de Aplicativo gerada na sua Conta Google (16 caracteres).</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Porta SMTP</label>
+              <input 
+                type="text" 
+                value={form.smtpPort || '587'}
+                onChange={e => setForm({...form, smtpPort: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all placeholder-slate-700 font-mono"
+                placeholder="587"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">Porta padrão do Gmail: 587 (TLS/STARTTLS).</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">URL / Host SMTP (Fixo)</label>
+              <input 
+                type="text" 
+                value={form.smtpHost || 'smtp.gmail.com'}
+                onChange={e => setForm({...form, smtpHost: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-slate-300 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono"
+                placeholder="smtp.gmail.com"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">Servidor SMTP padrão do Google (smtp.gmail.com).</p>
             </div>
           </div>
         </div>
