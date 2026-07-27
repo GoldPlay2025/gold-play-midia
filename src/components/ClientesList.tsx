@@ -633,7 +633,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                         setCobrancaModalOpen(true);
                       }}
                       variant="blue"
-                      className="h-8 px-3 text-[11px] whitespace-nowrap"
+                      className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
                     />
                     <PillProgressButton
                       label="Confirmar Pagamento"
@@ -641,7 +641,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                       isLoading={renewingId === row.id}
                       onClick={() => handleRenewPayment(row)}
                       variant="emerald"
-                      className="h-8 px-3 text-[11px] whitespace-nowrap"
+                      className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
                       disabled={getDaysToVencimento(row.vencimento) > 5}
                     />
                   </div>
