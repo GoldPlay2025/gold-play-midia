@@ -1,11 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, Copy, Check, Search, X, Users, Eye, ChevronRight, ExternalLink, MapPin, User, Tv, Play, Sparkles } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, Copy, Check, Search, X, Users, Eye, ChevronRight, ExternalLink, MapPin, User, Tv, Play, Sparkles, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Cliente } from './ClientesList';
 import { PillProgressButton } from './PillProgressButton';
+
+// Gentle "Blimp" audio chime sound synthesizer
+const playBlimpSound = () => {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = 'sine';
+    osc2.type = 'sine';
+
+    // Blimp dual-tone chime
+    osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    osc1.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.12); // C6
+
+    osc2.frequency.setValueAtTime(783.99, ctx.currentTime); // G5
+    osc2.frequency.exponentialRampToValueAtTime(1318.51, ctx.currentTime + 0.12); // E6
+
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(ctx.currentTime);
+    osc2.start(ctx.currentTime);
+    osc1.stop(ctx.currentTime + 0.31);
+    osc2.stop(ctx.currentTime + 0.31);
+  } catch (err) {
+    console.warn('Blimp sound playback error:', err);
+  }
+};
 
 export type Tela = {
   id: string;
@@ -93,14 +133,27 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Check-in status states & references
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const prevOnlineSetRef = useRef<Set<string>>(new Set());
+  const hasInitializedRef = useRef(false);
+
+  const triggerManualCheckIn = async () => {
+    setIsCheckingIn(true);
+    await fetchTelas(true);
+    setTimeout(() => {
+      setIsCheckingIn(false);
+    }, 1500);
+  };
+
   const handleCopyId = (id: string) => {
     navigator.clipboard.writeText(id);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const fetchTelas = async () => {
-    setIsLoading(true);
+  const fetchTelas = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('telas')
@@ -126,9 +179,9 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
     } catch (error: any) {
       console.error(error);
       const errorMsg = error.message || error.details || JSON.stringify(error);
-      showToast('error', `Erro ao carregar telas: ${errorMsg}. Verifique as tabelas do Supabase.`);
+      if (!silent) showToast('error', `Erro ao carregar telas: ${errorMsg}. Verifique as tabelas do Supabase.`);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -157,7 +210,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       channel = supabase
         .channel('public:telas')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'telas' }, () => {
-          fetchTelas();
+          fetchTelas(true);
         })
         .subscribe();
     } catch (err) {
@@ -193,6 +246,54 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       }
     };
   }, []);
+
+  // Automatic check-in periodic verification timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsCheckingIn(true);
+      fetchTelas(true);
+      setTimeout(() => {
+        setIsCheckingIn(false);
+      }, 1500);
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Monitor online status transitions: when a screen connects (offline -> online), play Blimp sound & spin check-in icon
+  useEffect(() => {
+    if (!telas || telas.length === 0) return;
+
+    const currentOnlineSet = new Set<string>();
+    telas.forEach(t => {
+      const isOnline = (onlineScreenIds || []).includes(t.id) || 
+                       (onlineScreenIds || []).includes(t.identificador_unico) || 
+                       t.status_online;
+      if (isOnline) {
+        currentOnlineSet.add(t.id);
+        if (t.identificador_unico) currentOnlineSet.add(t.identificador_unico);
+      }
+    });
+
+    if (hasInitializedRef.current) {
+      let newlyConnected = false;
+      currentOnlineSet.forEach(id => {
+        if (!prevOnlineSetRef.current.has(id)) {
+          newlyConnected = true;
+        }
+      });
+
+      if (newlyConnected) {
+        setIsCheckingIn(true);
+        setTimeout(() => setIsCheckingIn(false), 1800);
+        playBlimpSound();
+      }
+    } else {
+      hasInitializedRef.current = true;
+    }
+
+    prevOnlineSetRef.current = currentOnlineSet;
+  }, [telas, onlineScreenIds]);
 
   const generateId = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -518,13 +619,40 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
 
       <DataTable
         title={
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
-            <span className="shrink-0">Base de Telas</span>
-            <div className="flex flex-col bg-[#050505] border border-white/5 rounded-xl px-3.5 py-2.5">
-              <span className="text-[10px] font-medium tracking-wide text-amber-500 mb-1 uppercase">Link Dinâmico</span>
-              <span className="text-xs font-mono font-medium text-amber-500/70 select-text leading-none">
-                https://www.goldplaymanager.com.br/player?device=[DEVICE_ID_ATUAL]
-              </span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <span className="shrink-0 font-semibold text-white">Base de Telas</span>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex flex-col bg-[#050505] border border-white/5 rounded-xl px-3.5 py-2.5">
+                <span className="text-[10px] font-medium tracking-wide text-amber-500 mb-1 uppercase">Link Dinâmico</span>
+                <span className="text-xs font-mono font-medium text-amber-500/70 select-text leading-none">
+                  https://www.goldplaymanager.com.br/player?device=[DEVICE_ID_ATUAL]
+                </span>
+              </div>
+
+              {/* Automatic Check-in Status Button / Indicator */}
+              <button
+                type="button"
+                onClick={triggerManualCheckIn}
+                className="flex items-center gap-2.5 bg-[#050505] border border-emerald-500/30 hover:border-emerald-500/60 rounded-xl px-3 py-2 cursor-pointer transition-all shadow-md shadow-emerald-950/20 active:scale-95 group text-left"
+                title="Check-in automático de verificação de status. Clique para recalcular manualmente."
+              >
+                <div className="relative flex items-center justify-center">
+                  <RefreshCw
+                    className={`w-4 h-4 text-emerald-400 transition-transform duration-700 ${
+                      isCheckingIn ? 'animate-spin text-emerald-300' : 'group-hover:rotate-180'
+                    }`}
+                  />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-80" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-extrabold tracking-wider text-emerald-400 uppercase leading-none">
+                    Check-in
+                  </span>
+                  <span className="text-[9px] font-mono text-emerald-500/80 leading-tight mt-0.5">
+                    {isCheckingIn ? 'Verificando...' : 'Auto-Ativo'}
+                  </span>
+                </div>
+              </button>
             </div>
           </div>
         }
