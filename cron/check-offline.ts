@@ -64,8 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // b) Busca telas onde last_ping seja maior que 20 minutos atrás (ou criadas há > 20m sem ping) e alert_sent = false
-    const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    // b) Busca telas onde last_ping seja maior que 3 minutos atrás (ou criadas há > 3m sem ping) e alert_sent = false
+    const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
       .from('telas')
@@ -79,11 +79,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (tela.alert_sent) return false;
 
       if (tela.last_ping) {
-        return new Date(tela.last_ping).getTime() < new Date(twentyMinutesAgo).getTime();
+        return new Date(tela.last_ping).getTime() < new Date(threeMinutesAgo).getTime();
       }
 
       if (tela.criado_em) {
-        return new Date(tela.criado_em).getTime() < new Date(twentyMinutesAgo).getTime();
+        return new Date(tela.criado_em).getTime() < new Date(threeMinutesAgo).getTime();
       }
 
       return true;
