@@ -25,6 +25,8 @@ export type SystemSettings = {
   pixKey?: string;
   pixReceiver?: string;
   cobrancaImageUrl?: string;
+  adminPhone?: string;
+  alertsEnabled?: boolean;
 };
 
 export const defaultSettings: SystemSettings = {
@@ -36,6 +38,8 @@ export const defaultSettings: SystemSettings = {
   pixKey: '',
   pixReceiver: '',
   cobrancaImageUrl: '',
+  adminPhone: '',
+  alertsEnabled: false,
 };
 
 interface PerfilSettingsProps {
@@ -90,6 +94,8 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           pixKey: data.pix_key !== undefined && data.pix_key !== null ? data.pix_key : (localObj.pixKey || ''),
           pixReceiver: data.pix_receiver !== undefined && data.pix_receiver !== null ? data.pix_receiver : (localObj.pixReceiver || ''),
           cobrancaImageUrl: data.cobranca_image_url || localObj.cobrancaImageUrl || '',
+          adminPhone: data.admin_phone !== undefined && data.admin_phone !== null ? data.admin_phone : (localObj.adminPhone || ''),
+          alertsEnabled: data.alerts_enabled !== undefined && data.alerts_enabled !== null ? data.alerts_enabled : (localObj.alertsEnabled || false),
         };
         setForm(loadedSettings);
         onSettingsChange(loadedSettings);
@@ -148,6 +154,8 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             pix_key: form.pixKey || '',
             pix_receiver: form.pixReceiver || '',
             cobranca_image_url: form.cobrancaImageUrl || '',
+            admin_phone: form.adminPhone || '',
+            alerts_enabled: form.alertsEnabled || false,
           });
 
         if (error) {
@@ -156,9 +164,9 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             setShowSqlInstruction(true);
             throw new Error("A tabela 'configuracoes' não existe no Supabase. Execute o script SQL exibido no aviso acima.");
           }
-          if (error.code === '42703' || error.message?.includes('pix_key') || error.message?.includes('pix_receiver') || error.message?.includes('column')) {
+          if (error.code === '42703' || error.message?.includes('pix_key') || error.message?.includes('admin_phone') || error.message?.includes('column')) {
             setShowSqlInstruction(true);
-            throw new Error("A coluna 'pix_key' não existe na tabela 'configuracoes'. Execute o comando SQL no topo para adicionar as colunas do Pix no Supabase.");
+            throw new Error("Alguma coluna nova não existe na tabela 'configuracoes'. Execute o comando SQL no topo para atualizar a tabela no Supabase.");
           }
           throw error;
         }
@@ -254,12 +262,16 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
   pix_key TEXT,
   pix_receiver TEXT,
   cobranca_image_url TEXT,
+  admin_phone TEXT,
+  alerts_enabled BOOLEAN DEFAULT false,
   criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_key TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_receiver TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS cobranca_image_url TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS admin_phone TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alerts_enabled BOOLEAN DEFAULT false;
 
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
@@ -280,12 +292,16 @@ ON CONFLICT (id) DO NOTHING;`}
   pix_key TEXT,
   pix_receiver TEXT,
   cobranca_image_url TEXT,
+  admin_phone TEXT,
+  alerts_enabled BOOLEAN DEFAULT false,
   criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_key TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_receiver TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS cobranca_image_url TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS admin_phone TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alerts_enabled BOOLEAN DEFAULT false;
 
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
@@ -406,6 +422,41 @@ ON CONFLICT (id) DO NOTHING;`);
                 className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder-slate-700"
                 placeholder="Ex: João da Silva"
               />
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-6 border-t border-white/5 space-y-8">
+          <h3 className="text-lg font-bold text-white mb-4">Notificações e Alertas (WhatsApp/SMS)</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Celular do Administrador</label>
+              <input 
+                type="text" 
+                value={form.adminPhone || ''}
+                onChange={e => setForm({...form, adminPhone: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder-slate-700"
+                placeholder="Ex: 5511999999999"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">DDI + DDD + Número (ex: 55 para Brasil). Receberá alertas de telas offline.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Status de Alertas</label>
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className={`w-12 h-6 rounded-full transition-colors relative ${form.alertsEnabled ? 'bg-purple-500' : 'bg-[#26252a]'}`}>
+                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${form.alertsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                </div>
+                <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+                  {form.alertsEnabled ? 'Alertas Ativados' : 'Alertas Desativados'}
+                </span>
+                <input 
+                  type="checkbox" 
+                  className="hidden"
+                  checked={form.alertsEnabled || false}
+                  onChange={e => setForm({...form, alertsEnabled: e.target.checked})}
+                />
+              </label>
             </div>
           </div>
         </div>
