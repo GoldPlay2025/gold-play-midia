@@ -7,46 +7,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Cliente } from './ClientesList';
 import { PillProgressButton } from './PillProgressButton';
 
-// Gentle "Blimp" audio chime sound synthesizer
-const playBlimpSound = () => {
-  try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc1.type = 'sine';
-    osc2.type = 'sine';
-
-    // Blimp dual-tone chime
-    osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-    osc1.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.12); // C6
-
-    osc2.frequency.setValueAtTime(783.99, ctx.currentTime); // G5
-    osc2.frequency.exponentialRampToValueAtTime(1318.51, ctx.currentTime + 0.12); // E6
-
-    gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc1.start(ctx.currentTime);
-    osc2.start(ctx.currentTime);
-    osc1.stop(ctx.currentTime + 0.31);
-    osc2.stop(ctx.currentTime + 0.31);
-  } catch (err) {
-    console.warn('Blimp sound playback error:', err);
-  }
-};
-
 export type Tela = {
   id: string;
   nome_local: string;
@@ -286,7 +246,6 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       if (newlyConnected) {
         setIsCheckingIn(true);
         setTimeout(() => setIsCheckingIn(false), 1800);
-        playBlimpSound();
       }
     } else {
       hasInitializedRef.current = true;
