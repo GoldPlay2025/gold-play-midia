@@ -1108,16 +1108,16 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                       })
                     });
                     
-                    const data = await response.json();
+                    const data = await response.json().catch(() => ({ error: `Resposta inválida do servidor (HTTP ${response.status})` }));
                     
                     if (response.ok && data.success) {
                       showToast('success', 'SMS enviado com sucesso!');
                       setSmsModalOpen(false);
                     } else {
-                      showToast('error', data.error || 'Falha ao enviar SMS.');
+                      showToast('error', data.error || data.message || 'Falha ao enviar SMS.');
                     }
                   } catch (err: any) {
-                    showToast('error', 'Erro interno ao enviar SMS.');
+                    showToast('error', err?.message || 'Erro de conexão ao enviar SMS.');
                   } finally {
                     setIsSendingSms(false);
                   }
