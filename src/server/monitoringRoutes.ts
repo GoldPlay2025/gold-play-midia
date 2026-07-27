@@ -242,8 +242,8 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       });
     }
 
-    // b) Busca telas com last_ping > 20 minutos ou sem ping criadas há > 20 minutos e alert_sent = false
-    const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    // b) Busca telas com last_ping > 3 minutos ou sem ping criadas há > 3 minutos e alert_sent = false
+    const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
       .from('telas')
@@ -257,14 +257,14 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       // Já recebeu alerta? Não spama
       if (tela.alert_sent) return false;
 
-      // Se tem last_ping, verifica se foi há mais de 20 minutos
+      // Se tem last_ping, verifica se foi há mais de 3 minutos
       if (tela.last_ping) {
-        return new Date(tela.last_ping).getTime() < new Date(twentyMinutesAgo).getTime();
+        return new Date(tela.last_ping).getTime() < new Date(threeMinutesAgo).getTime();
       }
 
-      // Se não tem last_ping, verifica se foi criada há mais de 20 minutos
+      // Se não tem last_ping, verifica se foi criada há mais de 3 minutos
       if (tela.criado_em) {
-        return new Date(tela.criado_em).getTime() < new Date(twentyMinutesAgo).getTime();
+        return new Date(tela.criado_em).getTime() < new Date(threeMinutesAgo).getTime();
       }
 
       return true;
