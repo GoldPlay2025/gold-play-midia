@@ -318,13 +318,16 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
           // URL padrão estruturada do player do dispositivo no formato https://www.goldplaymanager.com.br/player?device=[DEVICE_ID_ATUAL]
           const telaPlayerUrl = `https://www.goldplaymanager.com.br/player?device=${currentDeviceId}`;
 
+          const isOnline = tela.status_online || 
+            (tela.last_ping && (Date.now() - new Date(tela.last_ping).getTime() < 15 * 60 * 1000));
+
           return (
             <div key={tela.id} className="bg-[#0f0f11] border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-white/10 transition-all flex flex-col shadow-xl">
               {/* Header do Card da Tela */}
               <div className="flex items-start justify-between mb-5 pb-4 border-b border-white/5">
                 <div className="flex items-center gap-3.5 min-w-0 pr-2">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0 ${tela.status_online ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-                    <Monitor className={`w-6 h-6 ${tela.status_online ? 'text-emerald-500' : 'text-red-400'}`} />
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0 ${isOnline ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                    <Monitor className={`w-6 h-6 ${isOnline ? 'text-emerald-500' : 'text-red-400'}`} />
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-lg font-semibold text-white truncate">{tela.nome_local}</h3>

@@ -70,6 +70,30 @@ export const getResponsavel = (endereco?: string): string => {
   return '';
 };
 
+const checkIsOnline = (row: Tela, onlineIds: string[]) => {
+  if (!row) return false;
+  const ids = onlineIds || [];
+
+  // 1. Verifica no presence do Supabase Realtime
+  const inPresence = ids.some(id => 
+    id === row.id || 
+    (row.identificador_unico && id.toLowerCase() === row.identificador_unico.toLowerCase()) ||
+    (row.fully_device_id && id === row.fully_device_id)
+  );
+  if (inPresence) return true;
+
+  // 2. Verifica coluna status_online no banco de dados
+  if (row.status_online) return true;
+
+  // 3. Fallback: verifica se houve ping nos últimos 15 minutos
+  if (row.last_ping) {
+    const diff = Date.now() - new Date(row.last_ping).getTime();
+    if (diff < 15 * 60 * 1000) return true;
+  }
+
+  return false;
+};
+
 export function TelasList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
   const [telas, setTelas] = useState<Tela[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -226,9 +250,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
 
     const currentOnlineSet = new Set<string>();
     telas.forEach(t => {
-      const isOnline = (onlineScreenIds || []).includes(t.id) || 
-                       (onlineScreenIds || []).includes(t.identificador_unico) || 
-                       t.status_online;
+      const isOnline = checkIsOnline(t, onlineScreenIds);
       if (isOnline) {
         currentOnlineSet.add(t.id);
         if (t.identificador_unico) currentOnlineSet.add(t.identificador_unico);
@@ -509,11 +531,13 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
       key: 'status_online', 
       header: 'STATUS',
       render: (row) => {
-        const isOnline = (onlineScreenIds || []).includes(row.id) || row.status_online;
+        const isOnline = checkIsOnline(row, onlineScreenIds);
         return (
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]'}`} />
-            <span className="text-xs text-slate-300">{isOnline ? 'Online' : 'PUBLICADO'}</span>
+            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.3)]'}`} />
+            <span className={`text-xs font-semibold ${isOnline ? 'text-emerald-400' : 'text-red-400'}`}>
+              {isOnline ? 'Online' : 'Offline'}
+            </span>
           </div>
         );
       }
@@ -621,7 +645,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
         onAdd={() => handleOpenModal()}
         addActionLabel="Nova Tela"
         renderMobileCard={(row) => {
-          const isOnline = (onlineScreenIds || []).includes(row.id) || row.status_online;
+          const isOnline = checkIsOnline(row, onlineScreenIds);
           return (
             <div 
               onClick={() => setSlideTela(row)}
@@ -635,9 +659,13 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
                   </h3>
                   <div className="text-xs text-slate-400 font-mono mt-0.5">ID: {row.identificador_unico}</div>
                 </div>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold shrink-0">
-                  <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]'}`} />
-                  <span className="uppercase">{isOnline ? 'Online' : 'PUBLICADO'}</span>
+                <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-bold shrink-0 ${
+                  isOnline 
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                    : 'bg-red-500/10 border-red-500/20 text-red-400'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
+                  <span className="uppercase">{isOnline ? 'Online' : 'Offline'}</span>
                 </div>
               </div>
 
