@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ClientesList } from '../components/ClientesList';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -100,6 +100,50 @@ type Toast = {
   message: string;
 };
 
+type GlobalNotification = {
+  id: string;
+  telaNome: string;
+  status: 'online' | 'offline';
+};
+
+const playBlimpSound = () => {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = 'sine';
+    osc2.type = 'sine';
+
+    osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
+    osc1.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.12);
+
+    osc2.frequency.setValueAtTime(783.99, ctx.currentTime);
+    osc2.frequency.exponentialRampToValueAtTime(1318.51, ctx.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(ctx.currentTime);
+    osc2.start(ctx.currentTime);
+    osc1.stop(ctx.currentTime + 0.31);
+    osc2.stop(ctx.currentTime + 0.31);
+  } catch (err) {
+    console.warn('Blimp sound playback error:', err);
+  }
+};
+
 export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -123,6 +167,19 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [globalNotification, setGlobalNotification] = useState<GlobalNotification | null>(null);
+  const prevOnlineScreenIdsRef = useRef<Set<string>>(new Set());
+  const hasInitializedPresenceRef = useRef(false);
+
+  const triggerGlobalNotification = (telaNome: string, status: 'online' | 'offline') => {
+    setGlobalNotification({ id: Math.random().toString(), telaNome, status });
+    if (status === 'online') {
+      playBlimpSound();
+    }
+    setTimeout(() => {
+      setGlobalNotification(prev => prev && prev.telaNome === telaNome ? null : prev);
+    }, 4500);
+  };
 
   const { crescimentoTelasData, crescimentoClientesData } = useMemo(() => {
     const months: string[] = [];
@@ -718,6 +775,44 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     };
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!telas || telas.length === 0 || !hasInitializedPresenceRef.current) {
+      if (telas.length > 0 && onlineScreenIds.length > 0) {
+        hasInitializedPresenceRef.current = true;
+        prevOnlineScreenIdsRef.current = new Set(onlineScreenIds);
+      } else if (telas.length > 0) {
+        // give it a short time before treating it as initialized even if empty
+        setTimeout(() => { hasInitializedPresenceRef.current = true; }, 2000);
+      }
+      return;
+    }
+
+    const currentOnlineSet = new Set(onlineScreenIds);
+    const previousOnlineSet = prevOnlineScreenIdsRef.current;
+
+    // Check for newly connected
+    currentOnlineSet.forEach(id => {
+      if (!previousOnlineSet.has(id)) {
+        const tela = telas.find(t => t.id === id || t.identificador_unico === id);
+        if (tela) {
+          triggerGlobalNotification(tela.nome_local, 'online');
+        }
+      }
+    });
+
+    // Check for newly disconnected
+    previousOnlineSet.forEach(id => {
+      if (!currentOnlineSet.has(id)) {
+        const tela = telas.find(t => t.id === id || t.identificador_unico === id);
+        if (tela) {
+          triggerGlobalNotification(tela.nome_local, 'offline');
+        }
+      }
+    });
+
+    prevOnlineScreenIdsRef.current = currentOnlineSet;
+  }, [onlineScreenIds, telas]);
+
   // Toast System
   const showToast = (type: 'success' | 'error', message: string) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -1217,6 +1312,33 @@ create policy "Permitir deletar midias" on storage.objects
     >
       {/* Dark overlay for optimal contrast */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] pointer-events-none" />
+
+      {/* Global Notification Slider */}
+      <AnimatePresence>
+        {globalNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.4, type: 'spring', bounce: 0.3 }}
+            className={`fixed top-8 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex flex-col items-center border ${
+              globalNotification.status === 'online' 
+                ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 border-emerald-400/50 shadow-emerald-900/50' 
+                : 'bg-gradient-to-br from-red-500 to-red-700 border-red-400/50 shadow-red-900/50'
+            }`}
+          >
+            <span className="text-[10px] font-mono uppercase tracking-widest text-white/80 font-bold mb-0.5">
+              Alerta!
+            </span>
+            <span className="text-xs font-semibold text-white/90">
+              TELA: {globalNotification.telaNome}
+            </span>
+            <span className="text-lg font-black tracking-widest text-white uppercase mt-0.5" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+              {globalNotification.status === 'online' ? 'ON-LINE' : 'OFF-LINE'}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Mobile Top Header Menu - Flutuante, Fixo e 70% transparente */}
       <div className="lg:hidden fixed top-4 right-4 z-50">
