@@ -118,49 +118,105 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let sentSuccess = false;
 
       // Disparo via BotBot.chat ou API do WhatsApp
-      if (process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL) {
-        try {
-          const botUrl = process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL;
-          const botToken = process.env.BOTBOT_TOKEN || process.env.WHATSAPP_BOT_TOKEN;
-          await fetch(botUrl!, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': botToken ? `Bearer ${botToken}` : ''
-            },
-            body: JSON.stringify({
-              number: adminPhone,
-              message: alertMessage
-            })
-          });
-          sentSuccess = true;
-        } catch (e) {
-          console.error('Erro no BotBot:', e);
+      try {
+        const cleaned = (adminPhone || '').replace(/\D/g, '');
+        const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
+        
+        const targetUrl = process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL || process.env.WHATSAPP_API_URL || 'https://api.botbot.chat/v1/send';
+        const appKey = process.env.WHATSAPP_APP_KEY || process.env.BOTBOT_APP_KEY || '';
+        const authKey = process.env.WHATSAPP_AUTH_KEY || process.env.BOTBOT_AUTH_KEY || process.env.BOTBOT_TOKEN || '';
+
+        const payload = {
+          appkey: appKey,
+          authkey: authKey,
+          number: fullNumber,
+          phone: fullNumber,
+          recipient: fullNumber,
+          message: alertMessage,
+          text: alertMessage,
+          caption: alertMessage
+        };
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        if (appKey) headers['appkey'] = appKey;
+        if (authKey) {
+          headers['authkey'] = authKey;
+          headers['Authorization'] = `Bearer ${authKey}`;
+          headers['x-api-key'] = authKey;
         }
+
+        const botResp = await fetch(targetUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload)
+        });
+        
+        if (botResp.ok) {
+          sentSuccess = true;
+        } else {
+          console.error('Erro na API BotBot:', await botResp.text());
+        }
+      } catch (e) {
+        console.error('Erro no BotBot:', e);
       }
 
-      // Se falhar ou não tiver BotBot URL externo, tenta endpoint relativo/local
-      if (!sentSuccess) {
+      // Disparo via GTI SMS
+      if (process.env.GTISMS_API_TOKEN) {
         try {
-          const host = req.headers.host || 'localhost:3000';
-          const protocol = host.includes('localhost') ? 'http' : 'https';
-          const apiKey = process.env.VITE_WHATSAPP_API_KEY || process.env.API_KEY || 'minha-chave-secreta';
+          const cleaned = (adminPhone || '').replace(/\D/g, '');
+          const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
+          
+          let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
+          if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
+             smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
+          }
+          const smsToken = process.env.GTISMS_API_TOKEN;
+          const senderId = process.env.GTISMS_SENDER_ID || '';
+          
+          const sanitizeSms = (text: string) => {
+            let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
+            sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
+            return sanitized;
+          };
 
-          const waResp = await fetch(`${protocol}://${host}/api/whatsapp/send-manual`, {
+          const payload: any = {
+            recipient: fullNumber,
+            message: sanitizeSms(alertMessage),
+            type: 'plain'
+          };
+          
+          if (senderId) {
+            payload.sender_id = senderId;
+          }
+
+          const smsResp = await fetch(smsUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-api-key': apiKey
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${smsToken}`
             },
-            body: JSON.stringify({
-              numero: adminPhone,
-              mensagem: alertMessage
-            })
+            body: JSON.stringify(payload)
           });
+          
+          let smsData;
+          try {
+            smsData = await smsResp.json();
+          } catch(e) {
+            console.error('Erro na requisição API GTI SMS:', await smsResp.text());
+          }
 
-          if (waResp.ok) sentSuccess = true;
-        } catch (e) {
-          console.error('Erro na chamada WhatsApp interna:', e);
+          if (smsResp.ok && smsData && smsData.status === 'success') {
+             sentSuccess = true;
+             console.log('Alerta OFFLINE enviado via SMS com sucesso para', fullNumber);
+          } else if (smsData) {
+             console.error('Erro retornado pela API GTI SMS:', smsData);
+          }
+        } catch (smsErr) {
+          console.error('Erro no envio via API GTI SMS:', smsErr);
         }
       }
 
