@@ -6,6 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { whatsappRouter } from "./src/server/whatsappRoutes";
 import { monitoringRouter } from "./src/server/monitoringRoutes";
+import { smsRouter } from "./src/server/smsRoutes";
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ async function startServer() {
   app.use('/api/whatsapp', whatsappRouter);
   app.use('/api/devices', monitoringRouter);
   app.use('/api/cron', monitoringRouter);
+  app.use('/api/sms', smsRouter);
 
   // Rota dedicada de teste do WhatsApp compatível com Vercel (/api/test-whatsapp)
   app.all('/api/test-whatsapp', async (req, res) => {
@@ -39,16 +41,6 @@ async function startServer() {
       return await handlerModule.default(req as any, res as any);
     } catch (e: any) {
       return res.status(500).json({ error: e.message || 'Erro ao carregar /api/test-whatsapp' });
-    }
-  });
-
-  // Rota dedicada de envio do WhatsApp compatível com Vercel (/api/send-whatsapp)
-  app.all('/api/send-whatsapp', async (req, res) => {
-    try {
-      const handlerModule = await import('./api/send-whatsapp.ts');
-      return await handlerModule.default(req as any, res as any);
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message || 'Erro ao carregar /api/send-whatsapp' });
     }
   });
 
