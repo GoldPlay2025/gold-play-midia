@@ -101,10 +101,10 @@ export default function Player() {
     fetchPlaylist();
     sendHeartbeat(screenId);
 
-    // Heartbeat silencioso a cada 5 minutos (300.000 ms)
+    // Heartbeat silencioso a cada 1 minuto (60.000 ms)
     const heartbeatInterval = setInterval(() => {
       sendHeartbeat(screenId);
-    }, 5 * 60 * 1000);
+    }, 1 * 60 * 1000);
 
     // Subscribe to realtime changes on playlists table for this screen
     const channel = supabase
