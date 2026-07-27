@@ -1251,7 +1251,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                               </div>
                             </div>
                             {(() => {
-                              const isOnline = t.status_online || (t.last_ping && (Date.now() - new Date(t.last_ping.includes('T') ? t.last_ping : t.last_ping.replace(' ', 'T') + 'Z').getTime() < 20 * 60 * 1000));
+                              const isOnline = t.status_online || (t.last_ping && (Date.now() - new Date(t.last_ping.includes('T') ? t.last_ping : t.last_ping.replace(' ', 'T') + 'Z').getTime() < 3 * 60 * 1000));
                               return (
                                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold border shrink-0 ${
                                   isOnline 

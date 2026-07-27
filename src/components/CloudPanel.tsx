@@ -319,7 +319,7 @@ export function CloudPanel({ telas, showToast, fetchDashboardData }: CloudPanelP
           const telaPlayerUrl = `https://www.goldplaymanager.com.br/player?device=${currentDeviceId}`;
 
           const isOnline = tela.status_online || 
-            (tela.last_ping && (Date.now() - new Date(tela.last_ping).getTime() < 15 * 60 * 1000));
+            (tela.last_ping && (Date.now() - new Date(tela.last_ping).getTime() < 3 * 60 * 1000));
 
           return (
             <div key={tela.id} className="bg-[#0f0f11] border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-white/10 transition-all flex flex-col shadow-xl">

@@ -85,14 +85,14 @@ const checkIsOnline = (row: Tela, onlineIds: string[]) => {
   // 2. Verifica coluna status_online no banco de dados
   if (row.status_online === true || String(row.status_online) === 'true') return true;
 
-  // 3. Fallback: verifica se houve ping nos últimos 20 minutos
+  // 3. Fallback: verifica se houve ping nos últimos 3 minutos
   if (row.last_ping) {
     try {
       let dateStr = String(row.last_ping).trim();
       if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
       if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
       const pingTime = new Date(dateStr).getTime();
-      if (!isNaN(pingTime) && (Date.now() - pingTime) < 20 * 60 * 1000) return true;
+      if (!isNaN(pingTime) && (Date.now() - pingTime) < 3 * 60 * 1000) return true;
     } catch(e) {}
   }
 
