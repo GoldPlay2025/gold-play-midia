@@ -94,6 +94,13 @@ ${pixKeyStr}
 • Estamos à disposição.`;
 };
 
+const getSmsCobrancaText = (cliente: Cliente, sysSettings: any) => {
+  const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-';
+  const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
+  const pixKeyStr = sysSettings?.pixKey || 'N/A';
+  return `Gold Midias: Mensalidade de ${valorStr} vence dia ${vencStr}. Pix para pgto: ${pixKeyStr}. Ignore se ja pago.`;
+};
+
 export function ClientesList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [telas, setTelas] = useState<any[]>([]);
@@ -118,6 +125,10 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
   const [renewSuccessId, setRenewSuccessId] = useState<string | null>(null);
   const [cobrancaModalOpen, setCobrancaModalOpen] = useState(false);
   const [cobrancaCliente, setCobrancaCliente] = useState<Cliente | null>(null);
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
+  const [smsCliente, setSmsCliente] = useState<Cliente | null>(null);
+  const [smsText, setSmsText] = useState("");
+  const [isSendingSms, setIsSendingSms] = useState(false);
   const [settings, setSettings] = useState<any>(null);
 
   const fetchSettings = async () => {
@@ -636,6 +647,16 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                       className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
                     />
                     <PillProgressButton
+                      label="SMS"
+                      onClick={() => {
+                        setSmsCliente(row);
+                        setSmsText(getSmsCobrancaText(row, settings));
+                        setSmsModalOpen(true);
+                      }}
+                      variant="purple"
+                      className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
+                    />
+                    <PillProgressButton
                       label="Confirmar Pagamento"
                       loadingLabel="Renovando..."
                       isLoading={renewingId === row.id}
@@ -1008,6 +1029,110 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
           </div>
         )}
       </Modal>
+
+      {/* Modal de Enviar SMS */}
+      <Modal
+        isOpen={smsModalOpen}
+        onClose={() => {
+          setSmsModalOpen(false);
+          setSmsCliente(null);
+        }}
+        title="Enviar SMS de Cobrança"
+      >
+        {smsCliente && (
+          <div className="space-y-6">
+            <div className="mx-auto w-[320px] max-w-full bg-[#1c1c1e] rounded-[40px] border-[8px] border-[#0a0a0c] overflow-hidden shadow-xl shadow-black relative pb-6">
+              <div className="absolute top-0 inset-x-0 h-6 bg-[#0a0a0c] rounded-b-3xl w-40 mx-auto z-10" />
+              
+              <div className="bg-[#1c1c1e] h-full pt-10 px-4 flex flex-col gap-3">
+                <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <span className="text-blue-400 text-xs font-bold">SMS</span>
+                  </div>
+                  <div>
+                    <div className="text-white text-sm font-semibold">{smsCliente.nome_empresa}</div>
+                    <div className="text-blue-500 text-[10px] font-medium">Mensagem</div>
+                  </div>
+                </div>
+
+                <div className="bg-[#26252a] rounded-2xl rounded-tl-sm p-3 w-full shadow-md relative group">
+                  <textarea 
+                    value={smsText}
+                    onChange={(e) => setSmsText(e.target.value)}
+                    className="w-full bg-transparent text-white text-[12px] leading-relaxed font-sans resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded p-1 min-h-[120px]"
+                  />
+                  <div className="flex justify-between items-center mt-2">
+                    <div className={`text-[10px] ${smsText.length > 160 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
+                      {smsText.length} / 160
+                    </div>
+                    <div className="text-[10px] text-white/50">Agora</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
+              <button
+                onClick={() => {
+                  setSmsModalOpen(false);
+                  setSmsCliente(null);
+                }}
+                disabled={isSendingSms}
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <PillProgressButton
+                onClick={async () => {
+                  if (smsText.length > 160) {
+                    showToast('error', 'A mensagem deve ter no máximo 160 caracteres.');
+                    return;
+                  }
+                  if (!smsCliente.whatsapp && !smsCliente.telefone && !smsCliente.contato) {
+                    showToast('error', 'Cliente sem telefone cadastrado.');
+                    return;
+                  }
+                  
+                  setIsSendingSms(true);
+                  try {
+                    const phone = smsCliente.whatsapp || smsCliente.telefone || smsCliente.contato || '';
+                    
+                    const response = await fetch('/api/sms/send', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        numero: phone,
+                        mensagem: smsText
+                      })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                      showToast('success', 'SMS enviado com sucesso!');
+                      setSmsModalOpen(false);
+                    } else {
+                      showToast('error', data.error || 'Falha ao enviar SMS.');
+                    }
+                  } catch (err: any) {
+                    showToast('error', 'Erro interno ao enviar SMS.');
+                  } finally {
+                    setIsSendingSms(false);
+                  }
+                }}
+                label="Enviar SMS"
+                loadingLabel="Enviando..."
+                isLoading={isSendingSms}
+                icon={<CheckCircle2 className="w-4 h-4" />}
+                variant="purple"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <AnimatePresence>
         {slideCliente && (
           <div className="fixed inset-0 z-[100] overflow-hidden">
