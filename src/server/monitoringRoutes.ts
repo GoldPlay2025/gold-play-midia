@@ -233,24 +233,97 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       }
 
       // 2. Tenta envio secundário via BotBot/Webhook externo se configurado
-      if (!sentSuccess && (process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL)) {
+      if (!sentSuccess) {
         try {
-          const botUrl = process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL;
-          const botToken = process.env.BOTBOT_TOKEN || process.env.WHATSAPP_BOT_TOKEN;
-          await fetch(botUrl!, {
+          const cleaned = (adminPhone || '').replace(/\D/g, '');
+          const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
+          
+          const botUrl = process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL || process.env.WHATSAPP_API_URL || 'https://api.botbot.chat/v1/send';
+          const appKey = process.env.WHATSAPP_APP_KEY || process.env.BOTBOT_APP_KEY || '';
+          const botToken = process.env.WHATSAPP_AUTH_KEY || process.env.BOTBOT_AUTH_KEY || process.env.BOTBOT_TOKEN || '';
+
+          const payload = {
+            appkey: appKey,
+            authkey: botToken,
+            number: fullNumber,
+            phone: fullNumber,
+            recipient: fullNumber,
+            message: alertMessage,
+            text: alertMessage,
+            caption: alertMessage
+          };
+
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+          };
+          if (appKey) headers['appkey'] = appKey;
+          if (botToken) {
+            headers['authkey'] = botToken;
+            headers['Authorization'] = `Bearer ${botToken}`;
+            headers['x-api-key'] = botToken;
+          }
+
+          const botResp = await fetch(botUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+          });
+          
+          if (botResp.ok) {
+            sentSuccess = true;
+          } else {
+            console.error('Erro na API BotBot:', await botResp.text());
+          }
+        } catch (botErr) {
+          console.error('Erro no envio via API BotBot:', botErr);
+        }
+      }
+
+      // 3. Tenta envio via SMS (GTI SMS) se configurado
+      if (process.env.GTISMS_API_TOKEN) {
+        try {
+          const cleaned = (adminPhone || '').replace(/\D/g, '');
+          const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
+          
+          const smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
+          const smsToken = process.env.GTISMS_API_TOKEN;
+          const senderId = process.env.GTISMS_SENDER_ID || '';
+          
+          const payload: any = {
+            recipient: fullNumber,
+            message: alertMessage,
+            type: 'plain'
+          };
+          
+          if (senderId) {
+            payload.sender_id = senderId;
+          }
+
+          const smsResp = await fetch(smsUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${botToken}`
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${smsToken}`
             },
-            body: JSON.stringify({
-              number: adminPhone,
-              message: alertMessage
-            })
+            body: JSON.stringify(payload)
           });
-          sentSuccess = true;
-        } catch (botErr) {
-          console.error('Erro no envio via API BotBot:', botErr);
+          
+          let smsData;
+          try {
+            smsData = await smsResp.json();
+          } catch(e) {
+            console.error('Erro na requisição API GTI SMS:', await smsResp.text());
+          }
+
+          if (smsResp.ok && smsData && smsData.status === 'success') {
+             sentSuccess = true;
+             console.log('Alerta enviado via SMS com sucesso!');
+          } else if (smsData) {
+             console.error('Erro retornado pela API GTI SMS:', smsData);
+          }
+        } catch (smsErr) {
+          console.error('Erro no envio via API GTI SMS:', smsErr);
         }
       }
 
