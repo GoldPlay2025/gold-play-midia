@@ -986,6 +986,9 @@ create table configuracoes (
   icon_url text,
   backend_url text,
   weather_city text,
+  pix_key text,
+  pix_receiver text,
+  cobranca_image_url text,
   admin_phone text,
   alerts_enabled boolean default false,
   criado_em timestamp with time zone default timezone('utc'::text, now()) not null
