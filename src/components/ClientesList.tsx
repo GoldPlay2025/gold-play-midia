@@ -75,25 +75,21 @@ const getCobrancaText = (cliente: Cliente, sysSettings: any) => {
   const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-';
   const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
   const pixKeyStr = sysSettings?.pixKey || 'Não configurada';
-  const favorecidoStr = sysSettings?.pixReceiver ? `\n  Favorecido: ${sysSettings.pixReceiver}` : '';
 
-  return `Olá *${cliente.nome_empresa}!* 
+  return `Olá ${cliente.nome_empresa}!
+• 𝑷𝒂𝒔𝒔𝒂𝒏𝒅𝒐 𝒑𝒂𝒓𝒂 𝒍𝒆𝒎𝒃𝒓𝒂𝒓 𝒒𝒖𝒆 𝒔𝒖𝒂 𝒎𝒆𝒏𝒔𝒂𝒍𝒊𝒅𝒂𝒅𝒆:
 
-⏰ *Passando para lembrar que sua mensalidade:*
-     *Midia TV* 
-     *GOLD MÍDIA*
----------------------------------
-📌 *Vence:* ${vencStr}
-🛒 *Valor:* ${valorStr}
---------------------------------
- ╰⊱❖ *Gold Play* ❖⊱╯
+*GOLD MÍDIAS*
+---------------------
+• Vence: ${vencStr}
+• Valor: ${valorStr}
+╰⊱❖ Gold Play ❖⊱╯
 
-*Pagamento*:
- Utilize chave Pix:
-  ${pixKeyStr}${favorecidoStr}
+Pagamento:
+Utilize chave Pix:
+${pixKeyStr}
 
-📞 *Estamos à disposição.* 
--------------------------`;
+• Estamos à disposição.`;
 };
 
 export function ClientesList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
@@ -133,50 +129,10 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       const merged = {
         pixKey: data?.pix_key || localObj?.pixKey || '',
         pixReceiver: data?.pix_receiver || localObj?.pixReceiver || '',
-        cobrancaImageUrl: data?.cobranca_image_url || localObj?.cobrancaImageUrl || '',
         systemName: data?.system_name || localObj?.systemName || 'GOLD PLAY',
       };
       setSettings(merged);
     } catch(e) {}
-  };
-
-  const handleCopyImage = async (imageUrl: string) => {
-    if (!imageUrl) return false;
-    try {
-      let blob: Blob | null = null;
-      if (imageUrl.startsWith('data:')) {
-        const res = await fetch(imageUrl);
-        blob = await res.blob();
-      } else {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = imageUrl;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-        });
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/png'));
-        }
-      }
-
-      if (blob) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ [blob.type || 'image/png']: blob })
-        ]);
-        showToast('success', 'Imagem do template copiada para a área de transferência! Cole (Ctrl+V) no WhatsApp.');
-        return true;
-      }
-    } catch (e) {
-      console.error('Copy image failed:', e);
-      showToast('error', 'Não foi possível copiar a imagem automaticamente para a área de transferência.');
-    }
-    return false;
   };
 
   const fetchTelas = async () => {
@@ -662,12 +618,12 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 </div>
                 
                 {renewSuccessId === row.id ? (
-                  <div className="h-9 px-4 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center gap-2 text-emerald-400 text-xs font-bold w-fit shadow-inner">
-                    <CheckCircle2 className="w-4 h-4" />
+                  <div className="h-8 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center gap-1.5 text-emerald-400 text-[11px] font-bold w-fit shadow-inner whitespace-nowrap">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
                     Renovado!
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                     <PillProgressButton
                       label="Enviar Cobrança"
                       onClick={() => {
@@ -675,7 +631,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                         setCobrancaModalOpen(true);
                       }}
                       variant="blue"
-                      className="h-9 text-[11px] w-fit"
+                      className="h-8 px-3 text-[11px] whitespace-nowrap"
                     />
                     <PillProgressButton
                       label="Confirmar Pagamento"
@@ -683,7 +639,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                       isLoading={renewingId === row.id}
                       onClick={() => handleRenewPayment(row)}
                       variant="emerald"
-                      className="h-9 text-[11px] w-fit"
+                      className="h-8 px-3 text-[11px] whitespace-nowrap"
                       disabled={getDaysToVencimento(row.vencimento) > 5}
                     />
                   </div>
@@ -992,20 +948,6 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       >
         {cobrancaCliente && (
           <div className="space-y-6">
-            {/* Informational tip if template image exists */}
-            {settings?.cobrancaImageUrl ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 flex items-start gap-3">
-                <ImageIcon className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-emerald-200/90 leading-relaxed">
-                  <strong className="text-emerald-400">Imagem de Template ativa!</strong> Ao clicar em Enviar, a imagem será copiada para sua área de transferência. No WhatsApp, basta pressionar <kbd className="bg-black/50 px-1.5 py-0.5 rounded text-[10px] border border-emerald-500/30 font-mono text-white">Ctrl + V</kbd> (Colar) para enviar com a imagem.
-                </p>
-              </div>
-            ) : (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-3 text-xs text-slate-400">
-                💡 Dica: Você pode cadastrar uma imagem de template para o topo da cobrança em <strong className="text-amber-400">Perfil</strong>.
-              </div>
-            )}
-
             {/* iPhone Mockup Preview */}
             <div className="mx-auto w-[320px] max-w-full bg-[#1c1c1e] rounded-[40px] border-[8px] border-[#0a0a0c] overflow-hidden shadow-xl shadow-black relative pb-6">
               {/* Notch */}
@@ -1024,63 +966,42 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 </div>
 
                 {/* Message Bubble */}
-                <div className="bg-[#26252a] rounded-2xl rounded-tl-sm p-2 w-fit max-w-[95%] shadow-md">
-                  {settings?.cobrancaImageUrl && (
-                    <img src={settings.cobrancaImageUrl} className="w-full h-36 object-cover rounded-xl mb-2 border border-white/10" alt="Template Cobrança" />
-                  )}
-                  <div className="text-white text-[12px] leading-relaxed whitespace-pre-wrap px-1 font-sans">
+                <div className="bg-[#26252a] rounded-2xl rounded-tl-sm p-3 w-full shadow-md">
+                  <div className="text-white text-[12px] leading-relaxed whitespace-pre-wrap font-sans">
                     {getCobrancaText(cobrancaCliente, settings)}
                   </div>
-                  <div className="text-[10px] text-white/50 text-right mt-1 px-1">Agora</div>
+                  <div className="text-[10px] text-white/50 text-right mt-2">Agora</div>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/5 flex-wrap sm:flex-nowrap">
-              {settings?.cobrancaImageUrl ? (
-                <button
-                  type="button"
-                  onClick={() => handleCopyImage(settings.cobrancaImageUrl)}
-                  className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition-all"
-                  title="Copiar Imagem"
-                >
-                  <Copy className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Copiar Imagem</span>
-                </button>
-              ) : <div />}
-
-              <div className="flex items-center gap-3 ml-auto">
-                <button
-                  onClick={() => {
-                    setCobrancaModalOpen(false);
-                    setCobrancaCliente(null);
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-                >
-                  Cancelar
-                </button>
-                <PillProgressButton
-                  onClick={async () => {
-                    if (!cobrancaCliente.whatsapp) {
-                      showToast('error', 'Cliente sem WhatsApp cadastrado.');
-                      return;
-                    }
-
-                    if (settings?.cobrancaImageUrl) {
-                      await handleCopyImage(settings.cobrancaImageUrl);
-                    }
-                    
-                    const msg = getCobrancaText(cobrancaCliente, settings);
-                    const rawNumbers = cobrancaCliente.whatsapp.replace(/\D/g, '');
-                    const waLink = `https://wa.me/${rawNumbers.startsWith('55') ? rawNumbers : '55' + rawNumbers}?text=${encodeURIComponent(msg)}`;
-                    window.open(waLink, '_blank');
-                    setCobrancaModalOpen(false);
-                  }}
-                  label="Enviar WhatsApp"
-                  icon={<CheckCircle2 className="w-4 h-4" />}
-                  variant="emerald"
-                />
-              </div>
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
+              <button
+                onClick={() => {
+                  setCobrancaModalOpen(false);
+                  setCobrancaCliente(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <PillProgressButton
+                onClick={() => {
+                  if (!cobrancaCliente.whatsapp) {
+                    showToast('error', 'Cliente sem WhatsApp cadastrado.');
+                    return;
+                  }
+                  
+                  const msg = getCobrancaText(cobrancaCliente, settings);
+                  const rawNumbers = cobrancaCliente.whatsapp.replace(/\D/g, '');
+                  const waLink = `https://wa.me/${rawNumbers.startsWith('55') ? rawNumbers : '55' + rawNumbers}?text=${encodeURIComponent(msg)}`;
+                  window.open(waLink, '_blank');
+                  setCobrancaModalOpen(false);
+                }}
+                label="Enviar WhatsApp"
+                icon={<CheckCircle2 className="w-4 h-4" />}
+                variant="emerald"
+              />
             </div>
           </div>
         )}

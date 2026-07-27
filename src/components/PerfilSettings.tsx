@@ -87,8 +87,8 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           iconUrl: data.icon_url || localObj.iconUrl || '/gpm.png',
           backendUrl: data.backend_url || localObj.backendUrl || '',
           weatherCity: data.weather_city || localObj.weatherCity || 'Paranavaí, Paraná',
-          pixKey: data.pix_key || localObj.pixKey || '',
-          pixReceiver: data.pix_receiver || localObj.pixReceiver || '',
+          pixKey: data.pix_key !== undefined && data.pix_key !== null ? data.pix_key : (localObj.pixKey || ''),
+          pixReceiver: data.pix_receiver !== undefined && data.pix_receiver !== null ? data.pix_receiver : (localObj.pixReceiver || ''),
           cobrancaImageUrl: data.cobranca_image_url || localObj.cobrancaImageUrl || '',
         };
         setForm(loadedSettings);
@@ -135,7 +135,7 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
       localStorage.setItem('gpm_system_settings', JSON.stringify(form));
       
       if (isSupabaseConfigured) {
-        // Upsert to configuracoes table
+        // Upsert to configuracoes table including pix_key and pix_receiver
         const { error } = await supabase
           .from('configuracoes')
           .upsert({
@@ -151,28 +151,23 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           });
 
         if (error) {
+          console.error('Error saving configuracoes to Supabase:', error);
           if (error.code === '42P01') {
             setShowSqlInstruction(true);
-            throw new Error("A tabela 'configuracoes' não existe no Supabase. Por favor, crie a tabela rodando o script SQL.");
+            throw new Error("A tabela 'configuracoes' não existe no Supabase. Execute o script SQL exibido no aviso acima.");
           }
-          // Try fallback without new columns if Supabase schema isn't updated yet
-          const { error: errorFallback } = await supabase
-            .from('configuracoes')
-            .upsert({
-              id: 'sistema',
-              system_name: form.systemName,
-              logo_url: form.logoUrl,
-              icon_url: form.iconUrl,
-              backend_url: form.backendUrl || '',
-            });
-          if (errorFallback) throw errorFallback;
+          if (error.code === '42703' || error.message?.includes('pix_key') || error.message?.includes('pix_receiver') || error.message?.includes('column')) {
+            setShowSqlInstruction(true);
+            throw new Error("A coluna 'pix_key' não existe na tabela 'configuracoes'. Execute o comando SQL no topo para adicionar as colunas do Pix no Supabase.");
+          }
+          throw error;
         }
         
         setDbStatus('synced');
         setShowSqlInstruction(false);
-        showToast('success', 'Configurações salvas e integradas ao banco de dados com sucesso!');
+        showToast('success', 'Configurações e chave Pix salvas com sucesso no Supabase!');
       } else {
-        showToast('success', 'Configurações salvas localmente no navegador (Banco offline).');
+        showToast('success', 'Configurações e chave Pix salvas localmente.');
       }
       
       onSettingsChange(form);
@@ -256,8 +251,15 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
   icon_url TEXT,
   backend_url TEXT,
   weather_city TEXT,
+  pix_key TEXT,
+  pix_receiver TEXT,
+  cobranca_image_url TEXT,
   criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_key TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_receiver TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS cobranca_image_url TEXT;
 
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
@@ -275,8 +277,15 @@ ON CONFLICT (id) DO NOTHING;`}
   icon_url TEXT,
   backend_url TEXT,
   weather_city TEXT,
+  pix_key TEXT,
+  pix_receiver TEXT,
+  cobranca_image_url TEXT,
   criado_em TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_key TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS pix_receiver TEXT;
+ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS cobranca_image_url TEXT;
 
 ALTER TABLE configuracoes DISABLE ROW LEVEL SECURITY;
 
@@ -397,32 +406,6 @@ ON CONFLICT (id) DO NOTHING;`);
                 className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder-slate-700"
                 placeholder="Ex: João da Silva"
               />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-4">Imagem de Fundo (Template de Cobrança)</label>
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-64 h-36 bg-[#050505] border border-white/10 rounded-2xl flex items-center justify-center overflow-hidden relative group">
-                {form.cobrancaImageUrl ? (
-                  <img src={form.cobrancaImageUrl} alt="Cobranca Preview" className="w-full h-full object-cover" />
-                ) : (
-                  <ImageIcon className="w-8 h-8 text-white/20" />
-                )}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                  <label className="cursor-pointer flex flex-col items-center gap-2 text-white hover:text-emerald-500 transition-colors">
-                    <Upload className="w-6 h-6" />
-                    <span className="text-xs font-medium">Upload Imagem</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => handleImageUpload(e, 'cobrancaImageUrl')}
-                    />
-                  </label>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-500 text-center">Será enviada anexada junto com a mensagem de cobrança.<br/>Recomendado proporção de capa ou cabeçalho.</p>
             </div>
           </div>
         </div>
