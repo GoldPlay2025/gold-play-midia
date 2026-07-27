@@ -292,9 +292,16 @@ monitoringRouter.all('/check-offline', async (req, res) => {
           const smsToken = process.env.GTISMS_API_TOKEN;
           const senderId = process.env.GTISMS_SENDER_ID || '';
           
+          const sanitizeSms = (text: string) => {
+            let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
+            sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
+            return sanitized;
+          };
+
           const payload: any = {
             recipient: fullNumber,
-            message: alertMessage,
+            message: sanitizeSms(alertMessage),
             type: 'plain'
           };
           
