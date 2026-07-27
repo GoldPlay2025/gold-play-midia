@@ -170,12 +170,13 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   const [globalNotification, setGlobalNotification] = useState<GlobalNotification | null>(null);
   const prevOnlineScreenIdsRef = useRef<Set<string>>(new Set());
   const hasInitializedPresenceRef = useRef(false);
+  const initialPresenceSyncDoneRef = useRef(false);
 
   const triggerGlobalNotification = (telaNome: string, status: 'online' | 'offline') => {
     setGlobalNotification({ id: Math.random().toString(), telaNome, status });
-    if (status === 'online') {
-      playBlimpSound();
-    }
+    // Play blimp sound for both online and offline status changes
+    playBlimpSound();
+    
     setTimeout(() => {
       setGlobalNotification(prev => prev && prev.telaNome === telaNome ? null : prev);
     }, 4500);
@@ -766,6 +767,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
         const state = presenceChannel.presenceState() || {};
         const onlineIds = Object.keys(state);
         setOnlineScreenIds(onlineIds);
+        initialPresenceSyncDoneRef.current = true;
         console.log('Realtime screen presence update (AdminPanel):', onlineIds);
       })
       .subscribe();
@@ -776,14 +778,13 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!telas || telas.length === 0 || !hasInitializedPresenceRef.current) {
-      if (telas.length > 0 && onlineScreenIds.length > 0) {
-        hasInitializedPresenceRef.current = true;
-        prevOnlineScreenIdsRef.current = new Set(onlineScreenIds);
-      } else if (telas.length > 0) {
-        // give it a short time before treating it as initialized even if empty
-        setTimeout(() => { hasInitializedPresenceRef.current = true; }, 2000);
-      }
+    if (!telas || telas.length === 0 || !initialPresenceSyncDoneRef.current) {
+      return;
+    }
+
+    if (!hasInitializedPresenceRef.current) {
+      hasInitializedPresenceRef.current = true;
+      prevOnlineScreenIdsRef.current = new Set(onlineScreenIds);
       return;
     }
 
@@ -1324,7 +1325,7 @@ create policy "Permitir deletar midias" on storage.objects
             className={`fixed top-8 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex flex-col items-center border ${
               globalNotification.status === 'online' 
                 ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 border-emerald-400/50 shadow-emerald-900/50' 
-                : 'bg-gradient-to-br from-red-500 to-red-700 border-red-400/50 shadow-red-900/50'
+                : 'bg-gradient-to-br from-rose-600 to-rose-900 border-rose-500/50 shadow-rose-950/50'
             }`}
           >
             <span className="text-[10px] font-mono uppercase tracking-widest text-white/80 font-bold mb-0.5">
