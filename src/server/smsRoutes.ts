@@ -35,7 +35,10 @@ smsRouter.post('/send', authMiddleware, async (req, res) => {
     const cleaned = String(numero).replace(/\D/g, '');
     const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
     
-    const smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
+    let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
+    if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
+       smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
+    }
     const smsToken = process.env.GTISMS_API_TOKEN;
     const senderId = process.env.GTISMS_SENDER_ID || '';
     
