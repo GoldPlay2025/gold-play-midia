@@ -20,11 +20,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'deviceId ou telaId é obrigatório' });
     }
 
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      return res.status(503).json({ error: 'Supabase não configurado' });
+      return res.status(503).json({ error: 'Supabase não configurado no Vercel' });
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { data } = await supabase
         .from('telas')
         .select('id, nome_local, status_online, alert_sent, identificador_unico, clientes(nome_empresa)')
-        .or(`fully_device_id.eq.${idToSearch},identificador_unico.eq.${idToSearch.toUpperCase()},identificador_unico.eq.${idToSearch}`)
+        .or(`id.ilike.${idToSearch}%,fully_device_id.eq.${idToSearch},identificador_unico.eq.${idToSearch.toUpperCase()},identificador_unico.eq.${idToSearch}`)
         .maybeSingle();
       if (data) screen = data;
     }
