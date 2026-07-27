@@ -69,12 +69,12 @@ smsRouter.post('/send', authMiddleware, async (req, res) => {
       body: JSON.stringify(payload)
     });
     
-    let smsData;
+    const rawText = await smsResp.text();
+    let smsData: any;
     try {
-       smsData = await smsResp.json();
+       smsData = JSON.parse(rawText);
     } catch(e) {
-       const text = await smsResp.text();
-       return res.status(500).json({ error: `Erro na API GTI SMS: HTTP ${smsResp.status}`, details: text });
+       return res.status(500).json({ error: `Erro na API GTI SMS: HTTP ${smsResp.status}`, details: rawText });
     }
 
     if (smsResp.ok && smsData.status === 'success') {
