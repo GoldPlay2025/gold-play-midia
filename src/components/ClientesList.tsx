@@ -76,17 +76,19 @@ const getCobrancaText = (cliente: Cliente, sysSettings: any) => {
   const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
   const pixKeyStr = sysSettings?.pixKey || 'Não configurada';
 
-  return `Olá ${cliente.nome_empresa}!
+  return `Olá *${cliente.nome_empresa}!*
+
 • 𝑷𝒂𝒔𝒔𝒂𝒏𝒅𝒐 𝒑𝒂𝒓𝒂 𝒍𝒆𝒎𝒃𝒓𝒂𝒓 𝒒𝒖𝒆 𝒔𝒖𝒂 𝒎𝒆𝒏𝒔𝒂𝒍𝒊𝒅𝒂𝒅𝒆:
 
 *GOLD MÍDIAS*
 ---------------------
 • Vence: ${vencStr}
 • Valor: ${valorStr}
+
 ╰⊱❖ Gold Play ❖⊱╯
 
 Pagamento:
-Utilize chave Pix:
+Pix:
 ${pixKeyStr}
 
 • Estamos à disposição.`;
