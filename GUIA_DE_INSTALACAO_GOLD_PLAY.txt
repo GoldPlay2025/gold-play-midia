@@ -1,0 +1,93 @@
+=============================================================================
+GUIA DE INSTALAÇÃO E IMPLANTAÇÃO — GOLD PLAY MÍDIA
+=============================================================================
+
+SISTEMA: Gold Play Mídia - Digital Signage & Financial Workspace
+VERSÃO: 1.1.0
+DATA DE ATUALIZAÇÃO: 2026-07-23
+
+-----------------------------------------------------------------------------
+1. PRÉ-REQUISITOS DO SISTEMA
+-----------------------------------------------------------------------------
+- Conta no Supabase (supabase.com) - Banco de Dados PostgreSQL & Storage
+- Conta na Vercel (vercel.com) ou servidor Node.js (v18+)
+- Chave de API Google Gemini (aistudio.google.com)
+- Token API Fully Kiosk Cloud (opcional para gestão remota de telas)
+
+-----------------------------------------------------------------------------
+2. VARIÁVEIS DE AMBIENTE REQUERIDAS
+-----------------------------------------------------------------------------
+VITE_SUPABASE_URL=https://sua-url.supabase.co
+VITE_SUPABASE_ANON_KEY=sua_chave_anon_aqui
+GEMINI_API_KEY=sua_chave_gemini_aqui
+FULLY_API_TOKEN=seu_token_fully_kiosk_aqui
+VITE_WHATSAPP_API_KEY=sua_chave_secreta_whatsapp
+APP_URL=https://seu-dominio.vercel.app
+
+-----------------------------------------------------------------------------
+3. SCRIPT SQL COMPLETO E UNIFICADO PARA O SUPABASE
+-----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS clientes (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  nome_empresa text NOT NULL,
+  whatsapp text,
+  endereco_fisico text,
+  valor numeric,
+  vencimento date,
+  criado_em timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS telas (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  nome_local text NOT NULL,
+  identificador_unico text NOT NULL UNIQUE,
+  status_online boolean DEFAULT false,
+  cliente_id uuid REFERENCES clientes(id) ON DELETE CASCADE NOT NULL,
+  endereco text,
+  whatsapp text,
+  fully_device_id varchar(255),
+  criado_em timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS midias (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  titulo_video text NOT NULL,
+  url_storage text NOT NULL,
+  tamanho_mb numeric,
+  cliente_id uuid REFERENCES clientes(id) ON DELETE CASCADE NOT NULL,
+  criado_em timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS playlists (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  tela_id uuid REFERENCES telas(id) ON DELETE CASCADE NOT NULL,
+  midia_id uuid REFERENCES midias(id) ON DELETE CASCADE NOT NULL,
+  ordem_exibicao integer DEFAULT 0 NOT NULL,
+  criado_em timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+  id text PRIMARY KEY,
+  data text NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS custos (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  descricao text NOT NULL,
+  valor numeric(10, 2) NOT NULL,
+  data_pagamento date DEFAULT current_date NOT NULL,
+  recorrencia text DEFAULT 'Anual' NOT NULL,
+  categoria text DEFAULT 'Licença Fully Kiosk',
+  observacoes text,
+  criado_em timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('midias', 'midias', true)
+ON CONFLICT (id) DO NOTHING;
+
+=============================================================================
+FIM DO GUIA DE INSTALAÇÃO
+=============================================================================

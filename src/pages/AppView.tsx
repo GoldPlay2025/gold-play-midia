@@ -21,15 +21,73 @@ export default function AppView() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Check if already paired on load
+  // Check if URL query parameter ?device= or ?deviceId= is provided, or if already paired on load
   useEffect(() => {
-    const savedScreenId = localStorage.getItem('gpm_paired_screen_id');
-    if (savedScreenId) {
-      navigate(`/player/${savedScreenId}`);
+    const params = new URLSearchParams(window.location.search);
+    const deviceParam = params.get('device') || params.get('deviceId') || params.get('device_id');
+
+    if (deviceParam) {
+      autoPairDeviceParam(deviceParam.trim());
     } else {
-      fetchTelas();
+      const savedScreenId = localStorage.getItem('gpm_paired_screen_id');
+      if (savedScreenId) {
+        navigate(`/player/${savedScreenId}`);
+      } else {
+        fetchTelas();
+      }
     }
   }, [navigate]);
+
+  const autoPairDeviceParam = async (deviceCode: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 1. Try matching fully_device_id
+      let { data, error } = await supabase
+        .from('telas')
+        .select('id, nome_local')
+        .eq('fully_device_id', deviceCode)
+        .maybeSingle();
+
+      // 2. Try matching identificador_unico
+      if (!data) {
+        const res = await supabase
+          .from('telas')
+          .select('id, nome_local')
+          .eq('identificador_unico', deviceCode.toUpperCase())
+          .maybeSingle();
+        data = res.data;
+      }
+
+      // 3. Try matching id (UUID)
+      if (!data) {
+        const res = await supabase
+          .from('telas')
+          .select('id, nome_local')
+          .eq('id', deviceCode)
+          .maybeSingle();
+        data = res.data;
+      }
+
+      if (!data) {
+        throw new Error(`Dispositivo "${deviceCode}" não foi encontrado no sistema. Verifique no painel.`);
+      }
+
+      localStorage.setItem('gpm_paired_screen_id', data.id);
+      setSuccessMsg(`Conectado com sucesso a: ${data.nome_local}!`);
+      
+      setTimeout(() => {
+        navigate(`/player/${data.id}`);
+      }, 1000);
+
+    } catch (err: any) {
+      console.error('Erro no auto-emparelhamento por URL:', err);
+      setError(err.message || 'Erro ao conectar ao dispositivo via URL.');
+      fetchTelas();
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchTelas = async () => {
     setIsLoading(true);
@@ -112,7 +170,7 @@ export default function AppView() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-slate-300 flex flex-col justify-between p-6 md:p-12 selection:bg-amber-500 selection:text-black">
+    <div className="min-h-screen bg-black text-slate-300 flex flex-col justify-between p-6 md:p-12 selection:bg-amber-500 selection:text-black relative overflow-hidden">
       {/* Background elements */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/5 via-black/0 to-black/0 pointer-events-none" />
 

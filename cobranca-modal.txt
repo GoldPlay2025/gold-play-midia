@@ -1,0 +1,72 @@
+      <Modal
+        isOpen={cobrancaModalOpen}
+        onClose={() => {
+          setCobrancaModalOpen(false);
+          setCobrancaCliente(null);
+        }}
+        title="Enviar Cobrança"
+      >
+        {cobrancaCliente && (
+          <div className="space-y-6">
+            {/* iPhone Mockup Preview */}
+            <div className="mx-auto w-[320px] max-w-full bg-[#1c1c1e] rounded-[40px] border-[8px] border-[#0a0a0c] overflow-hidden shadow-xl shadow-black relative pb-6">
+              {/* Notch */}
+              <div className="absolute top-0 inset-x-0 h-6 bg-[#0a0a0c] rounded-b-3xl w-40 mx-auto z-10" />
+              
+              {/* Screen Content */}
+              <div className="bg-[#1c1c1e] h-full pt-10 px-4 flex flex-col gap-3">
+                <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <img src="https://goldplaysky.com.br/whats.png" className="w-6 h-6 object-contain" />
+                  </div>
+                  <div>
+                    <div className="text-white text-sm font-semibold">{cobrancaCliente.nome_empresa}</div>
+                    <div className="text-emerald-500 text-[10px] font-medium">Online</div>
+                  </div>
+                </div>
+
+                {/* Message Bubble */}
+                <div className="bg-[#26252a] rounded-2xl rounded-tl-sm p-2 w-fit max-w-[90%] shadow-md">
+                  {settings?.cobrancaImageUrl && (
+                    <img src={settings.cobrancaImageUrl} className="w-full h-32 object-cover rounded-xl mb-2" alt="Template" />
+                  )}
+                  <div className="text-white text-[13px] leading-relaxed whitespace-pre-wrap px-1">
+                    {`Olá *${cobrancaCliente.nome_empresa}!* \n\n⏰ 𝑷𝒂𝒔𝒔𝒂𝒏𝒅𝒐 𝒑𝒂𝒓𝒂 𝒍𝒆𝒎𝒃𝒓𝒂𝒓 𝒒𝒖𝒆 𝒔𝒖𝒂 𝒎𝒆𝒏𝒔𝒂𝒍𝒊𝒅𝒂𝒅𝒆:\n     𝕄𝕚𝕕𝕚𝕒 𝕋𝕍 \n     🅶🅾🅻🅳 🅼🅸🅳🅸🅰\n---------------------------------\n📌 Vence: ${cobrancaCliente.vencimento ? new Date(cobrancaCliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}\n🛒 Valor: ${cobrancaCliente.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cobrancaCliente.valor) : '-'}\n--------------------------------\n ╰⊱❖ *Gold Play* ❖⊱╯\n\n*Pagamento*:\n Utilize chave Pix:\n  ${settings?.pixKey || 'Não configurada'}\n\n📞 Estamos à disposição. \n-------------------------`}
+                  </div>
+                  <div className="text-[10px] text-white/50 text-right mt-1 px-1">Agora</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
+              <button
+                onClick={() => {
+                  setCobrancaModalOpen(false);
+                  setCobrancaCliente(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <PillProgressButton
+                onClick={() => {
+                  if (!cobrancaCliente.whatsapp) {
+                    showToast('error', 'Cliente sem WhatsApp cadastrado.');
+                    return;
+                  }
+                  
+                  const msg = `Olá *${cobrancaCliente.nome_empresa}!* \n\n⏰ 𝑷𝒂𝒔𝒔𝒂𝒏𝒅𝒐 𝒑𝒂𝒓𝒂 𝒍𝒆𝒎𝒃𝒓𝒂𝒓 𝒒𝒖𝒆 𝒔𝒖𝒂 𝒎𝒆𝒏𝒔𝒂𝒍𝒊𝒅𝒂𝒅𝒆:\n     𝕄𝕚𝕕𝕚𝕒 𝕋𝕍 \n     🅶🅾🅻🅳 🅼🅸🅳🅸🅰\n---------------------------------\n📌 Vence: ${cobrancaCliente.vencimento ? new Date(cobrancaCliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}\n🛒 Valor: ${cobrancaCliente.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cobrancaCliente.valor) : '-'}\n--------------------------------\n ╰⊱❖ *Gold Play* ❖⊱╯\n\n*Pagamento*:\n Utilize chave Pix:\n  ${settings?.pixKey || 'Não configurada'}\n\n📞 Estamos à disposição. \n-------------------------`;
+                  
+                  const rawNumbers = cobrancaCliente.whatsapp.replace(/\D/g, '');
+                  const waLink = `https://wa.me/${rawNumbers.startsWith('55') ? rawNumbers : '55' + rawNumbers}?text=${encodeURIComponent(msg)}`;
+                  window.open(waLink, '_blank');
+                  setCobrancaModalOpen(false);
+                }}
+                label="Enviar WhatsApp"
+                icon={<CheckCircle2 className="w-4 h-4" />}
+                variant="emerald"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
