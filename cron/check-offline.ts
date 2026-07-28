@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
+import { createRequire } from 'module';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -231,17 +231,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Disparo de E-mail de Alerta para o Administrador
       if (smtpEmail && smtpPassword) {
         try {
-          const sanitizedPassword = smtpPassword.replace(/\s+/g, '');
-          const transporter = nodemailer.createTransport({
-            host: smtpHost || 'smtp.gmail.com',
-            port: smtpPort || 587,
-            secure: smtpPort === 465,
-            auth: {
-              user: smtpEmail,
-              pass: sanitizedPassword,
-            },
-            tls: { rejectUnauthorized: false }
-          });
+          let nodemailerMod: any;
+          try {
+            const reqFn = createRequire(import.meta.url);
+            nodemailerMod = reqFn('nodemailer');
+          } catch {
+            nodemailerMod = await import('nodemailer');
+          }
+          const createTransport = nodemailerMod?.createTransport || nodemailerMod?.default?.createTransport;
+
+          if (typeof createTransport === 'function') {
+            const sanitizedPassword = smtpPassword.replace(/\s+/g, '');
+            const transporter = createTransport({
+              host: smtpHost || 'smtp.gmail.com',
+              port: smtpPort || 587,
+              secure: smtpPort === 465,
+              auth: {
+                user: smtpEmail,
+                pass: sanitizedPassword,
+              },
+              tls: { rejectUnauthorized: false }
+            });
 
           const mailHtml = `<div style="font-family: Arial, sans-serif; padding: 24px; background: #0f0f11; color: #f8fafc; border-radius: 16px; border: 1px solid #1e293b;">
             <h2 style="color: #f43f5e; margin-bottom: 12px; font-size: 20px;">🚨 ALERTA GOLD PLAY - TELA OFFLINE</h2>
@@ -264,6 +274,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
           sentSuccess = true;
           console.log('E-mail de alerta enviado para', smtpEmail);
+          }
         } catch (emailErr) {
           console.error('Erro ao enviar e-mail de alerta offline:', emailErr);
         }
