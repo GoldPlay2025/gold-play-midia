@@ -222,6 +222,11 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     return { crescimentoTelasData: telasData, crescimentoClientesData: clientesData };
   }, [telas, clientes]);
 
+  const onlineTelasCount = useMemo(() => {
+    return telas.filter(t => checkIsOnline(t, onlineScreenIds)).length;
+  }, [telas, onlineScreenIds, ticker]);
+  const offlineTelasCount = Math.max(0, telas.length - onlineTelasCount);
+
   // Setup States
   const [setupUrl, setSetupUrl] = useState(supabaseUrl || '');
   const [setupKey, setSetupKey] = useState(supabaseAnonKey || '');
@@ -1671,11 +1676,37 @@ create policy "Permitir deletar midias" on storage.objects
                   </div>
                   <div className="flex flex-col gap-4 min-h-[200px]">
                     <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-blue-500/30 transition-all">
-                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Users className="w-12 h-12 text-blue-500" />
+                      <div className="grid grid-cols-2 gap-4 divide-x divide-white/10">
+                        {/* Clientes Ativos */}
+                        <div className="flex flex-col justify-center pr-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Clientes Ativos</p>
+                            <Users className="w-4 h-4 text-blue-400/80" />
+                          </div>
+                          <p className="text-2xl sm:text-3xl font-display font-light text-white mt-1">
+                            {clientes.length}
+                          </p>
+                        </div>
+
+                        {/* Telas On-line */}
+                        <div className="flex flex-col justify-center pl-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Telas On-line</p>
+                            <Tv className="w-4 h-4 text-emerald-400/80" />
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="relative flex h-2.5 w-2.5">
+                              {onlineTelasCount > 0 && (
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              )}
+                              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${onlineTelasCount > 0 ? 'bg-emerald-500' : 'bg-slate-500'}`}></span>
+                            </div>
+                            <p className="text-sm sm:text-base font-display font-medium tracking-wide text-emerald-400">
+                              {onlineTelasCount} On <span className="text-slate-500 text-xs font-normal">/ {offlineTelasCount} Off</span>
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Clientes Ativos</p>
-                      <p className="text-3xl font-display font-light text-white">{clientes.length}</p>
                     </div>
 
                     <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-pink-500/30 transition-all">
