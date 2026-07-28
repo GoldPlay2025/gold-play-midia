@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { createRequire } from 'module';
+import nodemailer from 'nodemailer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -231,14 +231,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Disparo de E-mail de Alerta para o Administrador
       if (smtpEmail && smtpPassword) {
         try {
-          let nodemailerMod: any;
-          try {
-            const reqFn = createRequire(import.meta.url);
-            nodemailerMod = reqFn('nodemailer');
-          } catch {
-            nodemailerMod = await import('nodemailer');
-          }
-          const createTransport = nodemailerMod?.createTransport || nodemailerMod?.default?.createTransport;
+          const createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport;
 
           if (typeof createTransport === 'function') {
             const sanitizedPassword = smtpPassword.replace(/\s+/g, '');
