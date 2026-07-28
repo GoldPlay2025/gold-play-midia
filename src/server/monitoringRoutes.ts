@@ -232,18 +232,8 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
     }
 
-    if (!alertsEnabled || !adminPhone) {
-      return res.json({
-        success: true,
-        action: 'skipped',
-        reason: !alertsEnabled ? 'Alertas desativados ou pendentes de criação no banco' : 'Número do WhatsApp do Administrador não configurado',
-        alertsEnabled,
-        adminPhone
-      });
-    }
-
-    // b) Busca telas com last_ping > 3 minutos ou sem ping criadas há > 3 minutos e alert_sent = false
-    const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    // b) Busca telas com last_ping > 2 minutos ou sem ping criadas há > 2 minutos
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
       .from('telas')
@@ -253,29 +243,50 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       return res.status(500).json({ error: 'Falha ao consultar telas', details: queryErr.message });
     }
 
-    const offlineScreens = (screens || []).filter((tela: any) => {
-      // Já recebeu alerta? Não spama
-      if (tela.alert_sent) return false;
-
-      // Se tem last_ping, verifica se foi há mais de 3 minutos
+    const allOfflineScreens = (screens || []).filter((tela: any) => {
+      // Se tem last_ping, verifica se foi há mais de 2 minutos
       if (tela.last_ping) {
-        return new Date(tela.last_ping).getTime() < new Date(threeMinutesAgo).getTime();
+        return new Date(tela.last_ping).getTime() < new Date(twoMinutesAgo).getTime();
       }
 
-      // Se não tem last_ping, verifica se foi criada há mais de 3 minutos
+      // Se não tem last_ping, verifica se foi criada há mais de 2 minutos
       if (tela.criado_em) {
-        return new Date(tela.criado_em).getTime() < new Date(threeMinutesAgo).getTime();
+        return new Date(tela.criado_em).getTime() < new Date(twoMinutesAgo).getTime();
       }
 
       return true;
     });
+
+    // Garante que o campo status_online no banco de dados reflita 'false' para todas as telas offline
+    for (const tela of allOfflineScreens) {
+      if (tela.status_online === true || String(tela.status_online) === 'true') {
+        await supabase
+          .from('telas')
+          .update({ status_online: false })
+          .eq('id', tela.id);
+      }
+    }
+
+    if (!alertsEnabled || !adminPhone) {
+      return res.json({
+        success: true,
+        action: 'status_updated_alerts_skipped',
+        reason: !alertsEnabled ? 'Alertas desativados ou pendentes de criação no banco' : 'Número do WhatsApp do Administrador não configurado',
+        alertsEnabled,
+        adminPhone,
+        offlineCount: allOfflineScreens.length
+      });
+    }
+
+    // Filtra apenas as telas offline que ainda NÃO enviaram alerta
+    const offlineScreens = allOfflineScreens.filter((tela: any) => !tela.alert_sent);
 
     if (offlineScreens.length === 0) {
       return res.json({
         success: true,
         action: 'checked',
         message: 'Todas as telas estão online ou já notificadas.',
-        offlineCount: 0
+        offlineCount: allOfflineScreens.length
       });
     }
 
@@ -293,7 +304,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         `A tela *${nomeTela}*${nomeCliente ? ` (${nomeCliente})` : ''} está *OFFLINE*!\n` +
         `📍 *ID:* ${idUnico}\n` +
         `🕒 *Último Sinal:* ${lastPingText}\n` +
-        `⚠️ *Status:* Parou de responder há mais de 20 minutos.\n\n` +
+        `⚠️ *Status:* Parou de responder há mais de 2 minutos.\n\n` +
         `_Ação recomendada: Verifique a conexão Wi-Fi/Rede ou a alimentação elétrica da TV Box._`;
 
       let sentSuccess = false;
