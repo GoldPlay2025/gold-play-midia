@@ -1,3 +1,4 @@
+import { AutomacaoPanel } from "../components/AutomacaoPanel";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ClientesList } from '../components/ClientesList';
@@ -1906,6 +1907,10 @@ create policy "Permitir deletar midias" on storage.objects
             )}
 
             {/* Perfil Tab */}
+            {activeTab === 'automacao' && (
+              <AutomacaoPanel showToast={showToast} />
+            )}
+
             {activeTab === 'perfil' && (
               <motion.div key="perfil" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
                 <PerfilSettings showToast={showToast} settings={systemSettings} onSettingsChange={setSystemSettings} />
