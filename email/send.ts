@@ -1,9 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import nodemailer from 'nodemailer';
-import { createClient } from '@supabase/supabase-js';
+import { createRequire } from 'module';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS Headers
+  // Configurar cabeçalhos CORS e Content-Type
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -43,13 +42,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (isNaN(finalPort) || !finalPort) finalPort = 587;
     let finalHost = smtpHost || process.env.GMAIL_HOST || process.env.SMTP_HOST || 'smtp.gmail.com';
 
-    // Se faltar email ou senha, tenta buscar do Supabase
+    // Se faltar e-mail ou senha no body e variáveis, busca no Supabase
     if (!finalEmail || !finalPassword) {
       const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
       if (supabaseUrl && supabaseKey) {
         try {
+          // Import dinâmico do Supabase
+          const { createClient } = await import('@supabase/supabase-js');
           const supabase = createClient(supabaseUrl, supabaseKey);
           const { data } = await supabase
             .from('configuracoes')
@@ -64,14 +65,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (data.smtp_host) finalHost = data.smtp_host;
           }
         } catch (dbErr) {
-          console.warn('Erro ao buscar SMTP do Supabase:', dbErr);
+          console.warn('Erro ao buscar SMTP no Supabase:', dbErr);
         }
       }
     }
 
     // Limpa a senha do aplicativo Google (remove espaços ex: "abcd efgh ijkl mnop")
     if (finalPassword) {
-      finalPassword = finalPassword.replace(/\s+/g, '');
+      finalPassword = String(finalPassword).replace(/\s+/g, '');
     }
 
     if (!finalEmail || !finalPassword) {
@@ -80,19 +81,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Resolvendo createTransport com compatibilidade ESM/CJS em Vercel Serverless
-    let createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport;
-    if (typeof createTransport !== 'function') {
+    // Carregamento resiliente do Nodemailer (suporta CJS e ESM em Serverless Vercel)
+    let nodemailerMod: any;
+    try {
+      const reqFn = createRequire(import.meta.url);
+      nodemailerMod = reqFn('nodemailer');
+    } catch {
       try {
-        const imported = await import('nodemailer');
-        createTransport = imported?.createTransport || imported?.default?.createTransport;
+        nodemailerMod = await import('nodemailer');
       } catch (impErr) {
-        console.error('Erro ao carregar módulo nodemailer:', impErr);
+        console.error('Falha ao importar nodemailer:', impErr);
       }
     }
 
+    const createTransport = nodemailerMod?.createTransport || nodemailerMod?.default?.createTransport;
     if (typeof createTransport !== 'function') {
-      return res.status(500).json({ error: 'Módulo Nodemailer indisponível no ambiente de execução.' });
+      return res.status(500).json({ error: 'Módulo Nodemailer não foi carregado corretamente no servidor.' });
     }
 
     const isGmail = finalHost.includes('gmail.com') || finalEmail.includes('@gmail.com');
@@ -109,9 +113,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tls: {
         rejectUnauthorized: false
       },
-      connectionTimeout: 6000, // 6 segundos timeout
-      greetingTimeout: 5000,
-      socketTimeout: 8000,
+      connectionTimeout: 8000,
+      greetingTimeout: 6000,
+      socketTimeout: 10000,
     };
 
     const mailOptions = {
@@ -160,11 +164,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
   } catch (err: any) {
-    console.error('Erro final no envio de e-mail via SMTP:', err);
+    console.error('Erro no envio de e-mail via SMTP:', err);
     return res.status(500).json({
       error: 'Falha no envio de e-mail: ' + (err?.message || String(err)),
       details: String(err?.stack || err?.message || err)
     });
   }
 }
-
