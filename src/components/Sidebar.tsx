@@ -33,10 +33,23 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
         <button className="lg:hidden absolute top-4 right-4" onClick={() => setIsOpen(false)}>
             <X className="w-6 h-6 text-white"/>
         </button>
-        <div className="w-28 h-28 flex items-center justify-center overflow-hidden mb-2 shrink-0">
+        <div 
+          className="w-28 h-28 flex items-center justify-center overflow-hidden mb-2 shrink-0 cursor-pointer active:scale-95 transition-transform"
+          onClick={() => {
+            setActiveTab('dashboard');
+            setIsOpen(false);
+          }}
+          title="Ir para a Dashboard"
+        >
           <img src={iconUrl || "/gpm.png"} alt="Logo" className="w-full h-auto object-contain" />
         </div>
-        <div>
+        <div 
+          className="cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => {
+            setActiveTab('dashboard');
+            setIsOpen(false);
+          }}
+        >
           <h1 className="text-xs font-bold text-white tracking-widest uppercase">{systemName}</h1>
           <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest mt-0.5">Workspace</p>
         </div>
