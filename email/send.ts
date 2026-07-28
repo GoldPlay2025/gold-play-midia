@@ -1,6 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import nodemailer from 'nodemailer';
-import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -50,6 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (supabaseUrl && supabaseKey) {
         try {
+          const { createClient } = await import('@supabase/supabase-js');
           const supabase = createClient(supabaseUrl, supabaseKey);
           const { data } = await supabase
             .from('configuracoes')
@@ -81,6 +80,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Resolvendo createTransport com compatibilidade total CJS/ESM
+    const nodemailerModule = await import('nodemailer');
+    const nodemailer = nodemailerModule.default || nodemailerModule;
     const createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport || (nodemailer as any)?.default;
     if (typeof createTransport !== 'function') {
       return res.status(500).json({ error: 'Módulo Nodemailer não pôde ser inicializado no servidor.' });
