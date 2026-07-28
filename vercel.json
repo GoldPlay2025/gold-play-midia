@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/check-offline",
-      "schedule": "*/3 * * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "rewrites": [
