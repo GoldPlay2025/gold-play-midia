@@ -348,9 +348,6 @@ ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS admin_phone TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alerts_enabled BOOLEAN DEFAULT false;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_email TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_password TEXT;
-ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS automacao_cobranca_ativa BOOLEAN DEFAULT false;
-ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS automacao_dias_antes INTEGER DEFAULT 1;
-ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS automacao_horario TEXT DEFAULT '09:00';
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_port TEXT DEFAULT '587';
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_host TEXT DEFAULT 'smtp.gmail.com';
 
@@ -389,9 +386,6 @@ ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS admin_phone TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alerts_enabled BOOLEAN DEFAULT false;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_email TEXT;
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_password TEXT;
-ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS automacao_cobranca_ativa BOOLEAN DEFAULT false;
-ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS automacao_dias_antes INTEGER DEFAULT 1;
-ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS automacao_horario TEXT DEFAULT '09:00';
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_port TEXT DEFAULT '587';
 ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS smtp_host TEXT DEFAULT 'smtp.gmail.com';
 
