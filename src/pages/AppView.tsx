@@ -26,17 +26,36 @@ export default function AppView() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const deviceParam = params.get('device') || params.get('deviceId') || params.get('device_id');
+    const savedScreenId = localStorage.getItem('gpm_paired_screen_id');
 
     if (deviceParam) {
       setUrlDeviceParam(deviceParam.trim());
+    }
+
+    // 1. Se o dispositivo já tiver uma tela salva localmente no localStorage, navega direto para o Player!
+    if (savedScreenId) {
+      if (deviceParam) {
+        // Atualiza em segundo plano no Supabase o fully_device_id para manter sincronizado
+        (async () => {
+          try {
+            await supabase
+              .from('telas')
+              .update({ fully_device_id: deviceParam.trim() })
+              .eq('id', savedScreenId);
+          } catch (err) {
+            console.warn('Erro ao associar fully_device_id:', err);
+          }
+        })();
+      }
+      navigate(`/player/${savedScreenId}`);
+      return;
+    }
+
+    // 2. Se não tem nada no localStorage, tenta pareamento automático via parâmetro de URL
+    if (deviceParam) {
       autoPairDeviceParam(deviceParam.trim());
     } else {
-      const savedScreenId = localStorage.getItem('gpm_paired_screen_id');
-      if (savedScreenId) {
-        navigate(`/player/${savedScreenId}`);
-      } else {
-        fetchTelas();
-      }
+      fetchTelas();
     }
   }, [navigate]);
 
