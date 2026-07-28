@@ -687,6 +687,96 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 )}
               </div>
             </div>
+
+            {/* Card de Mensalidade & Ações de Cobrança no Responsivo */}
+            <div className="bg-[#121216] border border-white/10 rounded-xl p-3 space-y-2.5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase font-mono tracking-wider block">Mensalidade</span>
+                  <span className="text-sm font-bold text-emerald-400 font-mono">
+                    {row.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor) : 'R$ 0,00'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-500 uppercase font-mono tracking-wider block">Vencimento</span>
+                  <span className={`text-xs font-semibold ${
+                    getVencimentoStatus(row.vencimento) === 'vencido' ? 'text-rose-400' :
+                    getVencimentoStatus(row.vencimento) === 'vencendo' ? 'text-orange-400' :
+                    'text-slate-200'
+                  }`}>
+                    {row.vencimento ? new Date(row.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'A combinar'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botões de Ação de Cobrança (Ícones Somente) */}
+              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                  <DollarSign className="w-3 h-3 text-amber-500" /> Cobrança
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  {/* WhatsApp */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCobrancaCliente(row);
+                      setCobrancaModalOpen(true);
+                    }}
+                    className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
+                    title="Cobrança via WhatsApp"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 fill-emerald-500/20 text-emerald-400" />
+                  </button>
+
+                  {/* SMS */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSmsCliente(row);
+                      setSmsText(getSmsCobrancaText(row, settings));
+                      setSmsModalOpen(true);
+                    }}
+                    className="p-2 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 active:scale-95 transition-all cursor-pointer shadow-md"
+                    title="Cobrança via SMS"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-white" />
+                  </button>
+
+                  {/* E-mail */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEmailCliente(row);
+                      setEmailDestination(row.email || settings?.smtpEmail || '');
+                      setEmailSubject(`Cobrança de Mensalidade - ${row.nome_empresa}`);
+                      setEmailModalOpen(true);
+                    }}
+                    className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
+                    title="Cobrança via E-mail"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-sky-400" />
+                  </button>
+
+                  {/* Confirmar Pagamento */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRenewPayment(row);
+                    }}
+                    disabled={renewingId === row.id || getDaysToVencimento(row.vencimento) > 5}
+                    className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer shadow-md flex items-center justify-center"
+                    title="Confirmar Pagamento (Renovar)"
+                  >
+                    {renewingId === row.id ? (
+                      <Loader2 className="w-3.5 h-3.5 text-emerald-300 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
             
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2">
@@ -1404,6 +1494,68 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                         }`}>
                           {slideCliente.vencimento ? new Date(slideCliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'A combinar'}
                         </span>
+                      </div>
+                    </div>
+
+                    {/* Botões de Ação de Cobrança (Ícones Somente) */}
+                    <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Cobrança
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        {/* WhatsApp */}
+                        <button
+                          onClick={() => {
+                            setCobrancaCliente(slideCliente);
+                            setCobrancaModalOpen(true);
+                          }}
+                          className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
+                          title="Cobrança via WhatsApp"
+                        >
+                          <MessageCircle className="w-4 h-4 fill-emerald-500/20 text-emerald-400" />
+                        </button>
+
+                        {/* SMS */}
+                        <button
+                          onClick={() => {
+                            setSmsCliente(slideCliente);
+                            setSmsText(getSmsCobrancaText(slideCliente, settings));
+                            setSmsModalOpen(true);
+                          }}
+                          className="p-2.5 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 active:scale-95 transition-all cursor-pointer shadow-md"
+                          title="Cobrança via SMS"
+                        >
+                          <MessageSquare className="w-4 h-4 text-white" />
+                        </button>
+
+                        {/* E-mail */}
+                        <button
+                          onClick={() => {
+                            setEmailCliente(slideCliente);
+                            setEmailDestination(slideCliente.email || settings?.smtpEmail || '');
+                            setEmailSubject(`Cobrança de Mensalidade - ${slideCliente.nome_empresa}`);
+                            setEmailModalOpen(true);
+                          }}
+                          className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
+                          title="Cobrança via E-mail"
+                        >
+                          <Mail className="w-4 h-4 text-sky-400" />
+                        </button>
+
+                        {/* Confirmar Pagamento */}
+                        <button
+                          onClick={() => handleRenewPayment(slideCliente)}
+                          disabled={renewingId === slideCliente.id || getDaysToVencimento(slideCliente.vencimento) > 5}
+                          className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer shadow-md flex items-center justify-center"
+                          title="Confirmar Pagamento (Renovar)"
+                        >
+                          {renewingId === slideCliente.id ? (
+                            <Loader2 className="w-4 h-4 text-emerald-300 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          )}
+                        </button>
                       </div>
                     </div>
 
