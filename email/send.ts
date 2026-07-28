@@ -22,7 +22,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { to, subject, html, text, smtpEmail, smtpPassword, smtpPort, smtpHost } = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        console.error('Erro ao analisar JSON do req.body:', e);
+      }
+    }
+
+    const { to, subject, html, text, smtpEmail, smtpPassword, smtpPort, smtpHost } = body || {};
 
     if (!to) {
       return res.status(400).json({ error: 'O campo "to" (destinatário) é obrigatório.' });
@@ -31,6 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let finalEmail = smtpEmail || process.env.GMAIL_USER || process.env.SMTP_EMAIL || process.env.SMTP_USER;
     let finalPassword = smtpPassword || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
     let finalPort = Number(smtpPort || process.env.GMAIL_PORT || process.env.SMTP_PORT || 587);
+    if (isNaN(finalPort) || !finalPort) finalPort = 587;
     let finalHost = smtpHost || process.env.GMAIL_HOST || process.env.SMTP_HOST || 'smtp.gmail.com';
 
     // Se faltar email ou senha, tenta buscar do Supabase
@@ -70,8 +80,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Configurar o Transportador do Nodemailer
-    const transporter = nodemailer.createTransport({
+    // Configurar o Transportador do Nodemailer (compatibilidade ESM/CJS)
+    const createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport;
+    if (typeof createTransport !== 'function') {
+      return res.status(500).json({ error: 'Módulo de envio de e-mail (Nodemailer) indisponível no servidor.' });
+    }
+
+    const transporter = createTransport({
       host: finalHost,
       port: finalPort,
       secure: finalPort === 465, // true para 465, false para 587 ou outras portas
@@ -105,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Erro ao enviar e-mail via SMTP:', err);
     return res.status(500).json({
       error: 'Falha no envio de e-mail: ' + (err?.message || String(err)),
-      details: err
+      details: String(err?.stack || err?.message || err)
     });
   }
 }
