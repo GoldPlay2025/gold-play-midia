@@ -4,7 +4,7 @@ import {
   Users, 
   Monitor, 
   LogOut,
-  Settings, Bot,
+  Settings,
   Film,
   X,
   Cloud,
@@ -62,7 +62,6 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
         <MenuButton icon={Monitor} label="Telas" active={activeTab === 'telas'} onClick={() => { setActiveTab('telas'); setIsOpen(false); }} />
         <MenuButton icon={Cloud} label="Cloud Manager" active={activeTab === 'cloud'} onClick={() => { setActiveTab('cloud'); setIsOpen(false); }} />
         <MenuButton icon={Film} label="Gerenciar Mídias" active={activeTab === 'nova-midia'} onClick={() => { setActiveTab('nova-midia'); setIsOpen(false); }} />
-        <MenuButton icon={Bot} label="Automação" active={activeTab === 'automacao'} onClick={() => { setActiveTab('automacao'); setIsOpen(false); }} />
         <MenuButton icon={Settings} label="Perfil" active={activeTab === 'perfil'} onClick={() => { setActiveTab('perfil'); setIsOpen(false); }} />
       </div>
 
