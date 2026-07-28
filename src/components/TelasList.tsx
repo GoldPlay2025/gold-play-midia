@@ -17,6 +17,7 @@ export type Tela = {
   whatsapp?: string;
   fully_device_id?: string;
   last_ping?: string;
+  criado_em?: string;
   alert_sent?: boolean;
   clientes?: { nome_empresa: string };
   playlists?: {
@@ -84,21 +85,34 @@ export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
   );
   if (inPresence) return true;
 
-  // 2. Verifica coluna status_online no banco de dados
-  if (row.status_online === true || String(row.status_online) === 'true') return true;
-
-  // 3. Fallback: verifica se houve ping nos últimos 3 minutos
+  // 2. Se houver last_ping registrado, a atualização recente (menos de 2 minutos) determina o status online
   if (row.last_ping) {
     try {
       let dateStr = String(row.last_ping).trim();
       if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
       if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
       const pingTime = new Date(dateStr).getTime();
-      if (!isNaN(pingTime) && (Date.now() - pingTime) < 3 * 60 * 1000) return true;
+      if (!isNaN(pingTime)) {
+        return (Date.now() - pingTime) < 2 * 60 * 1000; // Limite rigoroso de 2 minutos
+      }
     } catch(e) {}
   }
 
-  return false;
+  // 3. Se não houver last_ping, verifica se o registro foi criado há mais de 2 minutos
+  if (row.criado_em) {
+    try {
+      let dateStr = String(row.criado_em).trim();
+      if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
+      if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
+      const createdTime = new Date(dateStr).getTime();
+      if (!isNaN(createdTime) && (Date.now() - createdTime) > 2 * 60 * 1000) {
+        return false;
+      }
+    } catch(e) {}
+  }
+
+  // 4. Fallback final para status_online do banco (apenas se não for um registro antigo sem pings)
+  return row.status_online === true || String(row.status_online) === 'true';
 };
 
 export function TelasList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
