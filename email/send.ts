@@ -11,10 +11,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-api-key'
   );
+  res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).json({ ok: true });
   }
 
   if (req.method !== 'POST') {
@@ -69,35 +69,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Sanitize app password (remove spaces if pasted as "djzu xbpk whit uzck")
+    // Limpa a senha do aplicativo Google (remove espaços ex: "abcd efgh ijkl mnop")
     if (finalPassword) {
       finalPassword = finalPassword.replace(/\s+/g, '');
     }
 
     if (!finalEmail || !finalPassword) {
       return res.status(400).json({
-        error: 'Configuração de e-mail incompleta. Defina o E-mail e a Senha de Aplicativo Google na página Perfil ou nas Variáveis de Ambiente da Vercel (GMAIL_USER e GMAIL_APP_PASSWORD).'
+        error: 'Configuração de e-mail incompleta. Defina o E-mail e a Senha de Aplicativo Google na página Perfil ou nas Variáveis da Vercel.'
       });
     }
 
-    // Configurar o Transportador do Nodemailer (compatibilidade ESM/CJS)
-    const createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport;
+    // Resolvendo createTransport com compatibilidade ESM/CJS em Vercel Serverless
+    let createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport;
     if (typeof createTransport !== 'function') {
-      return res.status(500).json({ error: 'Módulo de envio de e-mail (Nodemailer) indisponível no servidor.' });
+      try {
+        const imported = await import('nodemailer');
+        createTransport = imported?.createTransport || imported?.default?.createTransport;
+      } catch (impErr) {
+        console.error('Erro ao carregar módulo nodemailer:', impErr);
+      }
     }
 
-    const transporter = createTransport({
+    if (typeof createTransport !== 'function') {
+      return res.status(500).json({ error: 'Módulo Nodemailer indisponível no ambiente de execução.' });
+    }
+
+    const isGmail = finalHost.includes('gmail.com') || finalEmail.includes('@gmail.com');
+    const useSecure = finalPort === 465;
+
+    const baseTransportOpts = {
       host: finalHost,
       port: finalPort,
-      secure: finalPort === 465, // true para 465, false para 587 ou outras portas
+      secure: useSecure,
       auth: {
         user: finalEmail,
         pass: finalPassword,
       },
       tls: {
         rejectUnauthorized: false
-      }
-    });
+      },
+      connectionTimeout: 6000, // 6 segundos timeout
+      greetingTimeout: 5000,
+      socketTimeout: 8000,
+    };
 
     const mailOptions = {
       from: `"GOLD PLAY Digital Signage" <${finalEmail}>`,
@@ -107,20 +122,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       html: html || `<div style="font-family: sans-serif; padding: 20px; color: #333;"><p>${text || 'Mensagem do sistema GOLD PLAY'}</p></div>`,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('E-mail enviado com sucesso:', info.messageId);
+    let info: any;
+    try {
+      const transporter = createTransport(baseTransportOpts);
+      info = await transporter.sendMail(mailOptions);
+    } catch (primaryErr: any) {
+      console.warn('Falha na tentativa principal SMTP:', primaryErr?.message);
+
+      // Se for Gmail e porta 587 falhou/deu timeout, tenta fallback automático na porta 465 (SSL)
+      if (isGmail && finalPort === 587) {
+        console.log('Tentando fallback para Gmail na porta 465 (SSL)...');
+        const fallbackTransporter = createTransport({
+          ...baseTransportOpts,
+          port: 465,
+          secure: true,
+        });
+        info = await fallbackTransporter.sendMail(mailOptions);
+      } else if (isGmail && finalPort === 465) {
+        console.log('Tentando fallback para Gmail na porta 587 (TLS)...');
+        const fallbackTransporter = createTransport({
+          ...baseTransportOpts,
+          port: 587,
+          secure: false,
+        });
+        info = await fallbackTransporter.sendMail(mailOptions);
+      } else {
+        throw primaryErr;
+      }
+    }
+
+    console.log('E-mail enviado com sucesso:', info?.messageId);
 
     return res.status(200).json({
       success: true,
       message: 'E-mail enviado com sucesso!',
-      messageId: info.messageId
+      messageId: info?.messageId || 'ok'
     });
 
   } catch (err: any) {
-    console.error('Erro ao enviar e-mail via SMTP:', err);
+    console.error('Erro final no envio de e-mail via SMTP:', err);
     return res.status(500).json({
       error: 'Falha no envio de e-mail: ' + (err?.message || String(err)),
       details: String(err?.stack || err?.message || err)
     });
   }
 }
+
