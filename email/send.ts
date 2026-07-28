@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createRequire } from 'module';
+import nodemailer from 'nodemailer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Configurar cabeçalhos CORS e Content-Type
@@ -49,7 +49,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (supabaseUrl && supabaseKey) {
         try {
-          // Import dinâmico do Supabase
           const { createClient } = await import('@supabase/supabase-js');
           const supabase = createClient(supabaseUrl, supabaseKey);
           const { data } = await supabase
@@ -81,22 +80,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Carregamento resiliente do Nodemailer (suporta CJS e ESM em Serverless Vercel)
-    let nodemailerMod: any;
-    try {
-      const reqFn = createRequire(import.meta.url);
-      nodemailerMod = reqFn('nodemailer');
-    } catch {
-      try {
-        nodemailerMod = await import('nodemailer');
-      } catch (impErr) {
-        console.error('Falha ao importar nodemailer:', impErr);
-      }
-    }
-
-    const createTransport = nodemailerMod?.createTransport || nodemailerMod?.default?.createTransport;
+    // Resolvendo createTransport com compatibilidade total CJS/ESM
+    const createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport;
     if (typeof createTransport !== 'function') {
-      return res.status(500).json({ error: 'Módulo Nodemailer não foi carregado corretamente no servidor.' });
+      return res.status(500).json({ error: 'Módulo Nodemailer não pôde ser inicializado no servidor.' });
     }
 
     const isGmail = finalHost.includes('gmail.com') || finalEmail.includes('@gmail.com');
