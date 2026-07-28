@@ -430,8 +430,8 @@ Pergunta ou solicitação do usuário:
     });
   }
 
-  // Iniciar Cron Job para monitoramento de telas offline (a cada 3 minutos)
-  cron.schedule('*/3 * * * *', async () => {
+  // Iniciar Cron Job para monitoramento de telas offline (a cada 1 minuto)
+  cron.schedule('* * * * *', async () => {
     try {
       console.log("[CRON] Iniciando verificação de telas offline...");
       const secret = process.env.CRON_SECRET || "";
