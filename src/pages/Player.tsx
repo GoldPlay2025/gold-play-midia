@@ -101,10 +101,31 @@ export default function Player() {
     fetchPlaylist();
     sendHeartbeat(screenId);
 
-    // Heartbeat silencioso a cada 1 minuto (60.000 ms)
+    // Heartbeat silencioso e frequente a cada 10 segundos para status em tempo real
     const heartbeatInterval = setInterval(() => {
       sendHeartbeat(screenId);
-    }, 1 * 60 * 1000);
+    }, 10 * 1000);
+
+    // Function to notify explicit disconnect on close or navigate away
+    const sendDisconnect = () => {
+      try {
+        if (presenceChannel) presenceChannel.untrack();
+        const payload = JSON.stringify({ deviceId: screenId });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/devices/disconnect', payload);
+        } else {
+          fetch('/api/devices/disconnect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          }).catch(() => {});
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('beforeunload', sendDisconnect);
+    window.addEventListener('pagehide', sendDisconnect);
 
     // Subscribe to realtime changes on playlists table for this screen
     const channel = supabase
@@ -152,6 +173,9 @@ export default function Player() {
     }, 60000); // 1 minute fallback check
 
     return () => {
+      sendDisconnect();
+      window.removeEventListener('beforeunload', sendDisconnect);
+      window.removeEventListener('pagehide', sendDisconnect);
       supabase.removeChannel(channel);
       supabase.removeChannel(presenceChannel);
       clearInterval(retryInterval);

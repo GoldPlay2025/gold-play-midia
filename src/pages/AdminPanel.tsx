@@ -763,11 +763,11 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     }
   }, [activeTab, isAuthenticated]);
 
-  // Heartbeat ticker every 10 seconds to re-evaluate last_ping freshness
+  // Heartbeat ticker every 5 seconds to re-evaluate last_ping freshness
   useEffect(() => {
     const interval = setInterval(() => {
       setTicker(t => t + 1);
-    }, 10000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -776,13 +776,17 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
 
     // 1. Presence Channel subscription for real-time online/offline status
     const presenceChannel = supabase.channel('telas-presence');
+    const updatePresenceState = () => {
+      const state = presenceChannel.presenceState() || {};
+      const onlineIds = Object.keys(state);
+      setOnlineScreenIds(onlineIds);
+      console.log('Realtime screen presence update (AdminPanel):', onlineIds);
+    };
+
     presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        const state = presenceChannel.presenceState() || {};
-        const onlineIds = Object.keys(state);
-        setOnlineScreenIds(onlineIds);
-        console.log('Realtime screen presence update (AdminPanel):', onlineIds);
-      })
+      .on('presence', { event: 'sync' }, updatePresenceState)
+      .on('presence', { event: 'join' }, updatePresenceState)
+      .on('presence', { event: 'leave' }, updatePresenceState)
       .subscribe();
 
     // 2. Realtime DB changes subscription on table 'telas'
