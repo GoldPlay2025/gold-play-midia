@@ -156,11 +156,18 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
         })
       });
 
-      const resData = await response.json();
+      const responseText = await response.text();
+      let resData: any = {};
+      try {
+        resData = JSON.parse(responseText);
+      } catch {
+        resData = { error: `Servidor indisponível ou erro (${response.status}): ${responseText.slice(0, 120)}` };
+      }
+
       if (response.ok && resData.success) {
-        showToast('success', `E-mail de teste enviado com sucesso para ${form.smtpEmail}! Check sua caixa de entrada.`);
+        showToast('success', `E-mail de teste enviado com sucesso para ${form.smtpEmail}! Verifique sua caixa de entrada.`);
       } else {
-        showToast('error', resData.error || 'Falha ao enviar e-mail de teste.');
+        showToast('error', resData.error || resData.message || 'Falha ao enviar e-mail de teste.');
       }
     } catch (err: any) {
       console.error('Erro ao testar envio de email:', err);

@@ -237,7 +237,13 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
           smtpHost: settings?.smtpHost,
         })
       });
-      const data = await resp.json().catch(() => ({ error: `Resposta inválida HTTP ${resp.status}` }));
+      const responseText = await resp.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { error: `Servidor indisponível (${resp.status}): ${responseText.slice(0, 120)}` };
+      }
       if (resp.ok && data.success) {
         showToast('success', `E-mail de cobrança enviado com sucesso para ${emailDestination}!`);
         setEmailModalOpen(false);
