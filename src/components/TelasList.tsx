@@ -72,7 +72,7 @@ export const getResponsavel = (endereco?: string): string => {
   return '';
 };
 
-const checkIsOnline = (row: Tela, onlineIds: string[]) => {
+export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
   if (!row) return false;
   const ids = onlineIds || [];
 
