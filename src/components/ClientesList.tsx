@@ -718,14 +718,15 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
           const gridCols = hasMidias ? 'md:grid-cols-4' : 'md:grid-cols-3';
 
           return (
-            <div className={`px-6 py-6 bg-[#0a0a0c]/80 rounded-2xl border border-white/5 mx-4 mb-4 mt-2 grid grid-cols-1 ${gridCols} gap-6 text-sm`}>
-              {/* Vencimento */}
-              <div className="flex flex-col gap-4">
+            <div className="px-6 py-5 bg-[#0a0a0c]/80 rounded-2xl border border-white/5 mx-4 mb-4 mt-2 space-y-5 text-sm">
+              {/* Grid de Informações das Colunas */}
+              <div className={`grid grid-cols-1 ${gridCols} gap-6 items-start`}>
+                {/* Vencimento */}
                 <div className="flex flex-col gap-1.5">
                   <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-amber-500/70" /> Vencimento
                   </span>
-                  <span className={`font-medium ${
+                  <span className={`font-semibold text-base ${
                     getVencimentoStatus(row.vencimento) === 'vencido' ? 'text-rose-400' :
                     getVencimentoStatus(row.vencimento) === 'vencendo' ? 'text-orange-400' :
                     'text-slate-200'
@@ -733,14 +734,112 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                     {row.vencimento ? new Date(row.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}
                   </span>
                 </div>
-                
+
+                {/* Valor / Mensalidade */}
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
+                    <span className="text-emerald-500 font-bold">$</span> Valor / Mensalidade
+                  </span>
+                  <span className="text-emerald-400 font-bold font-mono text-base">
+                    {row.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor) : '-'}
+                  </span>
+                </div>
+
+                {/* Mídia Vinculada */}
+                {hasMidias && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
+                      <Film className="w-3 h-3 text-amber-500/70" /> Mídia Vinculada
+                    </span>
+                    <div className="flex flex-col gap-2">
+                      {clientMidias.map(m => (
+                        <div key={m.id} className="flex items-center gap-3.5 bg-amber-500/[0.01] border border-amber-500/10 rounded-2xl p-2.5 hover:border-amber-500/30 transition-all group">
+                          {/* Compact Video Thumbnail */}
+                          <div className="w-14 h-14 rounded-xl bg-black overflow-hidden border border-white/10 shrink-0 flex items-center justify-center relative group/thumb">
+                            {m.url_storage ? (
+                              <video 
+                                src={m.url_storage} 
+                                className="w-full h-full object-cover"
+                                muted
+                                loop
+                                playsInline
+                                onMouseEnter={e => e.currentTarget.play()}
+                                onMouseLeave={e => {
+                                  e.currentTarget.pause();
+                                  e.currentTarget.currentTime = 0;
+                                }}
+                              />
+                            ) : (
+                              <Film className="w-5 h-5 text-slate-700" />
+                            )}
+                            <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                              <Play className="w-4 h-4 fill-amber-500 text-amber-500 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] transition-transform group-hover/thumb:scale-115" />
+                            </div>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-slate-200 font-semibold truncate" title={m.titulo_video}>
+                              {m.titulo_video}
+                            </p>
+                            <p className="text-[10px] font-mono text-slate-500 mt-1">
+                              {m.tamanho_mb ? `${m.tamanho_mb} MB` : 'Vídeo'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Telas Associadas */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
+                    <Monitor className="w-3 h-3 text-amber-500/70" /> Telas do Cliente ({clientTelas.length})
+                  </span>
+                  {clientTelas.length === 0 ? (
+                    <span className="text-slate-600 text-xs italic font-light">Nenhuma tela vinculada</span>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/5">
+                      {clientTelas.map(t => (
+                        <div key={t.id} className="flex items-center justify-between gap-2 bg-white/[0.02] border border-white/5 rounded-xl px-3 py-2 text-xs hover:border-amber-500/30 transition-all">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {/* Miniatura da mídia vinculada à tela */}
+                            {t.playlists && t.playlists[0]?.midias && (
+                               <div className="w-8 h-8 rounded-md bg-black overflow-hidden border border-white/10 shrink-0">
+                                  <video 
+                                    src={t.playlists[0].midias.url_storage} 
+                                    className="w-full h-full object-cover"
+                                    muted
+                                  />
+                               </div>
+                            )}
+                            <Tv className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            <span className="text-slate-300 font-medium truncate" title={t.nome_local}>
+                              {t.nome_local}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-500 shrink-0 uppercase">
+                            {t.identificador_unico}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Card de Botões de Ação de Cobrança */}
+              <div className="pt-3 border-t border-white/5 flex items-center justify-between flex-wrap gap-3">
+                <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Cobrança & Pagamento
+                </span>
+
                 {renewSuccessId === row.id ? (
-                  <div className="h-8 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center gap-1.5 text-emerald-400 text-[11px] font-bold w-fit shadow-inner whitespace-nowrap">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Renovado!
+                  <div className="h-9 px-4 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center gap-2 text-emerald-400 text-xs font-bold shadow-inner whitespace-nowrap">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Renovado com sucesso!
                   </div>
                 ) : (
-                  <div className="bg-[#0e0e12] border border-white/10 rounded-2xl p-2 flex items-center gap-2 flex-wrap sm:flex-nowrap shadow-xl">
+                  <div className="bg-[#0e0e12] border border-white/10 rounded-2xl p-2 flex items-center gap-2 flex-wrap shadow-xl">
                     <PillProgressButton
                       label="WhatsApp"
                       icon={<MessageCircle className="w-3.5 h-3.5 fill-slate-950" />}
@@ -783,97 +882,6 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                       className="h-8 px-3.5 text-xs font-black tracking-tight whitespace-nowrap"
                       disabled={getDaysToVencimento(row.vencimento) > 5}
                     />
-                  </div>
-                )}
-              </div>
-
-              {/* Valor */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
-                  <span className="text-emerald-500 font-bold">$</span> Valor / Mensalidade
-                </span>
-                <span className="text-emerald-400 font-medium font-mono text-base">
-                  {row.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor) : '-'}
-                </span>
-              </div>
-
-              {/* Mídia Vinculada */}
-              {hasMidias && (
-                <div className="flex flex-col gap-2">
-                  <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
-                    <Film className="w-3 h-3 text-amber-500/70" /> Mídia Vinculada
-                  </span>
-                  <div className="flex flex-col gap-2">
-                    {clientMidias.map(m => (
-                      <div key={m.id} className="flex items-center gap-3.5 bg-amber-500/[0.01] border border-amber-500/10 rounded-2xl p-2.5 hover:border-amber-500/30 transition-all group">
-                        {/* Compact Video Thumbnail */}
-                        <div className="w-14 h-14 rounded-xl bg-black overflow-hidden border border-white/10 shrink-0 flex items-center justify-center relative group/thumb">
-                          {m.url_storage ? (
-                            <video 
-                              src={m.url_storage} 
-                              className="w-full h-full object-cover"
-                              muted
-                              loop
-                              playsInline
-                              onMouseEnter={e => e.currentTarget.play()}
-                              onMouseLeave={e => {
-                                e.currentTarget.pause();
-                                e.currentTarget.currentTime = 0;
-                              }}
-                            />
-                          ) : (
-                            <Film className="w-5 h-5 text-slate-700" />
-                          )}
-                          <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
-                            <Play className="w-4 h-4 fill-amber-500 text-amber-500 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] transition-transform group-hover/thumb:scale-115" />
-                          </div>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs text-slate-200 font-semibold truncate" title={m.titulo_video}>
-                            {m.titulo_video}
-                          </p>
-                          <p className="text-[10px] font-mono text-slate-500 mt-1">
-                            {m.tamanho_mb ? `${m.tamanho_mb} MB` : 'Vídeo'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Telas Associadas */}
-              <div className="flex flex-col gap-2">
-                <span className="text-slate-500 text-[10px] font-mono uppercase tracking-wider flex items-center gap-1">
-                  <Monitor className="w-3 h-3 text-amber-500/70" /> Telas do Cliente ({clientTelas.length})
-                </span>
-                {clientTelas.length === 0 ? (
-                  <span className="text-slate-600 text-xs italic font-light">Nenhuma tela vinculada</span>
-                ) : (
-                  <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/5">
-                    {clientTelas.map(t => (
-                      <div key={t.id} className="flex items-center justify-between gap-2 bg-white/[0.02] border border-white/5 rounded-xl px-3 py-2 text-xs hover:border-amber-500/30 transition-all">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {/* Miniatura da mídia vinculada à tela */}
-                          {t.playlists && t.playlists[0]?.midias && (
-                             <div className="w-8 h-8 rounded-md bg-black overflow-hidden border border-white/10 shrink-0">
-                                <video 
-                                  src={t.playlists[0].midias.url_storage} 
-                                  className="w-full h-full object-cover"
-                                  muted
-                                />
-                             </div>
-                          )}
-                          <Tv className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                          <span className="text-slate-300 font-medium truncate" title={t.nome_local}>
-                            {t.nome_local}
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono text-slate-500 shrink-0 uppercase">
-                          {t.identificador_unico}
-                        </span>
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>
