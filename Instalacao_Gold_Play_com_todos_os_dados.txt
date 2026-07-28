@@ -1,0 +1,183 @@
+=============================================================================
+DOCUMENTO DE BACKUP E INFORMAÇÕES DE INSTALAÇÃO - GOLD PLAY MÍDIA
+=============================================================================
+
+SISTEMA: Gold Play Mídia - Digital Signage & Financial Workspace
+VERSÃO: 1.1.0
+DATA DE ATUALIZAÇÃO: 2026-07-23
+
+-----------------------------------------------------------------------------
+1. TABELAS E ESTRUTURA DO BANCO DE DADOS (SUPABASE / POSTGRESQL)
+-----------------------------------------------------------------------------
+
+1.1 TABELA: clientes
+--------------------
+Descrição: Armazena o cadastro dos clientes/empresas contratantes.
+Colunas:
+  - id (UUID, Chave Primária, Default: gen_random_uuid())
+  - nome_empresa (TEXT, Não Nulo)
+  - whatsapp (TEXT, Opcional)
+  - endereco_fisico (TEXT, Opcional)
+  - valor (NUMERIC, Opcional)
+  - vencimento (DATE, Opcional)
+  - criado_em (TIMESTAMP WITH TIME ZONE, Default: now())
+
+1.2 TABELA: telas
+-----------------
+Descrição: Cadastra e identifica os pontos de exibição (TVs / Players).
+Colunas:
+  - id (UUID, Chave Primária, Default: gen_random_uuid())
+  - nome_local (TEXT, Não Nulo)
+  - identificador_unico (TEXT, Único, Não Nulo)
+  - status_online (BOOLEAN, Default: false)
+  - cliente_id (UUID, Chave Estrangeira -> clientes.id ON DELETE CASCADE)
+  - endereco (TEXT, Opcional)
+  - whatsapp (TEXT, Opcional)
+  - fully_device_id (VARCHAR(255), Opcional - ID do dispositivo no Fully Kiosk)
+  - criado_em (TIMESTAMP WITH TIME ZONE, Default: now())
+
+1.3 TABELA: midias
+------------------
+Descrição: Biblioteca de vídeos, imagens e URLs cadastrados para exibição.
+Colunas:
+  - id (UUID, Chave Primária, Default: gen_random_uuid())
+  - titulo_video (TEXT, Não Nulo)
+  - url_storage (TEXT, Não Nulo)
+  - tamanho_mb (NUMERIC, Opcional)
+  - cliente_id (UUID, Chave Estrangeira -> clientes.id ON DELETE CASCADE)
+  - criado_em (TIMESTAMP WITH TIME ZONE, Default: now())
+
+1.4 TABELA: playlists
+---------------------
+Descrição: Vincula mídias a telas específicas definindo a ordem de reprodução.
+Colunas:
+  - id (UUID, Chave Primária, Default: gen_random_uuid())
+  - tela_id (UUID, Chave Estrangeira -> telas.id ON DELETE CASCADE)
+  - midia_id (UUID, Chave Estrangeira -> midias.id ON DELETE CASCADE)
+  - ordem_exibicao (INTEGER, Default: 0)
+  - criado_em (TIMESTAMP WITH TIME ZONE, Default: now())
+
+1.5 TABELA: whatsapp_sessions
+-----------------------------
+Descrição: Persiste a sessão de autenticação do WhatsApp (Baileys/QR Code).
+Colunas:
+  - id (TEXT, Chave Primária)
+  - data (TEXT, Não Nulo)
+  - updated_at (TIMESTAMP WITH TIME ZONE, Default: now())
+
+1.6 TABELA: custos (GESTÃO FINANCEIRA)
+--------------------------------------
+Descrição: Armazena custos operacionais, licenças do Fully Kiosk, servidores e despesas.
+Colunas:
+  - id (UUID, Chave Primária, Default: gen_random_uuid())
+  - descricao (TEXT, Não Nulo)
+  - valor (NUMERIC(10,2), Não Nulo)
+  - data_pagamento (DATE, Default: CURRENT_DATE)
+  - recorrencia (TEXT, Default: 'Anual' - Único, Mensal, Anual)
+  - categoria (TEXT, Default: 'Licença Fully Kiosk')
+  - observacoes (TEXT, Opcional)
+  - criado_em (TIMESTAMP WITH TIME ZONE, Default: now())
+
+1.7 ARMAZENAMENTO DE ARQUIVOS (SUPABASE STORAGE)
+------------------------------------------------
+Bucket: midias
+Acesso Público: Ativado (True)
+Finalidade: Guarda os arquivos de vídeos e imagens enviados pelos clientes.
+
+
+-----------------------------------------------------------------------------
+2. CHAVES DE API E VARIÁVEIS DE AMBIENTE UTILIZADAS
+-----------------------------------------------------------------------------
+
+1. VITE_SUPABASE_URL
+   - Finalidade: URL do seu projeto no Supabase (ex: https://xxx.supabase.co).
+   - Onde configurar: Arquivo .env / Variáveis de Ambiente da Vercel.
+
+2. VITE_SUPABASE_ANON_KEY
+   - Finalidade: Chave pública de API do Supabase (Anon Key).
+   - Onde configurar: Arquivo .env / Variáveis de Ambiente da Vercel.
+
+3. FULLY_API_TOKEN
+   - Finalidade: Token para integração com o serviço Fully Kiosk Cloud (Gerenciamento remoto de TVs).
+   - Onde configurar: Arquivo .env / Variáveis de Ambiente.
+
+4. GEMINI_API_KEY
+   - Finalidade: Chave da API do Google Gemini para recursos de IA.
+   - Onde configurar: Arquivo .env / Secrets do AI Studio.
+
+5. VITE_WHATSAPP_API_KEY / API_KEY
+   - Finalidade: Chave de segurança para os endpoints da API do WhatsApp.
+   - Onde configurar: Arquivo .env / Variáveis de Ambiente.
+
+6. APP_URL
+   - Finalidade: URL pública onde o aplicativo está rodando.
+   - Onde configurar: Arquivo .env / Injetado no runtime do Cloud Run / Vercel.
+
+
+-----------------------------------------------------------------------------
+3. SCRIPT SQL COMPLETO E UNIFICADO PARA CONFIGURAÇÃO NO SUPABASE
+-----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS clientes (
+  id uuid default gen_random_uuid() primary key,
+  nome_empresa text not null,
+  whatsapp text,
+  endereco_fisico text,
+  valor numeric,
+  vencimento date,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+CREATE TABLE IF NOT EXISTS telas (
+  id uuid default gen_random_uuid() primary key,
+  nome_local text not null,
+  identificador_unico text not null unique,
+  status_online boolean default false,
+  cliente_id uuid references clientes(id) on delete cascade not null,
+  endereco text,
+  whatsapp text,
+  fully_device_id varchar(255),
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+CREATE TABLE IF NOT EXISTS midias (
+  id uuid default gen_random_uuid() primary key,
+  titulo_video text not null,
+  url_storage text not null,
+  tamanho_mb numeric,
+  cliente_id uuid references clientes(id) on delete cascade not null,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+CREATE TABLE IF NOT EXISTS playlists (
+  id uuid default gen_random_uuid() primary key,
+  tela_id uuid references telas(id) on delete cascade not null,
+  midia_id uuid references midias(id) on delete cascade not null,
+  ordem_exibicao integer default 0 not null,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+  id text primary key,
+  data text not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS custos (
+  id uuid default gen_random_uuid() primary key,
+  descricao text not null,
+  valor numeric(10, 2) not null,
+  data_pagamento date default current_date not null,
+  recorrencia text default 'Anual' not null,
+  categoria text default 'Licença Fully Kiosk',
+  observacoes text,
+  criado_em timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('midias', 'midias', true)
+ON CONFLICT (id) DO NOTHING;
+
+=============================================================================
+FIM DO ARQUIVO DE BACKUP
+=============================================================================
