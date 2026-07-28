@@ -20,6 +20,7 @@ export default function AppView() {
   const [isPairing, setIsPairing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [urlDeviceParam, setUrlDeviceParam] = useState<string | null>(null);
 
   // Check if URL query parameter ?device= or ?deviceId= is provided, or if already paired on load
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function AppView() {
     const deviceParam = params.get('device') || params.get('deviceId') || params.get('device_id');
 
     if (deviceParam) {
+      setUrlDeviceParam(deviceParam.trim());
       autoPairDeviceParam(deviceParam.trim());
     } else {
       const savedScreenId = localStorage.getItem('gpm_paired_screen_id');
@@ -133,6 +135,15 @@ export default function AppView() {
       }
 
       localStorage.setItem('gpm_paired_screen_id', data.id);
+      
+      // If we have a new device code from the URL, link it so future auto-pairing works
+      if (urlDeviceParam) {
+        await supabase
+          .from('telas')
+          .update({ fully_device_id: urlDeviceParam })
+          .eq('id', data.id);
+      }
+
       setSuccessMsg(`Conectado com sucesso a: ${data.nome_local}!`);
       
       setTimeout(() => {
@@ -146,13 +157,22 @@ export default function AppView() {
     }
   };
 
-  const handlePairWithDropdown = () => {
+  const handlePairWithDropdown = async () => {
     if (!selectedScreenId) return;
 
     const selectedTela = telas.find(t => t.id === selectedScreenId);
     if (!selectedTela) return;
 
     localStorage.setItem('gpm_paired_screen_id', selectedScreenId);
+    
+    // If we have a new device code from the URL, link it so future auto-pairing works
+    if (urlDeviceParam) {
+      await supabase
+        .from('telas')
+        .update({ fully_device_id: urlDeviceParam })
+        .eq('id', selectedScreenId);
+    }
+
     setSuccessMsg(`Conectado com sucesso a: ${selectedTela.nome_local}!`);
 
     setTimeout(() => {
