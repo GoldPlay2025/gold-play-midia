@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ClientesList } from '../components/ClientesList';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TelasList } from "../components/TelasList";
+import { TelasList, checkIsOnline } from "../components/TelasList";
 import { PerfilSettings, SystemSettings, defaultSettings } from "../components/PerfilSettings";
 import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
@@ -168,9 +168,9 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [globalNotification, setGlobalNotification] = useState<GlobalNotification | null>(null);
-  const prevOnlineScreenIdsRef = useRef<Set<string>>(new Set());
-  const hasInitializedPresenceRef = useRef(false);
-  const initialPresenceSyncDoneRef = useRef(false);
+  const prevScreenStatusRef = useRef<Map<string, boolean>>(new Map());
+  const hasInitializedStatusRef = useRef(false);
+  const [ticker, setTicker] = useState(0);
 
   const triggerGlobalNotification = (telaNome: string, status: 'online' | 'offline') => {
     setGlobalNotification({ id: Math.random().toString(), telaNome, status });
@@ -757,62 +757,72 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     }
   }, [activeTab, isAuthenticated]);
 
+  // Heartbeat ticker every 10 seconds to re-evaluate last_ping freshness
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTicker(t => t + 1);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // Presence Channel subscription for real-time online/offline status
+    // 1. Presence Channel subscription for real-time online/offline status
     const presenceChannel = supabase.channel('telas-presence');
     presenceChannel
       .on('presence', { event: 'sync' }, () => {
         const state = presenceChannel.presenceState() || {};
         const onlineIds = Object.keys(state);
         setOnlineScreenIds(onlineIds);
-        initialPresenceSyncDoneRef.current = true;
         console.log('Realtime screen presence update (AdminPanel):', onlineIds);
+      })
+      .subscribe();
+
+    // 2. Realtime DB changes subscription on table 'telas'
+    const dbChangesChannel = supabase
+      .channel('admin-telas-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'telas' }, () => {
+        console.log('Realtime DB change on telas table received in AdminPanel');
+        fetchDashboardData();
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(presenceChannel);
+      supabase.removeChannel(dbChangesChannel);
     };
   }, [isAuthenticated]);
 
+  // Monitor screen online/offline status transitions and trigger top alert banner + blimp sound
   useEffect(() => {
-    if (!telas || telas.length === 0 || !initialPresenceSyncDoneRef.current) {
+    if (!telas || telas.length === 0) return;
+
+    // On initial load of screens, set baseline map without firing alerts
+    if (!hasInitializedStatusRef.current) {
+      hasInitializedStatusRef.current = true;
+      const initialMap = new Map<string, boolean>();
+      telas.forEach(tela => {
+        initialMap.set(tela.id, checkIsOnline(tela, onlineScreenIds));
+      });
+      prevScreenStatusRef.current = initialMap;
       return;
     }
 
-    if (!hasInitializedPresenceRef.current) {
-      hasInitializedPresenceRef.current = true;
-      prevOnlineScreenIdsRef.current = new Set(onlineScreenIds);
-      return;
-    }
+    const currentMap = new Map<string, boolean>();
+    telas.forEach(tela => {
+      const isOnline = checkIsOnline(tela, onlineScreenIds);
+      currentMap.set(tela.id, isOnline);
 
-    const currentOnlineSet = new Set(onlineScreenIds);
-    const previousOnlineSet = prevOnlineScreenIdsRef.current;
-
-    // Check for newly connected
-    currentOnlineSet.forEach(id => {
-      if (!previousOnlineSet.has(id)) {
-        const tela = telas.find(t => t.id === id || t.identificador_unico === id);
-        if (tela) {
-          triggerGlobalNotification(tela.nome_local, 'online');
-        }
+      const wasOnline = prevScreenStatusRef.current.get(tela.id);
+      if (wasOnline !== undefined && wasOnline !== isOnline) {
+        // Status changed! Trigger the global alert slider at top of dashboard
+        triggerGlobalNotification(tela.nome_local, isOnline ? 'online' : 'offline');
       }
     });
 
-    // Check for newly disconnected
-    previousOnlineSet.forEach(id => {
-      if (!currentOnlineSet.has(id)) {
-        const tela = telas.find(t => t.id === id || t.identificador_unico === id);
-        if (tela) {
-          triggerGlobalNotification(tela.nome_local, 'offline');
-        }
-      }
-    });
-
-    prevOnlineScreenIdsRef.current = currentOnlineSet;
-  }, [onlineScreenIds, telas]);
+    prevScreenStatusRef.current = currentMap;
+  }, [telas, onlineScreenIds, ticker]);
 
   // Toast System
   const showToast = (type: 'success' | 'error', message: string) => {
@@ -1668,19 +1678,41 @@ create policy "Permitir deletar midias" on storage.objects
                       <p className="text-3xl font-display font-light text-white">{clientes.length}</p>
                     </div>
 
-                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-sky-500/30 transition-all">
-                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Cloud className="w-12 h-12 text-sky-500" />
-                      </div>
-                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Fully Status</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="relative flex h-2.5 w-2.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-pink-500/30 transition-all">
+                      <div className="grid grid-cols-2 gap-4 divide-x divide-white/10">
+                        {/* Fully Status */}
+                        <div className="flex flex-col justify-center pr-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Fully Status</p>
+                            <Cloud className="w-4 h-4 text-sky-400/80" />
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="relative flex h-2.5 w-2.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+                            </div>
+                            <p className="text-sm sm:text-base font-display font-medium tracking-wide text-sky-400">
+                              ON-LINE
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-base font-display font-medium tracking-wide text-sky-500">
-                          ON-LINE
-                        </p>
+
+                        {/* Status SMS */}
+                        <div className="flex flex-col justify-center pl-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Status SMS</p>
+                            <MessageSquare className="w-4 h-4 text-pink-400/80" />
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="relative flex h-2.5 w-2.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>
+                            </div>
+                            <p className="text-sm sm:text-base font-display font-medium tracking-wide text-pink-500">
+                              ON-LINE
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
