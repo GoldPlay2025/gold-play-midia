@@ -10,7 +10,7 @@ export type PillProgressButtonProps = {
   label: string;
   loadingLabel?: string;
   icon?: React.ReactNode;
-  variant?: 'amber' | 'emerald' | 'rose' | 'slate' | 'gold' | 'blue';
+  variant?: 'amber' | 'emerald' | 'rose' | 'slate' | 'gold' | 'blue' | 'whatsapp' | 'white' | 'email' | 'light-emerald';
   className?: string;
 };
 
@@ -86,15 +86,26 @@ export function PillProgressButton({
   }
 
   // Normal Button state
-  const baseStyles = "relative h-11 px-6 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:active:scale-100 shadow-lg cursor-pointer";
+  const hasHeight = className.includes('h-');
+  const heightStyle = hasHeight ? '' : 'h-11';
+  const hasPadding = className.includes('px-');
+  const paddingStyle = hasPadding ? '' : 'px-5';
+
+  const baseStyles = `relative ${heightStyle} ${paddingStyle} rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:active:scale-100 shadow-lg cursor-pointer whitespace-nowrap`;
   
   let colorStyles = "bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black shadow-amber-500/20 hover:shadow-amber-500/35 border border-amber-400/30";
   if (variant === 'emerald') {
     colorStyles = "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-emerald-500/20 hover:shadow-emerald-500/35 border border-emerald-400/30";
+  } else if (variant === 'whatsapp') {
+    colorStyles = "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold shadow-emerald-500/30 hover:shadow-emerald-500/40 border border-emerald-400/50";
+  } else if (variant === 'white') {
+    colorStyles = "bg-white hover:bg-slate-100 text-slate-950 font-extrabold shadow-white/20 hover:shadow-white/30 border border-white";
+  } else if (variant === 'email' || variant === 'blue') {
+    colorStyles = "bg-sky-500 hover:bg-sky-400 text-white font-extrabold shadow-sky-500/25 hover:shadow-sky-500/35 border border-sky-400/40";
+  } else if (variant === 'light-emerald') {
+    colorStyles = "bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-200 text-slate-950 font-black shadow-emerald-400/30 hover:shadow-emerald-400/40 border border-emerald-300/60";
   } else if (variant === 'rose') {
     colorStyles = "bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white shadow-rose-500/20 hover:shadow-rose-500/35 border border-rose-400/30";
-  } else if (variant === 'blue') {
-    colorStyles = "bg-gradient-to-r from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-white shadow-blue-500/20 hover:shadow-blue-500/35 border border-blue-400/30";
   } else if (variant === 'slate') {
     colorStyles = "bg-white/5 hover:bg-white/10 text-white border border-white/10";
   }
@@ -107,7 +118,7 @@ export function PillProgressButton({
       className={`${baseStyles} ${colorStyles} ${className}`}
     >
       {icon}
-      <span>{label}</span>
+      <span className="whitespace-nowrap">{label}</span>
     </button>
   );
 }

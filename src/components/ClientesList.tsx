@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Download } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Download, MessageCircle, MessageSquare, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PillProgressButton } from './PillProgressButton';
 
@@ -109,10 +109,18 @@ const getEmailCobrancaHtml = (cliente: Cliente, sysSettings: any) => {
   const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
   const pixKeyStr = sysSettings?.pixKey || 'Não configurada';
 
+  const rawLogo = sysSettings?.logoUrl || '/gpm.png';
+  let fullLogoUrl = rawLogo;
+  if (typeof window !== 'undefined' && !rawLogo.startsWith('http') && !rawLogo.startsWith('data:')) {
+    fullLogoUrl = `${window.location.origin}${rawLogo.startsWith('/') ? '' : '/'}${rawLogo}`;
+  }
+
   return `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0f0f11; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1e293b;">
     <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); padding: 28px 20px; text-align: center; border-bottom: 2px solid #f59e0b;">
-      <h1 style="color: #f59e0b; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">GOLD PLAY DIGITAL SIGNAGE</h1>
-      <p style="color: #94a3b8; font-size: 13px; margin-top: 6px;">Aviso de Cobrança de Mensalidade</p>
+      <div style="margin: 0 auto 12px auto; text-align: center;">
+        <img src="${fullLogoUrl}" alt="${sysSettings?.systemName || 'Logo'}" style="max-height: 80px; max-width: 240px; width: auto; height: auto; object-fit: contain; display: inline-block; vertical-align: middle;" />
+      </div>
+      <p style="color: #94a3b8; font-size: 13px; margin: 6px 0 0 0; font-weight: 500;">Aviso de Cobrança de Mensalidade</p>
     </div>
     <div style="padding: 24px 20px;">
       <p style="font-size: 15px; color: #e2e8f0; margin-bottom: 16px;">Olá, <strong style="color: #ffffff;">${cliente.nome_empresa}</strong>!</p>
@@ -143,7 +151,7 @@ const getEmailCobrancaHtml = (cliente: Cliente, sysSettings: any) => {
       <p style="font-size: 12px; color: #64748b; text-align: center;">Após o pagamento, envie o comprovante para nosso atendimento. Agradecemos!</p>
     </div>
     <div style="background-color: #09090b; padding: 14px; text-align: center; border-top: 1px solid #18181b; font-size: 11px; color: #475569;">
-      © ${new Date().getFullYear()} GOLD PLAY • Sistema de Mídia Indoor
+      © ${new Date().getFullYear()} ${sysSettings?.systemName || 'GOLD PLAY'} • Sistema de Mídia Indoor
     </div>
   </div>`;
 };
@@ -198,6 +206,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
         pixKey: data?.pix_key || localObj?.pixKey || '',
         pixReceiver: data?.pix_receiver || localObj?.pixReceiver || '',
         systemName: data?.system_name || localObj?.systemName || 'GOLD PLAY',
+        logoUrl: data?.logo_url || localObj?.logoUrl || '/gpm.png',
         smtpEmail: data?.smtp_email || localObj?.smtpEmail || '',
         smtpPassword: data?.smtp_password || localObj?.smtpPassword || '',
         smtpPort: data?.smtp_port || localObj?.smtpPort || '587',
@@ -731,44 +740,47 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                     Renovado!
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  <div className="bg-[#0e0e12] border border-white/10 rounded-2xl p-2 flex items-center gap-2 flex-wrap sm:flex-nowrap shadow-xl">
                     <PillProgressButton
-                      label="Enviar Cobrança"
+                      label="WhatsApp"
+                      icon={<MessageCircle className="w-3.5 h-3.5 fill-slate-950" />}
                       onClick={() => {
                         setCobrancaCliente(row);
                         setCobrancaModalOpen(true);
                       }}
-                      variant="blue"
-                      className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
+                      variant="whatsapp"
+                      className="h-8 px-3 text-xs font-extrabold tracking-tight whitespace-nowrap"
                     />
                     <PillProgressButton
                       label="SMS"
+                      icon={<MessageSquare className="w-3.5 h-3.5 text-slate-950" />}
                       onClick={() => {
                         setSmsCliente(row);
                         setSmsText(getSmsCobrancaText(row, settings));
                         setSmsModalOpen(true);
                       }}
-                      variant="slate"
-                      className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
+                      variant="white"
+                      className="h-8 px-3 text-xs font-extrabold tracking-tight whitespace-nowrap"
                     />
                     <PillProgressButton
                       label="E-mail"
+                      icon={<Mail className="w-3.5 h-3.5 text-white" />}
                       onClick={() => {
                         setEmailCliente(row);
                         setEmailDestination(row.email || settings?.smtpEmail || '');
                         setEmailSubject(`Cobrança de Mensalidade - ${row.nome_empresa}`);
                         setEmailModalOpen(true);
                       }}
-                      variant="amber"
-                      className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
+                      variant="email"
+                      className="h-8 px-3 text-xs font-extrabold tracking-tight whitespace-nowrap"
                     />
                     <PillProgressButton
                       label="Confirmar Pagamento"
                       loadingLabel="Renovando..."
                       isLoading={renewingId === row.id}
                       onClick={() => handleRenewPayment(row)}
-                      variant="emerald"
-                      className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
+                      variant="light-emerald"
+                      className="h-8 px-3.5 text-xs font-black tracking-tight whitespace-nowrap"
                       disabled={getDaysToVencimento(row.vencimento) > 5}
                     />
                   </div>
@@ -1073,7 +1085,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
           setCobrancaModalOpen(false);
           setCobrancaCliente(null);
         }}
-        title="Enviar Cobrança"
+        title="Cobrança via WhatsApp"
       >
         {cobrancaCliente && (
           <div className="space-y-6">
