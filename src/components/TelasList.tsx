@@ -77,15 +77,16 @@ export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
   if (!row) return false;
   const ids = onlineIds || [];
 
-  // 1. Verifica no presence do Supabase Realtime
+  // 1. Verifica no presence do Supabase Realtime (Incondicional e em Tempo Real)
   const inPresence = ids.some(id => 
     id === row.id || 
     (row.identificador_unico && id.toLowerCase() === row.identificador_unico.toLowerCase()) ||
     (row.fully_device_id && id === row.fully_device_id)
   );
+
   if (inPresence) return true;
 
-  // 2. Se houver last_ping registrado, a atualização recente (menos de 2 minutos) determina o status online
+  // 2. Se o dispositivo está enviando heartbeats a cada 10s, se o último ping foi há mais de 30s é offline
   if (row.last_ping) {
     try {
       let dateStr = String(row.last_ping).trim();
@@ -93,26 +94,25 @@ export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
       if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
       const pingTime = new Date(dateStr).getTime();
       if (!isNaN(pingTime)) {
-        return (Date.now() - pingTime) < 2 * 60 * 1000; // Limite rigoroso de 2 minutos
+        return (Date.now() - pingTime) < 30 * 1000;
       }
     } catch(e) {}
   }
 
-  // 3. Se não houver last_ping, verifica se o registro foi criado há mais de 2 minutos
+  // 3. Fallback para telas criadas recentemente (menos de 30s) sem ping
   if (row.criado_em) {
     try {
       let dateStr = String(row.criado_em).trim();
       if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
       if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
       const createdTime = new Date(dateStr).getTime();
-      if (!isNaN(createdTime) && (Date.now() - createdTime) > 2 * 60 * 1000) {
-        return false;
+      if (!isNaN(createdTime) && (Date.now() - createdTime) < 30 * 1000) {
+        return row.status_online === true || String(row.status_online) === 'true';
       }
     } catch(e) {}
   }
 
-  // 4. Fallback final para status_online do banco (apenas se não for um registro antigo sem pings)
-  return row.status_online === true || String(row.status_online) === 'true';
+  return false;
 };
 
 export function TelasList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
@@ -224,19 +224,23 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
 
     try {
       presenceChannel = supabase.channel('telas-presence');
+      const handlePresenceChange = () => {
+        try {
+          const state = (presenceChannel && typeof presenceChannel.presenceState === 'function') 
+            ? presenceChannel.presenceState() 
+            : {};
+          const onlineIds = Object.keys(state || {});
+          setOnlineScreenIds(onlineIds);
+          console.log('Realtime screen presence update:', onlineIds);
+        } catch (syncErr) {
+          console.error('Error parsing presence state:', syncErr);
+        }
+      };
+
       presenceChannel
-        .on('presence', { event: 'sync' }, () => {
-          try {
-            const state = (presenceChannel && typeof presenceChannel.presenceState === 'function') 
-              ? presenceChannel.presenceState() 
-              : {};
-            const onlineIds = Object.keys(state || {});
-            setOnlineScreenIds(onlineIds);
-            console.log('Realtime screen presence update:', onlineIds);
-          } catch (syncErr) {
-            console.error('Error parsing presence state:', syncErr);
-          }
-        })
+        .on('presence', { event: 'sync' }, handlePresenceChange)
+        .on('presence', { event: 'join' }, handlePresenceChange)
+        .on('presence', { event: 'leave' }, handlePresenceChange)
         .subscribe();
     } catch (err) {
       console.error('Error establishing presence channel:', err);
