@@ -1,6 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -34,6 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(503).json({ error: 'Supabase não configurado no Vercel' });
     }
 
+    const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // a) Busca configurações de alertas de forma segura
@@ -231,7 +230,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Disparo de E-mail de Alerta para o Administrador
       if (smtpEmail && smtpPassword) {
         try {
-          const createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport;
+          const nodemailerModule = await import('nodemailer');
+          const nodemailer = nodemailerModule.default || nodemailerModule;
+          const createTransport = (nodemailer as any)?.createTransport || (nodemailer as any)?.default?.createTransport || (nodemailer as any)?.default;
 
           if (typeof createTransport === 'function') {
             const sanitizedPassword = smtpPassword.replace(/\s+/g, '');
