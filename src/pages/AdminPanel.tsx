@@ -55,7 +55,8 @@ import {
   Link2,
   Cloud,
   SearchX,
-  Receipt
+  Receipt,
+  Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -1714,38 +1715,55 @@ create policy "Permitir deletar midias" on storage.objects
                       </div>
                     </div>
 
-                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-pink-500/30 transition-all">
-                      <div className="grid grid-cols-2 gap-4 divide-x divide-white/10">
+                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-amber-500/30 transition-all">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-4 divide-x divide-white/10">
                         {/* Fully Status */}
-                        <div className="flex flex-col justify-center pr-2">
+                        <div className="flex flex-col justify-center pr-1 sm:pr-2">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Fully Status</p>
-                            <Cloud className="w-4 h-4 text-sky-400/80" />
+                            <p className="text-[8px] sm:text-[9px] font-mono text-slate-500 uppercase tracking-widest truncate max-w-full mr-1">Fully Status</p>
+                            <Cloud className="w-3 h-3 text-sky-400/80 flex-shrink-0" />
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="relative flex h-2.5 w-2.5">
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className="relative flex h-2 w-2">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
                             </div>
-                            <p className="text-sm sm:text-base font-display font-medium tracking-wide text-sky-400">
-                              ON-LINE
+                            <p className="text-xs sm:text-sm font-display font-medium tracking-wide text-sky-400 truncate">
+                              On
                             </p>
                           </div>
                         </div>
 
                         {/* Status SMS */}
-                        <div className="flex flex-col justify-center pl-4">
+                        <div className="flex flex-col justify-center px-1 sm:px-2">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Status SMS</p>
-                            <MessageSquare className="w-4 h-4 text-pink-400/80" />
+                            <p className="text-[8px] sm:text-[9px] font-mono text-slate-500 uppercase tracking-widest truncate max-w-full mr-1">Status SMS</p>
+                            <MessageSquare className="w-3 h-3 text-pink-400/80 flex-shrink-0" />
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="relative flex h-2.5 w-2.5">
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className="relative flex h-2 w-2">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-pink-500"></span>
                             </div>
-                            <p className="text-sm sm:text-base font-display font-medium tracking-wide text-pink-500">
-                              ON-LINE
+                            <p className="text-xs sm:text-sm font-display font-medium tracking-wide text-pink-500 truncate">
+                              On
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Status E-mail */}
+                        <div className="flex flex-col justify-center pl-1 sm:pl-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[8px] sm:text-[9px] font-mono text-slate-500 uppercase tracking-widest truncate max-w-full mr-1">Status E-mail</p>
+                            <Mail className="w-3 h-3 text-amber-400/80 flex-shrink-0" />
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </div>
+                            <p className="text-xs sm:text-sm font-display font-medium tracking-wide text-amber-500 truncate">
+                              On
                             </p>
                           </div>
                         </div>
