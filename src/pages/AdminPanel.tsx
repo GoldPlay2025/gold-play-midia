@@ -1,4 +1,4 @@
-import { AutomacaoPanel } from "../components/AutomacaoPanel";
+import { AutomacaoPanel } from '../components/AutomacaoPanel.tsx';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ClientesList } from '../components/ClientesList';
