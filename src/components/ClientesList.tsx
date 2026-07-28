@@ -109,10 +109,10 @@ const getEmailCobrancaHtml = (cliente: Cliente, sysSettings: any) => {
   const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
   const pixKeyStr = sysSettings?.pixKey || 'Não configurada';
 
-  const rawLogo = sysSettings?.logoUrl || '/gpm.png';
-  let fullLogoUrl = rawLogo;
-  if (typeof window !== 'undefined' && !rawLogo.startsWith('http') && !rawLogo.startsWith('data:')) {
-    fullLogoUrl = `${window.location.origin}${rawLogo.startsWith('/') ? '' : '/'}${rawLogo}`;
+  const rawLogo = sysSettings?.logoUrl;
+  let fullLogoUrl = 'https://goldplaysky.com.br/gpm.png';
+  if (rawLogo && (rawLogo.startsWith('http://') || rawLogo.startsWith('https://')) && !rawLogo.includes('localhost') && !rawLogo.includes('127.0.0.1')) {
+    fullLogoUrl = rawLogo;
   }
 
   return `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0f0f11; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1e293b;">
