@@ -1632,8 +1632,8 @@ create policy "Permitir deletar midias" on storage.objects
                     </div>
                   </div>
                   <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px] shadow-xl shadow-black/50 hover:border-emerald-500/30 transition-all">
-                    <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Link2 className="w-16 h-16 text-emerald-500" />
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+                      <Link2 className="w-12 h-12 text-emerald-500" />
                     </div>
                     <div className="mb-4 relative z-10">
                       <p className="text-xs font-mono text-emerald-500 uppercase tracking-widest font-bold mb-4">Link de Transmissão</p>
