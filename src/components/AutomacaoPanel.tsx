@@ -198,3 +198,4 @@ ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS automacao_horario TEXT DEFAUL
     </div>
   );
 }
+
