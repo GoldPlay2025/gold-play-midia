@@ -4,6 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import cron from "node-cron";
 import { whatsappRouter } from "./src/server/whatsappRoutes";
 import { monitoringRouter } from "./src/server/monitoringRoutes";
 import { smsRouter } from "./src/server/smsRoutes";
@@ -15,6 +16,7 @@ async function startServer() {
   const PORT = 3000;
 
   // CORS Middleware to allow cross-origin requests (e.g. from Vercel frontend deployments)
+
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
@@ -427,6 +429,30 @@ Pergunta ou solicitação do usuário:
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // Iniciar Cron Job para monitoramento de telas offline (a cada 3 minutos)
+  cron.schedule('*/3 * * * *', async () => {
+    try {
+      console.log("[CRON] Iniciando verificação de telas offline...");
+      const secret = process.env.CRON_SECRET || "";
+      const url = `http://127.0.0.1:${PORT}/api/cron/check-offline`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-cron-secret': secret,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log("[CRON] Verificação concluída:", data);
+      } else {
+        console.error("[CRON] Erro na verificação HTTP:", response.status, await response.text());
+      }
+    } catch (err) {
+      console.error("[CRON] Erro ao executar job:", err);
+    }
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
