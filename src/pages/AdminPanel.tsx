@@ -1362,7 +1362,12 @@ create policy "Permitir deletar midias" on storage.objects
           <img 
             src={systemSettings.iconUrl || "/gpm.png"} 
             alt="Logo" 
-            className="w-12 h-12 object-contain filter drop-shadow" 
+            className="w-12 h-12 object-contain filter drop-shadow cursor-pointer active:scale-95 transition-transform" 
+            onClick={() => {
+              setActiveTab('dashboard');
+              setIsSidebarExpanded(false);
+            }}
+            title="Ir para a Dashboard"
           />
           <button 
             onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} 
