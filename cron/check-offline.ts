@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import nodemailer from 'nodemailer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -36,8 +37,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // a) Busca configurações de alertas de forma segura
-    let alertsEnabled = false;
-    let adminPhone = '';
+    let alertsEnabled = true;
+    let adminPhone = process.env.ADMIN_PHONE || '';
+    let smtpEmail = process.env.GMAIL_USER || process.env.SMTP_EMAIL || process.env.SMTP_USER || '';
+    let smtpPassword = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '';
+    let smtpPort = Number(process.env.GMAIL_PORT || process.env.SMTP_PORT || 587);
+    let smtpHost = process.env.GMAIL_HOST || process.env.SMTP_HOST || 'smtp.gmail.com';
 
     try {
       const { data: configData, error: configError } = await supabase
@@ -47,20 +52,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .maybeSingle();
 
       if (configData) {
-        alertsEnabled = configData.alerts_enabled ?? false;
-        adminPhone = (configData.admin_phone || '').trim();
+        alertsEnabled = configData.alerts_enabled ?? true;
+        if (configData.admin_phone) adminPhone = configData.admin_phone.trim();
+        if (configData.smtp_email) smtpEmail = configData.smtp_email.trim();
+        if (configData.smtp_password) smtpPassword = configData.smtp_password.trim();
+        if (configData.smtp_port) smtpPort = Number(configData.smtp_port);
+        if (configData.smtp_host) smtpHost = configData.smtp_host.trim();
       }
     } catch (errConfig) {
       console.warn('Aviso ao consultar configuracoes no cron:', errConfig);
     }
 
-    if (!alertsEnabled || !adminPhone) {
+    if (!alertsEnabled) {
       return res.status(200).json({
         success: true,
         action: 'skipped',
-        reason: !alertsEnabled ? 'Alertas desativados ou pendentes de criação no banco' : 'Número do administrador não configurado',
-        alertsEnabled,
-        adminPhone
+        reason: 'Alertas desativados nas configurações',
+        alertsEnabled
       });
     }
 
@@ -217,6 +225,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         } catch (smsErr) {
           console.error('Erro no envio via API GTI SMS:', smsErr);
+        }
+      }
+
+      // Disparo de E-mail de Alerta para o Administrador
+      if (smtpEmail && smtpPassword) {
+        try {
+          const sanitizedPassword = smtpPassword.replace(/\s+/g, '');
+          const transporter = nodemailer.createTransport({
+            host: smtpHost || 'smtp.gmail.com',
+            port: smtpPort || 587,
+            secure: smtpPort === 465,
+            auth: {
+              user: smtpEmail,
+              pass: sanitizedPassword,
+            },
+            tls: { rejectUnauthorized: false }
+          });
+
+          const mailHtml = `<div style="font-family: Arial, sans-serif; padding: 24px; background: #0f0f11; color: #f8fafc; border-radius: 16px; border: 1px solid #1e293b;">
+            <h2 style="color: #f43f5e; margin-bottom: 12px; font-size: 20px;">🚨 ALERTA GOLD PLAY - TELA OFFLINE</h2>
+            <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6;">A tela <strong>${nomeTela}</strong>${nomeCliente ? ` (${nomeCliente})` : ''} foi detectada como <strong>OFFLINE</strong>.</p>
+            <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; margin: 16px 0;">
+              <ul style="color: #e2e8f0; font-size: 13px; line-height: 1.8; margin: 0; padding-left: 20px;">
+                <li><strong>Identificador da Tela:</strong> <span style="font-family: monospace; color: #fbbf24;">${idUnico}</span></li>
+                <li><strong>Último Sinal:</strong> ${lastPingText}</li>
+                <li><strong>Data do Alerta:</strong> ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</li>
+              </ul>
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; margin-top: 15px;">Ação recomendada: Verifique a conexão com a Internet e a energia elétrica do aparelho.</p>
+          </div>`;
+
+          await transporter.sendMail({
+            from: `"GOLD PLAY Alertas" <${smtpEmail}>`,
+            to: smtpEmail,
+            subject: `🚨 ALERTA OFFLINE: Tela ${nomeTela} - GOLD PLAY`,
+            html: mailHtml,
+          });
+          sentSuccess = true;
+          console.log('E-mail de alerta enviado para', smtpEmail);
+        } catch (emailErr) {
+          console.error('Erro ao enviar e-mail de alerta offline:', emailErr);
         }
       }
 
