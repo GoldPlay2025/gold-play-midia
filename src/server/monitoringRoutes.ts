@@ -190,7 +190,58 @@ monitoringRouter.get('/heartbeat', async (req, res) => {
   return res.redirect(307, '/api/devices/heartbeat');
 });
 
-// 2. Rota de Cron para checagem de telas offline e disparo de alertas WhatsApp
+// 2. Rota de desconexão explícita enviada ao fechar o app ou navegar fora
+monitoringRouter.post('/disconnect', async (req, res) => {
+  try {
+    const { deviceId, telaId } = req.body || req.query || {};
+    const idToSearch = (deviceId || telaId || '').trim();
+
+    if (!idToSearch) {
+      return res.status(400).json({ error: 'deviceId ou telaId é obrigatório' });
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Cliente Supabase não configurado no servidor' });
+    }
+
+    let screen: any = null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idToSearch);
+    if (isUuid) {
+      const { data } = await supabase
+        .from('telas')
+        .select('id, nome_local, status_online, alert_sent, identificador_unico, clientes(nome_empresa)')
+        .eq('id', idToSearch)
+        .maybeSingle();
+      if (data) screen = data;
+    }
+
+    if (!screen) {
+      const { data } = await supabase
+        .from('telas')
+        .select('id, nome_local, status_online, alert_sent, identificador_unico, clientes(nome_empresa)')
+        .or(`fully_device_id.eq.${idToSearch},identificador_unico.eq.${idToSearch.toUpperCase()},identificador_unico.eq.${idToSearch}`)
+        .maybeSingle();
+      if (data) screen = data;
+    }
+
+    if (!screen) {
+      return res.status(404).json({ error: 'Tela não encontrada para desconexão' });
+    }
+
+    // Marca imediatamente como offline no banco
+    await supabase
+      .from('telas')
+      .update({ status_online: false })
+      .eq('id', screen.id);
+
+    return res.json({ success: true, message: 'Dispositivo registrado como offline com sucesso' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Erro ao processar desconexão' });
+  }
+});
+
+// 3. Rota de Cron para checagem de telas offline e disparo de alertas WhatsApp
 monitoringRouter.all('/check-offline', async (req, res) => {
   try {
     // Validação de segurança via CRON_SECRET
@@ -232,8 +283,8 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
     }
 
-    // b) Busca telas com last_ping > 2 minutos ou sem ping criadas há > 2 minutos
-    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    // b) Busca telas com last_ping > 35 segundos ou sem ping criadas há > 35 segundos
+    const thirtyFiveSecondsAgo = new Date(Date.now() - 35 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
       .from('telas')
@@ -244,14 +295,14 @@ monitoringRouter.all('/check-offline', async (req, res) => {
     }
 
     const allOfflineScreens = (screens || []).filter((tela: any) => {
-      // Se tem last_ping, verifica se foi há mais de 2 minutos
+      // Se tem last_ping, verifica se foi há mais de 35 segundos
       if (tela.last_ping) {
-        return new Date(tela.last_ping).getTime() < new Date(twoMinutesAgo).getTime();
+        return new Date(tela.last_ping).getTime() < new Date(thirtyFiveSecondsAgo).getTime();
       }
 
-      // Se não tem last_ping, verifica se foi criada há mais de 2 minutos
+      // Se não tem last_ping, verifica se foi criada há mais de 35 segundos
       if (tela.criado_em) {
-        return new Date(tela.criado_em).getTime() < new Date(twoMinutesAgo).getTime();
+        return new Date(tela.criado_em).getTime() < new Date(thirtyFiveSecondsAgo).getTime();
       }
 
       return true;
@@ -304,7 +355,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         `A tela *${nomeTela}*${nomeCliente ? ` (${nomeCliente})` : ''} está *OFFLINE*!\n` +
         `📍 *ID:* ${idUnico}\n` +
         `🕒 *Último Sinal:* ${lastPingText}\n` +
-        `⚠️ *Status:* Parou de responder há mais de 2 minutos.\n\n` +
+        `⚠️ *Status:* Parou de responder (desconectado).\n\n` +
         `_Ação recomendada: Verifique a conexão Wi-Fi/Rede ou a alimentação elétrica da TV Box._`;
 
       let sentSuccess = false;
