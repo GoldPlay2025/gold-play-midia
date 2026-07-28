@@ -10,6 +10,9 @@ export type Cliente = {
   id: string;
   nome_empresa: string;
   whatsapp: string;
+  email?: string;
+  telefone?: string;
+  contato?: string;
   endereco_fisico: string;
   criado_em: string;
   vencimento?: string;
@@ -101,6 +104,50 @@ const getSmsCobrancaText = (cliente: Cliente, sysSettings: any) => {
   return `Gold Midias: Mensalidade de ${valorStr} vence dia ${vencStr}. Pix para pgto: ${pixKeyStr}. Ignore se ja pago.`;
 };
 
+const getEmailCobrancaHtml = (cliente: Cliente, sysSettings: any) => {
+  const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-';
+  const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
+  const pixKeyStr = sysSettings?.pixKey || 'Não configurada';
+
+  return `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0f0f11; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1e293b;">
+    <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); padding: 28px 20px; text-align: center; border-bottom: 2px solid #f59e0b;">
+      <h1 style="color: #f59e0b; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">GOLD PLAY DIGITAL SIGNAGE</h1>
+      <p style="color: #94a3b8; font-size: 13px; margin-top: 6px;">Aviso de Cobrança de Mensalidade</p>
+    </div>
+    <div style="padding: 24px 20px;">
+      <p style="font-size: 15px; color: #e2e8f0; margin-bottom: 16px;">Olá, <strong style="color: #ffffff;">${cliente.nome_empresa}</strong>!</p>
+      <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 20px;">Lembrando sobre o vencimento da mensalidade referente ao serviço de mídia digital em suas telas.</p>
+      
+      <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="color: #a1a1aa; padding-bottom: 8px;">Empresa:</td>
+            <td style="color: #ffffff; font-weight: 600; text-align: right; padding-bottom: 8px;">${cliente.nome_empresa}</td>
+          </tr>
+          <tr>
+            <td style="color: #a1a1aa; padding-bottom: 8px;">Data de Vencimento:</td>
+            <td style="color: #f87171; font-weight: 700; text-align: right; padding-bottom: 8px;">${vencStr}</td>
+          </tr>
+          <tr>
+            <td style="color: #a1a1aa;">Valor Mensal:</td>
+            <td style="color: #34d399; font-weight: 800; font-size: 16px; text-align: right;">${valorStr}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background-color: #1e1b18; border: 1px solid #78350f; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 20px;">
+        <p style="color: #fbbf24; font-size: 11px; font-weight: 700; text-transform: uppercase; margin: 0 0 6px 0;">Chave PIX para Pagamento</p>
+        <p style="color: #ffffff; font-family: monospace; font-size: 14px; font-weight: 700; background: #000; padding: 8px 12px; border-radius: 8px; margin: 0; word-break: break-all;">${pixKeyStr}</p>
+      </div>
+
+      <p style="font-size: 12px; color: #64748b; text-align: center;">Após o pagamento, envie o comprovante para nosso atendimento. Agradecemos!</p>
+    </div>
+    <div style="background-color: #09090b; padding: 14px; text-align: center; border-top: 1px solid #18181b; font-size: 11px; color: #475569;">
+      © ${new Date().getFullYear()} GOLD PLAY • Sistema de Mídia Indoor
+    </div>
+  </div>`;
+};
+
 export function ClientesList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [telas, setTelas] = useState<any[]>([]);
@@ -129,6 +176,14 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
   const [smsCliente, setSmsCliente] = useState<Cliente | null>(null);
   const [smsText, setSmsText] = useState("");
   const [isSendingSms, setIsSendingSms] = useState(false);
+
+  // Email Modal State
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailCliente, setEmailCliente] = useState<Cliente | null>(null);
+  const [emailDestination, setEmailDestination] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
   const [settings, setSettings] = useState<any>(null);
 
   const fetchSettings = async () => {
@@ -143,9 +198,49 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
         pixKey: data?.pix_key || localObj?.pixKey || '',
         pixReceiver: data?.pix_receiver || localObj?.pixReceiver || '',
         systemName: data?.system_name || localObj?.systemName || 'GOLD PLAY',
+        smtpEmail: data?.smtp_email || localObj?.smtpEmail || '',
+        smtpPassword: data?.smtp_password || localObj?.smtpPassword || '',
+        smtpPort: data?.smtp_port || localObj?.smtpPort || '587',
+        smtpHost: data?.smtp_host || localObj?.smtpHost || 'smtp.gmail.com',
       };
       setSettings(merged);
     } catch(e) {}
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailDestination) {
+      showToast('error', 'Informe o e-mail de destino.');
+      return;
+    }
+    setIsSendingEmail(true);
+    try {
+      const htmlBody = getEmailCobrancaHtml(emailCliente!, settings);
+      const resp = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: emailDestination,
+          subject: emailSubject || `Cobrança de Mensalidade - ${emailCliente?.nome_empresa}`,
+          html: htmlBody,
+          smtpEmail: settings?.smtpEmail,
+          smtpPassword: settings?.smtpPassword,
+          smtpPort: settings?.smtpPort,
+          smtpHost: settings?.smtpHost,
+        })
+      });
+      const data = await resp.json().catch(() => ({ error: `Resposta inválida HTTP ${resp.status}` }));
+      if (resp.ok && data.success) {
+        showToast('success', `E-mail de cobrança enviado com sucesso para ${emailDestination}!`);
+        setEmailModalOpen(false);
+        setEmailCliente(null);
+      } else {
+        showToast('error', data.error || data.message || 'Falha ao enviar e-mail.');
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || 'Erro ao conectar ao serviço de e-mail.');
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
 
   const fetchTelas = async () => {
@@ -653,7 +748,18 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                         setSmsText(getSmsCobrancaText(row, settings));
                         setSmsModalOpen(true);
                       }}
-                      variant="purple"
+                      variant="slate"
+                      className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
+                    />
+                    <PillProgressButton
+                      label="E-mail"
+                      onClick={() => {
+                        setEmailCliente(row);
+                        setEmailDestination(row.email || settings?.smtpEmail || '');
+                        setEmailSubject(`Cobrança de Mensalidade - ${row.nome_empresa}`);
+                        setEmailModalOpen(true);
+                      }}
+                      variant="amber"
                       className="h-7 px-2.5 text-[10px] font-bold tracking-tight whitespace-nowrap"
                     />
                     <PillProgressButton
@@ -1126,7 +1232,86 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 loadingLabel="Enviando..."
                 isLoading={isSendingSms}
                 icon={<CheckCircle2 className="w-4 h-4" />}
-                variant="purple"
+                variant="slate"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal de Enviar E-mail de Cobrança */}
+      <Modal
+        isOpen={emailModalOpen}
+        onClose={() => {
+          setEmailModalOpen(false);
+          setEmailCliente(null);
+        }}
+        title="Enviar E-mail de Cobrança"
+      >
+        {emailCliente && (
+          <div className="space-y-4 text-left">
+            <div className="bg-[#111115] border border-white/10 rounded-2xl p-4 space-y-3">
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-1">
+                  E-mail do Destinatário *
+                </label>
+                <input
+                  type="email"
+                  value={emailDestination}
+                  onChange={e => setEmailDestination(e.target.value)}
+                  placeholder="exemplo@empresa.com"
+                  className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-1">
+                  Assunto do E-mail
+                </label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                  placeholder={`Cobrança de Mensalidade - ${emailCliente.nome_empresa}`}
+                  className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Pré-visualização do Conteúdo do E-mail */}
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-1">
+                  Pré-visualização do Conteúdo
+                </label>
+                <div className="p-3 bg-black/80 rounded-xl border border-white/5 text-xs text-slate-300 space-y-1.5 max-h-48 overflow-y-auto font-sans">
+                  <p><strong className="text-white">Empresa:</strong> {emailCliente.nome_empresa}</p>
+                  <p><strong className="text-white">Vencimento:</strong> {emailCliente.vencimento ? new Date(emailCliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}</p>
+                  <p><strong className="text-white">Valor:</strong> {emailCliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(emailCliente.valor) : '-'}</p>
+                  <p><strong className="text-white">Chave PIX:</strong> {settings?.pixKey || 'Não configurada'}</p>
+                  <p className="text-[11px] text-slate-500 pt-2 border-t border-white/5">
+                    O e-mail será enviado em layout HTML responsivo usando as credenciais do Gmail/SMTP configuradas em Perfil ({settings?.smtpEmail || 'Administrador'}).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
+              <button
+                onClick={() => {
+                  setEmailModalOpen(false);
+                  setEmailCliente(null);
+                }}
+                disabled={isSendingEmail}
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <PillProgressButton
+                onClick={handleSendEmail}
+                label="Enviar E-mail"
+                loadingLabel="Enviando..."
+                isLoading={isSendingEmail}
+                icon={<CheckCircle2 className="w-4 h-4" />}
+                variant="amber"
               />
             </div>
           </div>

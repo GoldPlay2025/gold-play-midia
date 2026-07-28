@@ -16,6 +16,8 @@ export type Tela = {
   endereco?: string;
   whatsapp?: string;
   fully_device_id?: string;
+  last_ping?: string;
+  alert_sent?: boolean;
   clientes?: { nome_empresa: string };
   playlists?: {
     id: string;
