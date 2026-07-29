@@ -38,7 +38,7 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
     if (isUuid) {
       const { data } = await supabase
         .from('telas')
-        .select('id, nome_local, status_online, alert_sent, identificador_unico, clientes(nome_empresa)')
+        .select('id, nome_local, status_online, alert_sent, identificador_unico, last_ping, clientes(nome_empresa)')
         .eq('id', idToSearch)
         .maybeSingle();
       if (data) screen = data;
@@ -47,7 +47,7 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
     if (!screen) {
       const { data } = await supabase
         .from('telas')
-        .select('id, nome_local, status_online, alert_sent, identificador_unico, clientes(nome_empresa)')
+        .select('id, nome_local, status_online, alert_sent, identificador_unico, last_ping, clientes(nome_empresa)')
         .or(`fully_device_id.eq.${idToSearch},identificador_unico.eq.${idToSearch.toUpperCase()},identificador_unico.eq.${idToSearch}`)
         .maybeSingle();
       if (data) screen = data;
@@ -57,7 +57,19 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
       return res.status(404).json({ error: 'Tela não encontrada para heartbeat', deviceId: idToSearch });
     }
 
-    const wasOffline = screen.status_online === false || screen.alert_sent === true;
+    // Verifica se last_ping é antigo (mais de 5 minutos = 300.000 ms)
+    let isPingOld = false;
+    if (screen.last_ping) {
+      const pingTime = new Date(screen.last_ping).getTime();
+      if (!isNaN(pingTime)) {
+        isPingOld = (Date.now() - pingTime) > 300000;
+      }
+    } else {
+      // Se não tem last_ping, consideramos que estava offline
+      isPingOld = true;
+    }
+
+    const wasOffline = screen.status_online === false || screen.alert_sent === true || isPingOld;
 
     // Atualiza last_ping, status_online e reseta alert_sent para false
     const nowIso = new Date().toISOString();
@@ -283,8 +295,8 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
     }
 
-    // b) Busca telas com last_ping > 35 segundos ou sem ping criadas há > 35 segundos
-    const thirtyFiveSecondsAgo = new Date(Date.now() - 35 * 1000).toISOString();
+    // b) Busca telas com last_ping > 5 minutos ou sem ping criadas há > 5 minutos
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
       .from('telas')
@@ -295,14 +307,14 @@ monitoringRouter.all('/check-offline', async (req, res) => {
     }
 
     const allOfflineScreens = (screens || []).filter((tela: any) => {
-      // Se tem last_ping, verifica se foi há mais de 35 segundos
+      // Se tem last_ping, verifica se foi há mais de 5 minutos
       if (tela.last_ping) {
-        return new Date(tela.last_ping).getTime() < new Date(thirtyFiveSecondsAgo).getTime();
+        return new Date(tela.last_ping).getTime() < new Date(fiveMinutesAgo).getTime();
       }
 
-      // Se não tem last_ping, verifica se foi criada há mais de 35 segundos
+      // Se não tem last_ping, verifica se foi criada há mais de 5 minutos
       if (tela.criado_em) {
-        return new Date(tela.criado_em).getTime() < new Date(thirtyFiveSecondsAgo).getTime();
+        return new Date(tela.criado_em).getTime() < new Date(fiveMinutesAgo).getTime();
       }
 
       return true;
