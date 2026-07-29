@@ -75,7 +75,10 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
       isPingOld = true;
     }
 
-    const wasOffline = screen.status_online === false || screen.alert_sent === true || isPingOld;
+    // Uma tela só é considerada que RECONECTOU (wasOffline = true) se ela foi explicitamente
+    // marcada como offline (status_online === false) ou se um alerta de offline já foi enviado (alert_sent === true).
+    // NUNCA disparar SMS de "ONLINE" para pings normais de telas que já estavam online!
+    const wasOffline = screen.status_online === false || String(screen.status_online) === 'false' || screen.alert_sent === true;
 
     // Atualiza last_ping, status_online e reseta alert_sent para false
     const nowIso = new Date().toISOString();
@@ -301,8 +304,8 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
     }
 
-    // b) Busca telas com last_ping > 35 segundos ou sem ping criadas há > 35 segundos
-    const thirtyFiveSecondsAgo = new Date(Date.now() - 35 * 1000).toISOString();
+    // b) Busca telas com last_ping > 90 segundos ou sem ping criadas há > 90 segundos
+    const ninetySecondsAgo = new Date(Date.now() - 90 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
       .from('telas')
@@ -313,7 +316,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
     }
 
     const allOfflineScreens = (screens || []).filter((tela: any) => {
-      // Se tem last_ping, verifica se foi há mais de 35 segundos
+      // Se tem last_ping, verifica se foi há mais de 90 segundos
       if (tela.last_ping) {
         let dateStr = String(tela.last_ping).trim();
         if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
@@ -321,10 +324,10 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         if (!timePart.includes('Z') && !timePart.includes('+') && !timePart.includes('-')) {
           dateStr += 'Z';
         }
-        return new Date(dateStr).getTime() < (Date.now() - 35000);
+        return new Date(dateStr).getTime() < (Date.now() - 90000);
       }
 
-      // Se não tem last_ping, verifica se foi criada há mais de 35 segundos
+      // Se não tem last_ping, verifica se foi criada há mais de 90 segundos
       if (tela.criado_em) {
         let dateStr = String(tela.criado_em).trim();
         if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
@@ -332,7 +335,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         if (!timePart.includes('Z') && !timePart.includes('+') && !timePart.includes('-')) {
           dateStr += 'Z';
         }
-        return new Date(dateStr).getTime() < (Date.now() - 35000);
+        return new Date(dateStr).getTime() < (Date.now() - 90000);
       }
 
       return true;
