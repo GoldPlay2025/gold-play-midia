@@ -87,15 +87,15 @@ const parseUtcTimestamp = (str: any): number => {
 export const checkIsOnline = (row: Tela, onlineIds: string[] = []) => {
   if (!row) return false;
 
-  // 1. last_ping é a prioridade absoluta (heartbeat a cada 10s enviado pelo Player)
+  // 1. last_ping do Heartbeat (Player envia a cada 10s)
   if (row.last_ping) {
     const pingTime = parseUtcTimestamp(row.last_ping);
     if (!isNaN(pingTime)) {
       const diff = Date.now() - pingTime;
-      // Se parou de pingar há mais de 35s (3 pings falhos) -> OFFLINE IMEDIATO
-      if (diff >= 35000) return false;
-      // Se pingou recentemente (menos de 35s) -> ONLINE
-      if (diff > -120000 && diff < 35000) return true;
+      // Considera OFFLINE somente se parou de pingar há mais de 90 segundos (9 pings perdidos)
+      if (diff >= 90000) return false;
+      // Considera ONLINE se pingou nos últimos 90 segundos
+      if (diff > -180000 && diff < 90000) return true;
     }
   }
 
@@ -109,10 +109,10 @@ export const checkIsOnline = (row: Tela, onlineIds: string[] = []) => {
 
   if (inPresence) return true;
 
-  // 3. Fallback para telas criadas recentemente (menos de 35s) sem ping registrado
+  // 3. Fallback para telas criadas recentemente (menos de 90s) sem ping registrado
   if (row.criado_em) {
     const createdTime = parseUtcTimestamp(row.criado_em);
-    if (!isNaN(createdTime) && (Date.now() - createdTime) < 35000) {
+    if (!isNaN(createdTime) && (Date.now() - createdTime) < 90000) {
       return row.status_online === true || String(row.status_online) === 'true';
     }
   }
