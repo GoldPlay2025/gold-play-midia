@@ -76,7 +76,17 @@ export const getResponsavel = (endereco?: string): string => {
 export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
   if (!row) return false;
 
-  // 1. Prioritize last_ping since it's the most reliable explicit heartbeat (every 10s)
+  const ids = onlineIds || [];
+  const inPresence = ids.some(id => 
+    id === row.id || 
+    (row.identificador_unico && id.toLowerCase() === row.identificador_unico.toLowerCase()) ||
+    (row.fully_device_id && id === row.fully_device_id)
+  );
+
+  // 1. Conexão via Realtime Presence -> IMEDIATAMENTE ONLINE
+  if (inPresence) return true;
+
+  // 2. Verificação do heartbeat (last_ping) -> OFFLINE somente APÓS 5 minutos (300.000 ms) de inatividade
   if (row.last_ping) {
     try {
       let dateStr = String(row.last_ping).trim();
@@ -85,36 +95,29 @@ export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
       const pingTime = new Date(dateStr).getTime();
       if (!isNaN(pingTime)) {
         const diff = Date.now() - pingTime;
-        // Se o ping estiver no futuro (clock skew do servidor), consideramos online
-        if (diff < 0) return diff > -120 * 1000;
-        // Se parou de pingar há mais de 30s, está offline, ignorando presence zumbi
-        return diff < 30 * 1000;
+        // Se parou de pingar há 5 minutos ou mais, fica OFFLINE
+        if (diff >= 300000) return false;
+        
+        // Se o ping ocorreu há menos de 5 minutos, continua ONLINE
+        if (diff > -300000 && diff < 300000) return true;
       }
     } catch(e) {}
   }
 
-  // 2. Fallback para telas criadas recentemente (menos de 30s) sem ping
+  // 3. Fallback para telas recém-criadas sem ping (menos de 5 minutos)
   if (row.criado_em) {
     try {
       let dateStr = String(row.criado_em).trim();
       if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
       if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
       const createdTime = new Date(dateStr).getTime();
-      if (!isNaN(createdTime) && (Date.now() - createdTime) < 30 * 1000) {
+      if (!isNaN(createdTime) && (Date.now() - createdTime) < 300000) {
         return row.status_online === true || String(row.status_online) === 'true';
       }
     } catch(e) {}
   }
 
-  // 3. Fallback final para presence realtime (se last_ping for nulo)
-  const ids = onlineIds || [];
-  const inPresence = ids.some(id => 
-    id === row.id || 
-    (row.identificador_unico && id.toLowerCase() === row.identificador_unico.toLowerCase()) ||
-    (row.fully_device_id && id === row.fully_device_id)
-  );
-
-  return inPresence;
+  return false;
 };
 
 export function TelasList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
