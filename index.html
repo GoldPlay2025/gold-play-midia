@@ -5,7 +5,17 @@
     <meta name="theme-color" content="#0f172a" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gold Play Mídia - Supabase Architect Studio</title>
+    <title>Gold Play Mídia - Na sua tela!</title>
+    <!-- COLE O CÓDIGO DO ONESIGNAL AQUI -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "3219d4f1-626e-4ff2-a265-127b14897157",
+      });
+    });
+  </script>
   </head>
   <body>
     <div id="root"></div>
