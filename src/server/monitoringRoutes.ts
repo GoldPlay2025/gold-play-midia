@@ -75,10 +75,10 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
       isPingOld = true;
     }
 
-    // Uma tela só é considerada que RECONECTOU (wasOffline = true) se ela foi explicitamente
-    // marcada como offline (status_online === false) ou se um alerta de offline já foi enviado (alert_sent === true).
-    // NUNCA disparar SMS de "ONLINE" para pings normais de telas que já estavam online!
-    const wasOffline = screen.status_online === false || String(screen.status_online) === 'false' || screen.alert_sent === true;
+    // Uma tela é considerada que RECONECTOU (wasOffline = true) se ela estava explicitamente
+    // marcada como offline (status_online === false), se um alerta de offline foi enviado (alert_sent === true),
+    // ou se o seu último ping foi há mais de 35 segundos (isPingOld === true).
+    const wasOffline = screen.status_online === false || String(screen.status_online) === 'false' || screen.alert_sent === true || isPingOld;
 
     // Atualiza last_ping, status_online e reseta alert_sent para false
     const nowIso = new Date().toISOString();
@@ -105,8 +105,10 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
           .eq('id', 'sistema')
           .maybeSingle();
 
-        if (configData?.alerts_enabled && configData?.admin_phone?.trim()) {
-          const adminPhone = configData.admin_phone.trim();
+        const adminPhone = (configData?.admin_phone || '').trim();
+        const isAlertsActive = configData?.alerts_enabled !== false;
+
+        if (adminPhone && isAlertsActive) {
           const nomeTela = screen.nome_local || 'Tela sem nome';
           const nomeCliente = (screen as any).clientes?.nome_empresa || '';
           const idUnico = screen.identificador_unico || screen.id;
@@ -140,12 +142,12 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
 
               const payload: any = {
                 recipient: fullNumber,
-                message: sanitizeSms(onlineAlertMessage),
+                message: sanitizeSms(`ALERTA GOLD PLAY MIDIA: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} voltou a ficar ONLINE! ID: ${idUnico} as ${horarioText}`),
                 type: 'plain'
               };
               if (senderId) payload.sender_id = senderId;
 
-              await fetch(smsUrl, {
+              const smsResp = await fetch(smsUrl, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -154,6 +156,8 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
                 },
                 body: JSON.stringify(payload)
               });
+              const smsResultText = await smsResp.text();
+              console.log('📱 Resposta envio GTI SMS (Reconexão):', smsResp.status, smsResultText);
             } catch (smsErr) {
               console.error('Erro ao enviar SMS de reconexão:', smsErr);
             }
@@ -286,7 +290,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
     }
 
     // a) Busca configurações de alertas de forma segura
-    let alertsEnabled = false;
+    let alertsEnabled = true;
     let adminPhone = '';
 
     try {
@@ -297,15 +301,15 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         .maybeSingle();
 
       if (configData) {
-        alertsEnabled = configData.alerts_enabled ?? false;
+        alertsEnabled = configData.alerts_enabled !== false;
         adminPhone = (configData.admin_phone || '').trim();
       }
     } catch (errConfig) {
       console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
     }
 
-    // b) Busca telas com last_ping > 90 segundos ou sem ping criadas há > 90 segundos
-    const ninetySecondsAgo = new Date(Date.now() - 90 * 1000).toISOString();
+    // b) Busca telas com last_ping > 35 segundos ou sem ping criadas há > 35 segundos
+    const thirtyFiveSecondsAgo = new Date(Date.now() - 35 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
       .from('telas')
@@ -316,7 +320,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
     }
 
     const allOfflineScreens = (screens || []).filter((tela: any) => {
-      // Se tem last_ping, verifica se foi há mais de 90 segundos
+      // Se tem last_ping, verifica se foi há mais de 35 segundos
       if (tela.last_ping) {
         let dateStr = String(tela.last_ping).trim();
         if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
@@ -324,10 +328,10 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         if (!timePart.includes('Z') && !timePart.includes('+') && !timePart.includes('-')) {
           dateStr += 'Z';
         }
-        return new Date(dateStr).getTime() < (Date.now() - 90000);
+        return new Date(dateStr).getTime() < (Date.now() - 35000);
       }
 
-      // Se não tem last_ping, verifica se foi criada há mais de 90 segundos
+      // Se não tem last_ping, verifica se foi criada há mais de 35 segundos
       if (tela.criado_em) {
         let dateStr = String(tela.criado_em).trim();
         if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
@@ -335,7 +339,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         if (!timePart.includes('Z') && !timePart.includes('+') && !timePart.includes('-')) {
           dateStr += 'Z';
         }
-        return new Date(dateStr).getTime() < (Date.now() - 90000);
+        return new Date(dateStr).getTime() < (Date.now() - 35000);
       }
 
       return true;
