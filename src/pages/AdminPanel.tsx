@@ -835,48 +835,9 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
 
       const wasOnline = prevScreenStatusRef.current.get(tela.id);
       if (wasOnline !== undefined && wasOnline !== isOnline) {
-        // Status mudou! Dispara notificação no topo do painel + som
+        // Status mudou na interface! Dispara notificação no topo do painel + efeito sonoro
+        // (O envio oficial de SMS é gerido exclusivamente no backend pelo monitor de integridade)
         triggerGlobalNotification(tela.nome_local, isOnline ? 'online' : 'offline');
-
-        // Busca o número do telefone do admin (do state ou do localStorage de fallback)
-        let phone = (systemSettings?.adminPhone || '').trim();
-        if (!phone) {
-          try {
-            const saved = JSON.parse(localStorage.getItem('gpm_system_settings') || '{}');
-            phone = (saved.adminPhone || '').trim();
-          } catch(e) {}
-        }
-
-        // Se houver telefone configurado, dispara SMS automático
-        if (phone) {
-          const statusText = isOnline ? 'ONLINE' : 'OFFLINE';
-          const msg = isOnline
-            ? `ALERTA GOLD PLAY: A tela ${tela.nome_local} voltou a ficar ONLINE!`
-            : `ALERTA GOLD PLAY: A tela ${tela.nome_local} ficou OFFLINE!`;
-
-          fetch('/api/sms/send', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'x-api-key': import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta'
-            },
-            body: JSON.stringify({
-              numero: phone,
-              mensagem: msg
-            })
-          })
-          .then(async res => {
-            const json = await res.json().catch(() => ({}));
-            if (res.ok) {
-              console.log('✅ SMS de transição de status enviado com sucesso:', json);
-            } else {
-              console.error('❌ Erro no envio de SMS de transição:', json);
-            }
-          })
-          .catch(err => console.error('Silent SMS Error:', err));
-        } else {
-          console.warn('⚠️ Transição de status detectada, mas telefone de SMS (adminPhone) não está configurado nas Configurações.');
-        }
       }
     });
 
