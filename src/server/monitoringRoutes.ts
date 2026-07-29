@@ -57,12 +57,18 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
       return res.status(404).json({ error: 'Tela não encontrada para heartbeat', deviceId: idToSearch });
     }
 
-    // Verifica se last_ping é antigo (mais de 5 minutos = 300.000 ms)
+    // Verifica se last_ping é antigo (mais de 35 segundos)
     let isPingOld = false;
     if (screen.last_ping) {
-      const pingTime = new Date(screen.last_ping).getTime();
+      let dateStr = String(screen.last_ping).trim();
+      if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
+      const timePart = dateStr.split('T')[1] || '';
+      if (!timePart.includes('Z') && !timePart.includes('+') && !timePart.includes('-')) {
+        dateStr += 'Z';
+      }
+      const pingTime = new Date(dateStr).getTime();
       if (!isNaN(pingTime)) {
-        isPingOld = (Date.now() - pingTime) > 300000;
+        isPingOld = (Date.now() - pingTime) > 35000;
       }
     } else {
       // Se não tem last_ping, consideramos que estava offline
@@ -295,8 +301,8 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
     }
 
-    // b) Busca telas com last_ping > 5 minutos ou sem ping criadas há > 5 minutos
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    // b) Busca telas com last_ping > 35 segundos ou sem ping criadas há > 35 segundos
+    const thirtyFiveSecondsAgo = new Date(Date.now() - 35 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
       .from('telas')
@@ -307,14 +313,26 @@ monitoringRouter.all('/check-offline', async (req, res) => {
     }
 
     const allOfflineScreens = (screens || []).filter((tela: any) => {
-      // Se tem last_ping, verifica se foi há mais de 5 minutos
+      // Se tem last_ping, verifica se foi há mais de 35 segundos
       if (tela.last_ping) {
-        return new Date(tela.last_ping).getTime() < new Date(fiveMinutesAgo).getTime();
+        let dateStr = String(tela.last_ping).trim();
+        if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
+        const timePart = dateStr.split('T')[1] || '';
+        if (!timePart.includes('Z') && !timePart.includes('+') && !timePart.includes('-')) {
+          dateStr += 'Z';
+        }
+        return new Date(dateStr).getTime() < (Date.now() - 35000);
       }
 
-      // Se não tem last_ping, verifica se foi criada há mais de 5 minutos
+      // Se não tem last_ping, verifica se foi criada há mais de 35 segundos
       if (tela.criado_em) {
-        return new Date(tela.criado_em).getTime() < new Date(fiveMinutesAgo).getTime();
+        let dateStr = String(tela.criado_em).trim();
+        if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
+        const timePart = dateStr.split('T')[1] || '';
+        if (!timePart.includes('Z') && !timePart.includes('+') && !timePart.includes('-')) {
+          dateStr += 'Z';
+        }
+        return new Date(dateStr).getTime() < (Date.now() - 35000);
       }
 
       return true;
