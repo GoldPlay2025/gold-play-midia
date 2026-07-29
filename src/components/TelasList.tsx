@@ -75,18 +75,8 @@ export const getResponsavel = (endereco?: string): string => {
 
 export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
   if (!row) return false;
-  const ids = onlineIds || [];
 
-  // 1. Verifica no presence do Supabase Realtime (Incondicional e em Tempo Real)
-  const inPresence = ids.some(id => 
-    id === row.id || 
-    (row.identificador_unico && id.toLowerCase() === row.identificador_unico.toLowerCase()) ||
-    (row.fully_device_id && id === row.fully_device_id)
-  );
-
-  if (inPresence) return true;
-
-  // 2. Se o dispositivo está enviando heartbeats a cada 10s, se o último ping foi há mais de 30s é offline
+  // 1. Prioritize last_ping since it's the most reliable explicit heartbeat (every 10s)
   if (row.last_ping) {
     try {
       let dateStr = String(row.last_ping).trim();
@@ -94,12 +84,16 @@ export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
       if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
       const pingTime = new Date(dateStr).getTime();
       if (!isNaN(pingTime)) {
-        return (Date.now() - pingTime) < 30 * 1000;
+        const diff = Date.now() - pingTime;
+        // Se o ping estiver no futuro (clock skew do servidor), consideramos online
+        if (diff < 0) return diff > -120 * 1000;
+        // Se parou de pingar há mais de 30s, está offline, ignorando presence zumbi
+        return diff < 30 * 1000;
       }
     } catch(e) {}
   }
 
-  // 3. Fallback para telas criadas recentemente (menos de 30s) sem ping
+  // 2. Fallback para telas criadas recentemente (menos de 30s) sem ping
   if (row.criado_em) {
     try {
       let dateStr = String(row.criado_em).trim();
@@ -112,7 +106,15 @@ export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
     } catch(e) {}
   }
 
-  return false;
+  // 3. Fallback final para presence realtime (se last_ping for nulo)
+  const ids = onlineIds || [];
+  const inPresence = ids.some(id => 
+    id === row.id || 
+    (row.identificador_unico && id.toLowerCase() === row.identificador_unico.toLowerCase()) ||
+    (row.fully_device_id && id === row.fully_device_id)
+  );
+
+  return inPresence;
 };
 
 export function TelasList({ showToast }: { showToast: (type: 'success' | 'error', msg: string) => void }) {
@@ -142,6 +144,14 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const prevOnlineSetRef = useRef<Set<string>>(new Set());
   const hasInitializedRef = useRef(false);
+  const [ticker, setTicker] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTicker(t => t + 1);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const triggerManualCheckIn = async () => {
     setIsCheckingIn(true);
