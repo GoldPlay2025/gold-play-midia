@@ -291,6 +291,16 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
           logoUrl: data.logo_url || '/gpm.png',
           iconUrl: data.icon_url || '/gpm.png',
           backendUrl: data.backend_url || '',
+          weatherCity: data.weather_city || 'Paranavaí, Paraná',
+          pixKey: data.pix_key || '',
+          pixReceiver: data.pix_receiver || '',
+          cobrancaImageUrl: data.cobranca_image_url || '',
+          adminPhone: data.admin_phone || '',
+          alertsEnabled: data.alerts_enabled ?? false,
+          smtpEmail: data.smtp_email || '',
+          smtpPassword: data.smtp_password || '',
+          smtpPort: data.smtp_port || '587',
+          smtpHost: data.smtp_host || 'smtp.gmail.com',
         };
         setSystemSettings(loadedSettings);
         localStorage.setItem('gpm_system_settings', JSON.stringify(loadedSettings));
@@ -317,8 +327,8 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   };
 
   // Fetch Data
-  const fetchDashboardData = async () => {
-    setIsLoading(true);
+  const fetchDashboardData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const { data: telasData, error: telasError } = await supabase
         .from('telas')
@@ -349,10 +359,12 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
       setClientes(clientesData || []);
     } catch (error: any) {
       console.error('Error fetching data:', error);
-      const errorMsg = error.message || error.details || JSON.stringify(error);
-      showToast('error', `Falha ao carregar dados: ${errorMsg}. Verifique a conexão do banco.`);
+      if (!silent) {
+        const errorMsg = error.message || error.details || JSON.stringify(error);
+        showToast('error', `Falha ao carregar dados: ${errorMsg}. Verifique a conexão do banco.`);
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -751,25 +763,22 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     if (isAuthenticated) {
       fetchClientes();
       fetchCustos();
-      if (activeTab === 'dashboard') {
-        fetchDashboardData();
+      fetchDashboardData();
+      if (activeTab === 'dashboard' || activeTab === 'nova-midia') {
         fetchMidias();
-      } else if (activeTab === 'nova-tela') {
-        fetchClientes();
-      } else if (activeTab === 'nova-midia') {
-        fetchDashboardData(); // Fetches both telas and clientes, which is needed for nova-midia dropdown
-        fetchMidias(); // Carrega biblioteca de mídias
       }
     }
   }, [activeTab, isAuthenticated]);
 
-  // Heartbeat ticker every 5 seconds to re-evaluate last_ping freshness
+  // Heartbeat ticker and background poll for screens data every 10s
   useEffect(() => {
+    if (!isAuthenticated) return;
     const interval = setInterval(() => {
       setTicker(t => t + 1);
-    }, 5000);
+      fetchDashboardData(true);
+    }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -794,7 +803,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
       .channel('admin-telas-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'telas' }, () => {
         console.log('Realtime DB change on telas table received in AdminPanel');
-        fetchDashboardData();
+        fetchDashboardData(true);
       })
       .subscribe();
 
@@ -826,20 +835,47 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
 
       const wasOnline = prevScreenStatusRef.current.get(tela.id);
       if (wasOnline !== undefined && wasOnline !== isOnline) {
-        // Status changed! Trigger the global alert slider at top of dashboard
+        // Status mudou! Dispara notificação no topo do painel + som
         triggerGlobalNotification(tela.nome_local, isOnline ? 'online' : 'offline');
 
-        // Silent SMS Alert to Admin
-        if (systemSettings?.adminPhone) {
+        // Busca o número do telefone do admin (do state ou do localStorage de fallback)
+        let phone = (systemSettings?.adminPhone || '').trim();
+        if (!phone) {
+          try {
+            const saved = JSON.parse(localStorage.getItem('gpm_system_settings') || '{}');
+            phone = (saved.adminPhone || '').trim();
+          } catch(e) {}
+        }
+
+        // Se houver telefone configurado, dispara SMS automático
+        if (phone) {
           const statusText = isOnline ? 'ONLINE' : 'OFFLINE';
+          const msg = isOnline
+            ? `ALERTA GOLD PLAY: A tela ${tela.nome_local} voltou a ficar ONLINE!`
+            : `ALERTA GOLD PLAY: A tela ${tela.nome_local} ficou OFFLINE há mais de 5 minutos!`;
+
           fetch('/api/sms/send', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-api-key': import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta'
+            },
             body: JSON.stringify({
-              numero: systemSettings.adminPhone,
-              mensagem: `Alerta: A tela ${tela.nome_local} ficou ${statusText}!`
+              numero: phone,
+              mensagem: msg
             })
-          }).catch(err => console.error('Silent SMS Error:', err));
+          })
+          .then(async res => {
+            const json = await res.json().catch(() => ({}));
+            if (res.ok) {
+              console.log('✅ SMS de transição de status enviado com sucesso:', json);
+            } else {
+              console.error('❌ Erro no envio de SMS de transição:', json);
+            }
+          })
+          .catch(err => console.error('Silent SMS Error:', err));
+        } else {
+          console.warn('⚠️ Transição de status detectada, mas telefone de SMS (adminPhone) não está configurado nas Configurações.');
         }
       }
     });
