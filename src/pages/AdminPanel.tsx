@@ -830,32 +830,22 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
         triggerGlobalNotification(tela.nome_local, isOnline ? 'online' : 'offline');
 
         // Silent SMS Alert to Admin
-        if (systemSettings?.adminPhone && systemSettings?.alertsEnabled !== false) {
-          if (isOnline) {
-            fetch('/api/sms/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                numero: systemSettings.adminPhone,
-                mensagem: `✅ Alerta: A tela ${tela.nome_local} conectou e está ONLINE!`
-              })
-            }).catch(err => console.error('Silent SMS Error (Online):', err));
-          } else {
-            fetch('/api/sms/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                numero: systemSettings.adminPhone,
-                mensagem: `🚨 Alerta: A tela ${tela.nome_local} caiu e está OFFLINE!`
-              })
-            }).catch(err => console.error('Silent SMS Error (Offline):', err));
-          }
+        if (systemSettings?.adminPhone) {
+          const statusText = isOnline ? 'ONLINE' : 'OFFLINE';
+          fetch('/api/sms/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              numero: systemSettings.adminPhone,
+              mensagem: `Alerta: A tela ${tela.nome_local} ficou ${statusText}!`
+            })
+          }).catch(err => console.error('Silent SMS Error:', err));
         }
       }
     });
 
     prevScreenStatusRef.current = currentMap;
-  }, [telas, onlineScreenIds, ticker, systemSettings?.adminPhone, systemSettings?.alertsEnabled]);
+  }, [telas, onlineScreenIds, ticker, systemSettings?.adminPhone]);
 
   // Toast System
   const showToast = (type: 'success' | 'error', message: string) => {
