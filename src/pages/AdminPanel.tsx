@@ -83,6 +83,28 @@ type Cliente = {
   nome_empresa: string;
   contato: string;
   criado_em: string;
+  vencimento?: string;
+};
+
+const getDaysToVencimento = (vencimento?: string) => {
+  if (!vencimento) return null;
+  const today = new Date();
+  const utcToday = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  
+  const vDate = new Date(vencimento);
+  const utcVDate = Date.UTC(vDate.getUTCFullYear(), vDate.getUTCMonth(), vDate.getUTCDate());
+  
+  const diffTime = utcVDate - utcToday;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const getVencimentoStatus = (vencimento?: string) => {
+  if (!vencimento) return 'ok';
+  const diffDays = getDaysToVencimento(vencimento);
+  if (diffDays === null || isNaN(diffDays)) return 'ok';
+  if (diffDays < 0) return 'vencido';
+  if (diffDays <= 3) return 'vencendo';
+  return 'ok';
 };
 
 type Tela = {
@@ -227,6 +249,14 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     return telas.filter(t => checkIsOnline(t, onlineScreenIds)).length;
   }, [telas, onlineScreenIds, ticker]);
   const offlineTelasCount = Math.max(0, telas.length - onlineTelasCount);
+
+  const clientesVencidosCount = useMemo(() => {
+    return clientes.filter(c => getVencimentoStatus(c.vencimento) === 'vencido').length;
+  }, [clientes]);
+
+  const clientesVencendoCount = useMemo(() => {
+    return clientes.filter(c => getVencimentoStatus(c.vencimento) === 'vencendo').length;
+  }, [clientes]);
 
   // Setup States
   const [setupUrl, setSetupUrl] = useState(supabaseUrl || '');
@@ -1717,11 +1747,54 @@ create policy "Permitir deletar midias" on storage.objects
                   </div>
                   <div className="flex flex-col gap-4 min-h-[200px]">
                     <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-blue-500/30 transition-all">
-                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
-                        <Users className="w-12 h-12 text-blue-500" />
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4 divide-x divide-white/10 items-center">
+                        {/* Esquerda: Clientes Ativos */}
+                        <div className="flex flex-col justify-center pr-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] sm:text-[11px] font-mono text-slate-400 uppercase tracking-widest font-semibold">
+                              CLIENTES
+                            </p>
+                            <Users className="w-4 h-4 text-blue-400 shrink-0" />
+                          </div>
+                          <div className="flex items-baseline gap-2 mt-1">
+                            <span className="text-3xl font-display font-light text-white leading-none">
+                              {clientes.length}
+                            </span>
+                            <span className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                              ATIVOS
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Direita: Vencidos e Vencendo empilhados */}
+                        <div className="flex flex-col justify-center pl-3 sm:pl-4 gap-2.5">
+                          {/* Vencidos */}
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <p className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                                VENCIDOS
+                              </p>
+                              <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                            </div>
+                            <p className="text-lg sm:text-xl font-display font-medium text-rose-400 leading-none">
+                              {clientesVencidosCount}
+                            </p>
+                          </div>
+
+                          {/* Vencendo */}
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <p className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                                VENCENDO
+                              </p>
+                              <AlertTriangle className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                            </div>
+                            <p className="text-lg sm:text-xl font-display font-medium text-orange-400 leading-none">
+                              {clientesVencendoCount}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Clientes Ativos</p>
-                      <p className="text-3xl font-display font-light text-white">{clientes.length}</p>
                     </div>
 
                     <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-amber-500/30 transition-all">
