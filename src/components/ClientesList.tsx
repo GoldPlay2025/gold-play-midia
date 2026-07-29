@@ -6,6 +6,8 @@ import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Ey
 import { motion, AnimatePresence } from 'motion/react';
 import { PillProgressButton } from './PillProgressButton';
 
+import { checkIsOnline } from './TelasList';
+
 export type Cliente = {
   id: string;
   nome_empresa: string;
@@ -1322,7 +1324,8 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                     const response = await fetch('/api/sms/send', {
                       method: 'POST',
                       headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'x-api-key': import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta'
                       },
                       body: JSON.stringify({
                         numero: phone,
@@ -1614,9 +1617,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                               </div>
                             </div>
                             {(() => {
-                              const isOnline = t.last_ping 
-                                ? (Date.now() - new Date(t.last_ping.includes('T') ? t.last_ping : t.last_ping.replace(' ', 'T') + 'Z').getTime() < 30 * 1000)
-                                : (t.status_online === true);
+                              const isOnline = checkIsOnline(t, []);
                               return (
                                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold border shrink-0 ${
                                   isOnline 

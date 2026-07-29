@@ -73,9 +73,33 @@ export const getResponsavel = (endereco?: string): string => {
   return '';
 };
 
-export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
+const parseUtcTimestamp = (str: any): number => {
+  if (!str) return NaN;
+  let dateStr = String(str).trim();
+  if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
+  const timePart = dateStr.split('T')[1] || '';
+  if (!timePart.includes('Z') && !timePart.includes('+') && !timePart.includes('-')) {
+    dateStr += 'Z';
+  }
+  return new Date(dateStr).getTime();
+};
+
+export const checkIsOnline = (row: Tela, onlineIds: string[] = []) => {
   if (!row) return false;
 
+  // 1. last_ping é a prioridade absoluta (heartbeat a cada 10s enviado pelo Player)
+  if (row.last_ping) {
+    const pingTime = parseUtcTimestamp(row.last_ping);
+    if (!isNaN(pingTime)) {
+      const diff = Date.now() - pingTime;
+      // Se parou de pingar há mais de 35s (3 pings falhos) -> OFFLINE IMEDIATO
+      if (diff >= 35000) return false;
+      // Se pingou recentemente (menos de 35s) -> ONLINE
+      if (diff > -120000 && diff < 35000) return true;
+    }
+  }
+
+  // 2. Fallback para presença realtime (caso a tela não possua last_ping salvo ainda)
   const ids = onlineIds || [];
   const inPresence = ids.some(id => 
     id === row.id || 
@@ -83,38 +107,14 @@ export const checkIsOnline = (row: Tela, onlineIds: string[]) => {
     (row.fully_device_id && id === row.fully_device_id)
   );
 
-  // 1. Conexão via Realtime Presence -> IMEDIATAMENTE ONLINE
   if (inPresence) return true;
 
-  // 2. Verificação do heartbeat (last_ping) -> OFFLINE somente APÓS 5 minutos (300.000 ms) de inatividade
-  if (row.last_ping) {
-    try {
-      let dateStr = String(row.last_ping).trim();
-      if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
-      if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
-      const pingTime = new Date(dateStr).getTime();
-      if (!isNaN(pingTime)) {
-        const diff = Date.now() - pingTime;
-        // Se parou de pingar há 5 minutos ou mais, fica OFFLINE
-        if (diff >= 300000) return false;
-        
-        // Se o ping ocorreu há menos de 5 minutos, continua ONLINE
-        if (diff > -300000 && diff < 300000) return true;
-      }
-    } catch(e) {}
-  }
-
-  // 3. Fallback para telas recém-criadas sem ping (menos de 5 minutos)
+  // 3. Fallback para telas criadas recentemente (menos de 35s) sem ping registrado
   if (row.criado_em) {
-    try {
-      let dateStr = String(row.criado_em).trim();
-      if (!dateStr.includes('T')) dateStr = dateStr.replace(' ', 'T');
-      if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-')) dateStr += 'Z';
-      const createdTime = new Date(dateStr).getTime();
-      if (!isNaN(createdTime) && (Date.now() - createdTime) < 300000) {
-        return row.status_online === true || String(row.status_online) === 'true';
-      }
-    } catch(e) {}
+    const createdTime = parseUtcTimestamp(row.criado_em);
+    if (!isNaN(createdTime) && (Date.now() - createdTime) < 35000) {
+      return row.status_online === true || String(row.status_online) === 'true';
+    }
   }
 
   return false;
