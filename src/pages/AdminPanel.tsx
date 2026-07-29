@@ -770,13 +770,13 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
     }
   }, [activeTab, isAuthenticated]);
 
-  // Heartbeat ticker and background poll for screens data every 10s
+  // Heartbeat ticker and background poll for screens data every 5s
   useEffect(() => {
     if (!isAuthenticated) return;
     const interval = setInterval(() => {
       setTicker(t => t + 1);
       fetchDashboardData(true);
-    }, 10000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
@@ -852,7 +852,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
           const statusText = isOnline ? 'ONLINE' : 'OFFLINE';
           const msg = isOnline
             ? `ALERTA GOLD PLAY: A tela ${tela.nome_local} voltou a ficar ONLINE!`
-            : `ALERTA GOLD PLAY: A tela ${tela.nome_local} ficou OFFLINE há mais de 5 minutos!`;
+            : `ALERTA GOLD PLAY: A tela ${tela.nome_local} ficou OFFLINE!`;
 
           fetch('/api/sms/send', {
             method: 'POST',
