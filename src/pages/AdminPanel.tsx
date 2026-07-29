@@ -1645,66 +1645,15 @@ create policy "Permitir deletar midias" on storage.objects
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                   <div className="flex flex-col gap-4 min-h-[200px]">
                     <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-amber-500/30 transition-all">
-                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Monitor className="w-12 h-12 text-amber-500" />
-                      </div>
-                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Total de Telas</p>
-                      <p className="text-3xl font-display font-light text-white">{telas.length}</p>
-                    </div>
-
-                    <div className="flex-1 flex flex-col">
-                      <WeatherWidget city={systemSettings.weatherCity || 'Paranavaí, Paraná'} />
-                    </div>
-                  </div>
-                  <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px] shadow-xl shadow-black/50 hover:border-emerald-500/30 transition-all">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
-                      <Link2 className="w-12 h-12 text-emerald-500" />
-                    </div>
-                    <div className="mb-4 relative z-10">
-                      <p className="text-xs font-mono text-emerald-500 uppercase tracking-widest font-bold mb-4">Link de Transmissão</p>
-                      <div className="space-y-3 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
-                        {midias.length === 0 ? (
-                          <p className="text-xs text-slate-500 italic">Nenhuma mídia ativa</p>
-                        ) : (
-                          midias.map(midia => (
-                            <div 
-                              key={midia.id} 
-                              onClick={() => {
-                                navigator.clipboard.writeText(`${window.location.origin}/campanha/${midia.id}`);
-                                showToast('success', `Link de "${midia.titulo_video || 'Campanha'}" copiado!`);
-                              }}
-                              title="Clique para copiar o link"
-                              className="flex items-center gap-3 bg-black/40 hover:bg-white/[0.05] border border-white/5 hover:border-emerald-500/30 p-2.5 rounded-xl cursor-pointer transition-all group/item"
-                            >
-                              <div className="w-16 h-12 rounded-lg overflow-hidden bg-white/5 shrink-0 flex items-center justify-center relative group-hover/item:scale-105 transition-transform">
-                                {midia.url_storage ? (
-                                  <video src={midia.url_storage} className="w-full h-full object-cover opacity-80 group-hover/item:opacity-100 transition-opacity" />
-                                ) : (
-                                  <Video className="w-4 h-4 text-slate-600" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[11px] font-mono text-slate-200 truncate font-semibold uppercase group-hover/item:text-emerald-400 transition-colors">
-                                  {midia.titulo_video || 'Campanha'}
-                                </p>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-4 min-h-[200px]">
-                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-blue-500/30 transition-all">
                       <div className="grid grid-cols-2 gap-4 divide-x divide-white/10">
-                        {/* Clientes Ativos */}
+                        {/* Total de Telas */}
                         <div className="flex flex-col justify-center pr-2">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Clientes Ativos</p>
-                            <Users className="w-4 h-4 text-blue-400/80" />
+                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Total de Telas</p>
+                            <Monitor className="w-4 h-4 text-amber-500/80" />
                           </div>
                           <p className="text-2xl sm:text-3xl font-display font-light text-white mt-1">
-                            {clientes.length}
+                            {telas.length}
                           </p>
                         </div>
 
@@ -1727,6 +1676,52 @@ create policy "Permitir deletar midias" on storage.objects
                           </div>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="flex-1 flex flex-col">
+                      <WeatherWidget city={systemSettings.weatherCity || 'Paranavaí, Paraná'} />
+                    </div>
+                  </div>
+                  <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-start min-h-[200px] shadow-xl shadow-black/50 hover:border-emerald-500/30 transition-all">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+                      <Link2 className="w-12 h-12 text-emerald-500" />
+                    </div>
+                    <div className="mb-4 relative z-10">
+                      <p className="text-xs font-mono text-emerald-500 uppercase tracking-widest font-bold mb-4">MÍDIAS DE TRANSMISSÃO</p>
+                      <div className="space-y-3 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
+                        {midias.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">Nenhuma mídia ativa</p>
+                        ) : (
+                          midias.map(midia => (
+                            <div 
+                              key={midia.id} 
+                              className="flex items-center gap-3 bg-black/40 border border-white/5 p-2.5 rounded-xl transition-all"
+                            >
+                              <div className="w-16 h-12 rounded-lg overflow-hidden bg-white/5 shrink-0 flex items-center justify-center relative">
+                                {midia.url_storage ? (
+                                  <video src={midia.url_storage} className="w-full h-full object-cover opacity-80" />
+                                ) : (
+                                  <Video className="w-4 h-4 text-slate-600" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-mono text-slate-200 truncate font-semibold uppercase">
+                                  {midia.titulo_video || 'Campanha'}
+                                </p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-4 min-h-[200px]">
+                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-blue-500/30 transition-all">
+                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+                        <Users className="w-12 h-12 text-blue-500" />
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Clientes Ativos</p>
+                      <p className="text-3xl font-display font-light text-white">{clientes.length}</p>
                     </div>
 
                     <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-amber-500/30 transition-all">
