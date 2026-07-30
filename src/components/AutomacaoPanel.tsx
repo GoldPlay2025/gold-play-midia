@@ -124,16 +124,33 @@ ON CONFLICT (id) DO NOTHING;`;
   const fetchConfig = async () => {
     setLoading(true);
     try {
-      const res = await fetchApi('/api/automacao/config');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+
+      const res = await fetchApi('/api/automacao/config', { signal: controller.signal });
+      clearTimeout(timer);
+
       if (res.ok) {
         const data = await safeJsonParse(res);
-        setConfig(data);
+        if (data && typeof data === 'object') {
+          setConfig(prev => ({
+            ...prev,
+            ...data,
+            diasAntecedencia: typeof data.diasAntecedencia === 'number' ? data.diasAntecedencia : prev.diasAntecedencia,
+            horarioDisparo: data.horarioDisparo || prev.horarioDisparo,
+            ativo: typeof data.ativo === 'boolean' ? data.ativo : prev.ativo,
+            mensagemTemplate: data.mensagemTemplate || prev.mensagemTemplate,
+            logs: Array.isArray(data.logs) ? data.logs : prev.logs
+          }));
+        }
       } else {
         showToast('error', 'Não foi possível carregar as configurações da automação.');
       }
     } catch (err: any) {
       console.error('Erro ao buscar automação:', err);
-      showToast('error', err.message || 'Erro de conexão com o servidor.');
+      if (err.name !== 'AbortError') {
+        showToast('error', err.message || 'Erro de conexão com o servidor.');
+      }
     } finally {
       setLoading(false);
     }
