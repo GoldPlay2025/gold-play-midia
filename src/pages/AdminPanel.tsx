@@ -1678,13 +1678,13 @@ create policy "Permitir deletar midias" on storage.objects
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                   <div className="flex flex-col gap-4 min-h-[200px]">
-                    <div className="bg-[#0c0c10]/60 backdrop-blur-xl border border-white/10 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-amber-500/30 transition-all">
+                    <div className="bg-[#0c0c10]/80 backdrop-blur-xl border border-amber-500/30 p-4 rounded-2xl relative overflow-hidden group flex-1 flex flex-col justify-center shadow-xl shadow-black/50 hover:border-amber-500/50 transition-all">
                       <div className="grid grid-cols-2 gap-4 divide-x divide-white/10">
                         {/* Total de Telas */}
                         <div className="flex flex-col justify-center pr-2">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Total de Telas</p>
-                            <Monitor className="w-4 h-4 text-amber-500/80" />
+                            <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-semibold">Total de Telas</p>
+                            <Monitor className="w-4 h-4 text-amber-500" />
                           </div>
                           <p className="text-2xl sm:text-3xl font-display font-light text-white mt-1">
                             {telas.length}
@@ -1694,18 +1694,27 @@ create policy "Permitir deletar midias" on storage.objects
                         {/* Telas On-line */}
                         <div className="flex flex-col justify-center pl-4">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Telas On-line</p>
-                            <Tv className="w-4 h-4 text-emerald-400/80" />
+                            <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-semibold">Telas On-line</p>
+                            <Tv className="w-4 h-4 text-emerald-400" />
                           </div>
                           <div className="flex items-center gap-2 mt-1">
-                            <div className="relative flex h-2.5 w-2.5">
-                              {onlineTelasCount > 0 && (
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <div className="relative flex h-2.5 w-2.5 shrink-0">
+                              {onlineTelasCount > 0 ? (
+                                <>
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                </>
+                              ) : (
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-400/80"></span>
                               )}
-                              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${onlineTelasCount > 0 ? 'bg-emerald-500' : 'bg-slate-500'}`}></span>
                             </div>
-                            <p className="text-sm sm:text-base font-display font-medium tracking-wide text-emerald-400">
-                              {onlineTelasCount} On <span className="text-slate-500 text-xs font-normal">/ {offlineTelasCount} Off</span>
+                            <p className="text-sm sm:text-base font-display font-medium tracking-wide">
+                              <span className={onlineTelasCount > 0 ? "text-emerald-400 font-bold" : "text-rose-400/80 font-bold"}>
+                                {onlineTelasCount} On
+                              </span>
+                              <span className="text-slate-500 text-xs font-normal ml-1">
+                                / {offlineTelasCount} Off
+                              </span>
                             </p>
                           </div>
                         </div>
