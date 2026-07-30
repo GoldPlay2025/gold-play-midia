@@ -217,7 +217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.error('Erro na requisição API GTI SMS:', await smsResp.text());
           }
 
-          if (smsResp.ok && smsData && smsData.status === 'success') {
+          if (smsResp.ok && smsData && (smsData.status === 'success' || smsData.success === true || smsData.code === 200 || smsData.data?.status === 'success')) {
              sentSuccess = true;
              console.log('Alerta OFFLINE enviado via SMS com sucesso para', fullNumber);
           } else if (smsData) {
@@ -243,7 +243,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 user: smtpEmail,
                 pass: sanitizedPassword,
               },
-              tls: { rejectUnauthorized: false }
+              tls: { rejectUnauthorized: false },
+              connectionTimeout: 5000,
+              greetingTimeout: 5000,
+              socketTimeout: 5000
             });
 
           const mailHtml = `<div style="font-family: Arial, sans-serif; padding: 24px; background: #0f0f11; color: #f8fafc; border-radius: 16px; border: 1px solid #1e293b;">
@@ -273,11 +276,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // Marca alert_sent = true
-      await supabase
-        .from('telas')
-        .update({ alert_sent: true, status_online: false })
-        .eq('id', tela.id);
+      // Marca alert_sent = true somente se enviou com sucesso
+      if (sentSuccess) {
+        await supabase
+          .from('telas')
+          .update({ alert_sent: true, status_online: false })
+          .eq('id', tela.id);
+      } else {
+        console.warn(`Alerta Vercel Cron para a tela "${nomeTela}" (${tela.id}) mantido alert_sent = false.`);
+      }
 
       alertsSentResults.push({
         telaId: tela.id,
