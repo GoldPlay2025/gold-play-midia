@@ -140,9 +140,12 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
                 return sanitized;
               };
 
+              const shortOnlineMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} voltou a ficar ONLINE!`;
+              const finalOnlineMsg = sanitizeSms(shortOnlineMsg).substring(0, 155);
+
               const payload: any = {
                 recipient: fullNumber,
-                message: sanitizeSms(`ALERTA GOLD PLAY MIDIA: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} voltou a ficar ONLINE! ID: ${idUnico} as ${horarioText}`),
+                message: finalOnlineMsg,
                 type: 'plain'
               };
               if (senderId) payload.sender_id = senderId;
@@ -275,8 +278,12 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       const authHeader = req.headers.authorization || '';
       const querySecret = req.query?.secret || req.headers['x-cron-secret'];
       const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (authHeader as string);
+      const apiKey = process.env.VITE_WHATSAPP_API_KEY || process.env.API_KEY || 'minha-chave-secreta';
+      const providedKey = req.headers['x-api-key'];
+      const clientIp = req.ip || req.socket.remoteAddress || '';
+      const isLocal = clientIp.includes('127.0.0.1') || clientIp.includes('::1') || clientIp.includes('localhost');
 
-      if (token !== cronSecret && querySecret !== cronSecret) {
+      if (token !== cronSecret && querySecret !== cronSecret && providedKey !== apiKey && !isLocal) {
         return res.status(401).json({ 
           error: 'Não autorizado. Token CRON_SECRET inválido ou não fornecido.',
           message: 'Envie o token no cabeçalho Authorization: Bearer <CRON_SECRET> ou parâmetro ?secret=<CRON_SECRET>'
@@ -320,6 +327,11 @@ monitoringRouter.all('/check-offline', async (req, res) => {
     }
 
     const allOfflineScreens = (screens || []).filter((tela: any) => {
+      // Se a tela já está marcada como offline
+      if (tela.status_online === false || String(tela.status_online) === 'false') {
+        return true;
+      }
+
       // Se tem last_ping, verifica se foi há mais de 35 segundos
       if (tela.last_ping) {
         let dateStr = String(tela.last_ping).trim();
@@ -495,9 +507,12 @@ monitoringRouter.all('/check-offline', async (req, res) => {
             return sanitized;
           };
 
+          const shortOfflineMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} ficou OFFLINE!`;
+          const finalOfflineMsg = sanitizeSms(shortOfflineMsg).substring(0, 155);
+
           const payload: any = {
             recipient: fullNumber,
-            message: sanitizeSms(alertMessage),
+            message: finalOfflineMsg,
             type: 'plain'
           };
           
