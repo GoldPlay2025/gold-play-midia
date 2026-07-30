@@ -58,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const payload: any = {
       recipient: fullNumber,
       message: cleanMsg,
-      type: 'unicode'
+      type: 'plain'
     };
     
     if (senderId) {
