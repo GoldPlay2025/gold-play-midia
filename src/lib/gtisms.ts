@@ -37,12 +37,13 @@ export async function sendGtiSms(options: SendGtiSmsOptions): Promise<SendGtiSms
 
   const sanitizedMsg = sanitizeSms(options.mensagem);
   const senderId = options.senderId || process.env.GTISMS_SENDER_ID || '';
-  const timeoutMs = options.timeoutMs || 15000;
+  const timeoutMs = options.timeoutMs || 8000;
 
   // 1. Tentar V3 JSON POST
+  let timerV3: any = null;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    timerV3 = setTimeout(() => controller.abort(), Math.min(timeoutMs, 5000));
 
     const v3Url = 'https://sms.gtisms.com/api/v3/sms/send';
     const payload: any = {
@@ -62,7 +63,6 @@ export async function sendGtiSms(options: SendGtiSmsOptions): Promise<SendGtiSms
       body: JSON.stringify(payload),
       signal: controller.signal
     });
-    clearTimeout(timer);
 
     const rawText = await resp.text();
     let data: any = {};
@@ -77,12 +77,15 @@ export async function sendGtiSms(options: SendGtiSmsOptions): Promise<SendGtiSms
     }
   } catch (errV3: any) {
     console.warn('[sendGtiSms] Tentativa v3 falhou ou excedeu o tempo, tentando HTTP GET...', errV3?.message);
+  } finally {
+    if (timerV3) clearTimeout(timerV3);
   }
 
   // 2. Fallback: HTTP GET Endpoint
+  let timerHttp: any = null;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    timerHttp = setTimeout(() => controller.abort(), Math.min(timeoutMs, 4000));
 
     const httpUrl = `https://sms.gtisms.com/api/http/sms/send?api_token=${encodeURIComponent(token)}&recipient=${encodeURIComponent(fullNumber)}&message=${encodeURIComponent(sanitizedMsg)}${senderId ? `&sender_id=${encodeURIComponent(senderId)}` : ''}`;
 
@@ -91,7 +94,6 @@ export async function sendGtiSms(options: SendGtiSmsOptions): Promise<SendGtiSms
       headers: { 'Accept': 'application/json' },
       signal: controller.signal
     });
-    clearTimeout(timer);
 
     const rawText = await resp.text();
     let data: any = {};
@@ -115,5 +117,7 @@ export async function sendGtiSms(options: SendGtiSmsOptions): Promise<SendGtiSms
       success: false,
       message: errHttp.name === 'AbortError' ? 'Tempo de conexão esgotado ao contatar a operadora de SMS.' : ('Erro ao conectar à operadora de SMS: ' + errHttp.message)
     };
+  } finally {
+    if (timerHttp) clearTimeout(timerHttp);
   }
 }
