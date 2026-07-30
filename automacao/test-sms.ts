@@ -43,17 +43,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const smsResult = await sendGtiSms({
       numero,
       mensagem: testMsg,
-      timeoutMs: 15000
+      timeoutMs: 8000
     });
 
     const cleaned = String(numero).replace(/\D/g, '');
     const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
 
-    // Atualiza log no Supabase em segundo plano sem travar o cliente
+    // Atualiza log no Supabase com timeout seguro e limpeza de timers
     const supabase = getSupabase();
     if (supabase) {
-      (async () => {
-        try {
+      let timer: any = null;
+      try {
+        const timeoutPromise = new Promise((resolve) => {
+          timer = setTimeout(() => resolve(null), 2000);
+        });
+
+        const logTask = (async () => {
           const { data: configData } = await supabase
             .from('automacao_config')
             .select('*')
@@ -79,10 +84,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             logs,
             updated_at: new Date().toISOString()
           }, { onConflict: 'id' });
-        } catch (logErr) {
-          console.error('Erro em log assíncrono:', logErr);
-        }
-      })();
+        })();
+
+        await Promise.race([logTask, timeoutPromise]);
+      } catch (logErr) {
+        console.error('Erro ao gravar log no Supabase:', logErr);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     }
 
     if (smsResult.success) {

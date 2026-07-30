@@ -51,10 +51,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     targetDate.setDate(targetDate.getDate() + config.diasAntecedencia);
     const targetIsoDate = targetDate.toISOString().split('T')[0];
 
-    const { data: clients, error: clientErr } = await supabase
+    const { data: allClients, error: clientErr } = await supabase
       .from('clientes')
-      .select('*')
-      .eq('vencimento', targetIsoDate);
+      .select('*');
+
+    if (clientErr) {
+      return res.status(500).json({ error: 'Erro ao buscar clientes: ' + clientErr.message });
+    }
+
+    const clients = (allClients || []).filter(cli => {
+      if (!cli.vencimento) return false;
+      try {
+        const cliVencStr = new Date(cli.vencimento).toISOString().split('T')[0];
+        return cliVencStr === targetIsoDate;
+      } catch (e) {
+        return String(cli.vencimento).startsWith(targetIsoDate);
+      }
+    });
 
     if (clientErr) {
       return res.status(500).json({ error: 'Erro ao buscar clientes: ' + clientErr.message });

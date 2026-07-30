@@ -38,17 +38,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     try {
       if (supabase) {
-        const queryPromise = supabase
-          .from('automacao_config')
-          .select('*')
-          .eq('id', 'sistema')
-          .maybeSingle();
+        let timer: any = null;
+        let data: any = null;
+        let error: any = null;
 
-        const timeoutPromise = new Promise((resolve) => 
-          setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 1000)
-        );
+        try {
+          const queryPromise = supabase
+            .from('automacao_config')
+            .select('*')
+            .eq('id', 'sistema')
+            .maybeSingle();
 
-        const { data, error }: any = await Promise.race([queryPromise, timeoutPromise]);
+          const timeoutPromise = new Promise((resolve) => {
+            timer = setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 2000);
+          });
+
+          const resRace: any = await Promise.race([queryPromise, timeoutPromise]);
+          data = resRace?.data;
+          error = resRace?.error;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
 
         if (!error && data) {
           return res.status(200).json({
@@ -82,23 +92,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       if (supabase) {
-        const upsertPromise = supabase.from('automacao_config').upsert({
-          id: 'sistema',
-          dias_antecedencia: updated.diasAntecedencia,
-          horario_disparo: updated.horarioDisparo,
-          ativo: updated.ativo,
-          mensagem_template: updated.mensagemTemplate,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
+        let timer: any = null;
+        try {
+          const timeoutPromise = new Promise((resolve) => {
+            timer = setTimeout(() => resolve({ error: { message: 'Timeout write' } }), 2500);
+          });
 
-        const timeoutWrite = new Promise((resolve) => 
-          setTimeout(() => resolve({ error: { message: 'Timeout write' } }), 1000)
-        );
+          const upsertPromise = supabase.from('automacao_config').upsert({
+            id: 'sistema',
+            dias_antecedencia: updated.diasAntecedencia,
+            horario_disparo: updated.horarioDisparo,
+            ativo: updated.ativo,
+            mensagem_template: updated.mensagemTemplate,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
 
-        // Executa sem travar a resposta HTTP
-        Promise.race([upsertPromise, timeoutWrite]).catch(err => {
-          console.warn('[Vercel config] Upsert em segundo plano:', err);
-        });
+          await Promise.race([upsertPromise, timeoutPromise]);
+        } catch (err) {
+          console.warn('[Vercel config] Upsert erro:', err);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
       }
 
       return res.status(200).json({
