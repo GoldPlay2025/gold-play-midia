@@ -38,10 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
        smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
     }
-    let senderId = process.env.GTISMS_SENDER_ID || '';
-    if (senderId.startsWith('http') || senderId.length > 20) {
-      senderId = '';
-    }
+    const senderId = process.env.GTISMS_SENDER_ID || '';
     
     const sanitizeSms = (text: string) => {
       let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
