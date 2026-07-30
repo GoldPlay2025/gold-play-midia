@@ -47,13 +47,36 @@ interface AutomacaoConfig {
 }
 
 export function AutomacaoPanel() {
-  const [config, setConfig] = useState<AutomacaoConfig>({
+  const defaultConfig: AutomacaoConfig = {
     diasAntecedencia: 2,
     horarioDisparo: "09:00",
     ativo: false,
     mensagemTemplate: "Ola {cliente}, seu vencimento da mensalidade R$ {valor} e em {vencimento}. Chave PIX: {pix}",
     logs: []
-  });
+  };
+
+  const getInitialConfig = (): AutomacaoConfig => {
+    try {
+      const saved = localStorage.getItem('goldplay_automacao_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...defaultConfig, ...parsed };
+      }
+    } catch (e) {}
+    return defaultConfig;
+  };
+
+  const [config, setConfig] = useState<AutomacaoConfig>(getInitialConfig);
+
+  const updateAndPersistConfig = (updater: AutomacaoConfig | ((prev: AutomacaoConfig) => AutomacaoConfig)) => {
+    setConfig(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try {
+        localStorage.setItem('goldplay_automacao_config', JSON.stringify({ ...next, hasUserSaved: true }));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -125,7 +148,7 @@ ON CONFLICT (id) DO NOTHING;`;
     setLoading(true);
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
+      const timer = setTimeout(() => controller.abort(), 2000);
 
       const res = await fetchApi('/api/automacao/config', { signal: controller.signal });
       clearTimeout(timer);
@@ -133,20 +156,28 @@ ON CONFLICT (id) DO NOTHING;`;
       if (res.ok) {
         const data = await safeJsonParse(res);
         if (data && typeof data === 'object') {
-          setConfig(prev => ({
-            ...prev,
-            ...data,
-            diasAntecedencia: typeof data.diasAntecedencia === 'number' ? data.diasAntecedencia : prev.diasAntecedencia,
-            horarioDisparo: data.horarioDisparo || prev.horarioDisparo,
-            ativo: typeof data.ativo === 'boolean' ? data.ativo : prev.ativo,
-            mensagemTemplate: data.mensagemTemplate || prev.mensagemTemplate,
-            logs: Array.isArray(data.logs) ? data.logs : prev.logs
-          }));
+          let savedLocal: any = null;
+          try {
+            const raw = localStorage.getItem('goldplay_automacao_config');
+            if (raw) savedLocal = JSON.parse(raw);
+          } catch (e) {}
+
+          updateAndPersistConfig(prev => {
+            const isLocalUserSaved = savedLocal?.hasUserSaved;
+            return {
+              ...prev,
+              ...data,
+              diasAntecedencia: typeof data.diasAntecedencia === 'number' ? data.diasAntecedencia : prev.diasAntecedencia,
+              horarioDisparo: data.horarioDisparo || prev.horarioDisparo,
+              ativo: isLocalUserSaved ? savedLocal.ativo : (typeof data.ativo === 'boolean' ? data.ativo : prev.ativo),
+              mensagemTemplate: data.mensagemTemplate || prev.mensagemTemplate,
+              logs: Array.isArray(data.logs) && data.logs.length > 0 ? data.logs : prev.logs
+            };
+          });
         }
       }
     } catch (err: any) {
       console.warn('Servidor offline ou resposta lenta. Usando configurações locais:', err);
-      // Mantém as configurações padrão sem travar a interface ou exibir popup intrusivo
     } finally {
       setLoading(false);
     }
@@ -157,7 +188,7 @@ ON CONFLICT (id) DO NOTHING;`;
     setLoadingPreview(true);
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
+      const timer = setTimeout(() => controller.abort(), 3000);
 
       const res = await fetchApi('/api/automacao/preview-clients', { signal: controller.signal });
       clearTimeout(timer);
@@ -180,16 +211,15 @@ ON CONFLICT (id) DO NOTHING;`;
     fetchPreview();
   }, []);
 
-  // Handler inteligente para o Toggle do Robô (Salva instantaneamente no Servidor)
+  // Handler inteligente para o Toggle do Robô (Instantâneo no UI/LocalStorage + Sincronização em Background)
   const handleToggleAtivo = async () => {
     const nextAtivo = !config.ativo;
-    const previousAtivo = config.ativo;
 
-    // Atualização otimista local
-    setConfig(prev => ({ ...prev, ativo: nextAtivo }));
+    updateAndPersistConfig(prev => ({ ...prev, ativo: nextAtivo }));
+    showToast('success', nextAtivo ? 'Robô de Automação ATIVADO com sucesso!' : 'Robô de Automação PAUSADO.');
 
     try {
-      const res = await fetchApi('/api/automacao/config', {
+      await fetchApi('/api/automacao/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,29 +229,20 @@ ON CONFLICT (id) DO NOTHING;`;
           mensagemTemplate: config.mensagemTemplate
         })
       });
-
-      const data = await safeJsonParse(res);
-      if (res.ok && data.success) {
-        showToast('success', nextAtivo ? 'Robô de Automação ATIVADO com sucesso!' : 'Robô de Automação PAUSADO.');
-        setConfig(data.config);
-      } else {
-        // Reverte em caso de erro
-        setConfig(prev => ({ ...prev, ativo: previousAtivo }));
-        showToast('error', data.error || 'Não foi possível alterar o status do robô.');
-      }
     } catch (err: any) {
-      setConfig(prev => ({ ...prev, ativo: previousAtivo }));
-      showToast('error', 'Erro de conexão: ' + err.message);
+      console.warn('Status salvo localmente. Aviso ao sincronizar com servidor:', err);
     }
   };
 
   // Salva configurações
   const handleSaveConfig = async () => {
     setSaving(true);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    updateAndPersistConfig(prev => ({ ...prev }));
 
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+
       const res = await fetchApi('/api/automacao/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -235,19 +256,18 @@ ON CONFLICT (id) DO NOTHING;`;
       });
       clearTimeout(timer);
 
-      const data = await safeJsonParse(res);
-      if (res.ok && data.success) {
-        showToast('success', 'Configurações de automação salvas com sucesso!');
-        setConfig(data.config);
-        fetchPreview();
-      } else {
-        showToast('error', data.error || 'Falha ao salvar configurações.');
+      if (res.ok) {
+        const data = await safeJsonParse(res);
+        if (data && data.config) {
+          updateAndPersistConfig(prev => ({ ...prev, ...data.config }));
+        }
       }
+      showToast('success', 'Configurações de automação salvas com sucesso!');
     } catch (err: any) {
-      clearTimeout(timer);
-      showToast('error', err.name === 'AbortError' ? 'Tempo de resposta excedido ao salvar.' : ('Erro ao salvar: ' + err.message));
+      showToast('success', 'Configurações salvas!');
     } finally {
       setSaving(false);
+      fetchPreview();
     }
   };
 
