@@ -38,11 +38,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     try {
       if (supabase) {
-        const { data, error } = await supabase
+        const queryPromise = supabase
           .from('automacao_config')
           .select('*')
           .eq('id', 'sistema')
           .maybeSingle();
+
+        const timeoutPromise = new Promise((resolve) => 
+          setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 2500)
+        );
+
+        const { data, error }: any = await Promise.race([queryPromise, timeoutPromise]);
 
         if (!error && data) {
           return res.status(200).json({
