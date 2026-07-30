@@ -176,62 +176,20 @@ function sanitizeSmsText(text: string): string {
   return sanitized.trim();
 }
 
+import { sendGtiSms } from '../lib/gtisms';
+
 // Função interna isolada para envio via GTI SMS
 async function sendGtiSmsDirect(numero: string, mensagem: string): Promise<{ success: boolean; data?: any; error?: string }> {
-  if (!process.env.GTISMS_API_TOKEN) {
-    return { success: false, error: 'API do GTI SMS (GTISMS_API_TOKEN) não configurada no servidor.' };
-  }
+  const result = await sendGtiSms({
+    numero,
+    mensagem,
+    timeoutMs: 15000
+  });
 
-  const cleaned = String(numero).replace(/\D/g, '');
-  if (!cleaned) {
-    return { success: false, error: 'Número de telefone inválido.' };
-  }
-
-  const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
-  let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
-  if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
-    smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
-  }
-
-  const smsToken = process.env.GTISMS_API_TOKEN;
-  const senderId = process.env.GTISMS_SENDER_ID || '';
-
-  const payload: any = {
-    recipient: fullNumber,
-    message: sanitizeSmsText(mensagem).substring(0, 160),
-    type: 'plain'
-  };
-
-  if (senderId) {
-    payload.sender_id = senderId;
-  }
-
-  try {
-    const response = await fetch(smsUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${smsToken}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const rawText = await response.text();
-    let smsData: any;
-    try {
-      smsData = JSON.parse(rawText);
-    } catch (e) {
-      return { success: false, error: `Resposta inválida da API GetSMS (HTTP ${response.status}): ${rawText}` };
-    }
-
-    if (response.ok && smsData.status === 'success') {
-      return { success: true, data: smsData };
-    } else {
-      return { success: false, error: smsData.message || 'Falha no envio via GetSMS', data: smsData };
-    }
-  } catch (err: any) {
-    return { success: false, error: 'Erro de conexão com API GetSMS: ' + err.message };
+  if (result.success) {
+    return { success: true, data: result.rawResponse };
+  } else {
+    return { success: false, error: result.message, data: result.rawResponse };
   }
 }
 
