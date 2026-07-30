@@ -790,7 +790,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold flex items-center gap-1">
                   <Eye className="w-3 h-3" />
-                  Toque para Detalhes
+                  Detalhes
                 </span>
                 <span className="text-xs text-slate-400 font-mono">
                   {telas.filter(t => getClientIdsForTela(t).includes(row.id)).length} Telas
@@ -1526,89 +1526,20 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                       </div>
                     </div>
 
-                    {/* Botões de Ação de Cobrança (Organizados em 2 linhas no mobile) */}
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5 shrink-0">
-                        <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Cobrança
-                      </span>
-
-                      <div className="flex flex-col gap-1.5 items-end">
-                        {/* Linha 1: WhatsApp e SMS */}
-                        <div className="flex items-center gap-2">
-                          {/* WhatsApp */}
-                          <button
-                            onClick={() => {
-                              setCobrancaCliente(slideCliente);
-                              setCobrancaModalOpen(true);
-                            }}
-                            className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
-                            title="Cobrança via WhatsApp"
-                          >
-                            <MessageCircle className="w-4 h-4 fill-emerald-500/20 text-emerald-400" />
-                          </button>
-
-                          {/* SMS */}
-                          <button
-                            onClick={() => {
-                              setSmsCliente(slideCliente);
-                              setSmsText(getSmsCobrancaText(slideCliente, settings));
-                              setSmsModalOpen(true);
-                            }}
-                            className="p-2.5 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 active:scale-95 transition-all cursor-pointer shadow-md"
-                            title="Cobrança via SMS"
-                          >
-                            <MessageSquare className="w-4 h-4 text-white" />
-                          </button>
-                        </div>
-
-                        {/* Linha 2: E-mail e Confirmar Pagamento */}
-                        <div className="flex items-center gap-2">
-                          {/* E-mail */}
-                          <button
-                            onClick={() => {
-                              setEmailCliente(slideCliente);
-                              setEmailDestination(slideCliente.email || settings?.smtpEmail || '');
-                              setEmailSubject(`Cobrança de Mensalidade - ${slideCliente.nome_empresa}`);
-                              setEmailModalOpen(true);
-                            }}
-                            className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
-                            title="Cobrança via E-mail"
-                          >
-                            <Mail className="w-4 h-4 text-sky-400" />
-                          </button>
-
-                          {/* Confirmar Pagamento */}
-                          <button
-                            onClick={() => handleRenewPayment(slideCliente)}
-                            disabled={renewingId === slideCliente.id || getDaysToVencimento(slideCliente.vencimento) > 5}
-                            className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer shadow-md flex items-center justify-center"
-                            title="Confirmar Pagamento (Renovar)"
-                          >
-                            {renewingId === slideCliente.id ? (
-                              <Loader2 className="w-4 h-4 text-emerald-300 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* WhatsApp */}
                     {slideCliente.whatsapp && (
-                      <div className="flex items-center justify-between pt-1">
-                        <div className="flex items-center gap-2 text-xs text-slate-300">
-                          <img src="https://goldplaysky.com.br/whats.png" alt="WA" className="w-4 h-4 object-contain" referrerPolicy="no-referrer" />
-                          <span className="font-mono">{slideCliente.whatsapp}</span>
-                        </div>
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-300">
                         <a
                           href={`https://wa.me/${slideCliente.whatsapp.replace(/\D/g, '').startsWith('55') ? slideCliente.whatsapp.replace(/\D/g, '') : '55' + slideCliente.whatsapp.replace(/\D/g, '')}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                          className="flex items-center gap-2 hover:text-emerald-400 transition-colors group cursor-pointer"
+                          title="Abrir no WhatsApp"
                         >
-                          <span>Abrir WhatsApp</span>
-                          <ExternalLink className="w-3 h-3" />
+                          <div className="p-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 group-hover:bg-emerald-500/20 transition-all">
+                            <img src="https://goldplaysky.com.br/whats.png" alt="WA" className="w-4 h-4 object-contain" referrerPolicy="no-referrer" />
+                          </div>
+                          <span className="font-mono group-hover:underline">{slideCliente.whatsapp}</span>
                         </a>
                       </div>
                     )}

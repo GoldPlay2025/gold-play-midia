@@ -711,7 +711,7 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold flex items-center gap-1">
                     <Eye className="w-3 h-3" />
-                    Toque para Detalhes
+                    Detalhes
                   </span>
                   <span className="text-xs text-slate-400 font-mono">
                     {getClientIdsForTela(row).length} Clientes
