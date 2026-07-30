@@ -8,6 +8,7 @@ import { Sidebar } from "../components/Sidebar";
 import { CloudPanel } from "../components/CloudPanel";
 
 import { GestaoPanel } from "../components/GestaoPanel";
+import { AutomacaoPanel } from "../components/AutomacaoPanel";
 import { PillProgressButton } from "../components/PillProgressButton";
 import { MediaThumbnail, MediaModalPlayer } from "../components/MediaThumbnail";
 import { fetchApi } from '../lib/api';
@@ -167,7 +168,7 @@ const playBlimpSound = () => {
   }
 };
 
-export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud' }) {
+export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 'gestao' | 'clientes' | 'telas' | 'automacao' | 'nova-midia' | 'perfil' | 'cloud' }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('gpm_authenticated') === 'true';
@@ -177,7 +178,7 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'nova-midia' | 'perfil' | 'cloud'>(initialTab || 'dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'gestao' | 'clientes' | 'telas' | 'automacao' | 'nova-midia' | 'perfil' | 'cloud'>(initialTab || 'dashboard');
   const [telas, setTelas] = useState<Tela[]>([]);
   const [onlineScreenIds, setOnlineScreenIds] = useState<string[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -1988,6 +1989,13 @@ create policy "Permitir deletar midias" on storage.objects
             {activeTab === 'telas' && (
               <motion.div key="telas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
                 <TelasList showToast={showToast} />
+              </motion.div>
+            )}
+
+            {/* Automação Tab */}
+            {activeTab === 'automacao' && (
+              <motion.div key="automacao" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
+                <AutomacaoPanel />
               </motion.div>
             )}
 
