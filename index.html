@@ -1,24 +1,9 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#0f172a" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gold Play Mídia - Na sua tela!</title>
-   <!-- CÓDIGO DO ONESIGNAL ATUALIZADO -->
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-  <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "3219d4f1-626e-4ff2-a265-127b14897157",
-      });
-      
-      // Essa é a linha mágica que força o pop-up a pular na tela!
-      OneSignal.Slidedown.promptPush({ force: true });
-    });
-  </script>
+    <title>Gold Play Mídia - Supabase Architect Studio</title>
   </head>
   <body>
     <div id="root"></div>

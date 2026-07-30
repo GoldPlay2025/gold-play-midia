@@ -8,7 +8,6 @@ import cron from "node-cron";
 import { whatsappRouter } from "./src/server/whatsappRoutes";
 import { monitoringRouter } from "./src/server/monitoringRoutes";
 import { smsRouter } from "./src/server/smsRoutes";
-import { automationRouter, runAutomatedBillingRoutine, readAutomacaoConfig } from "./src/server/automationRoutes";
 
 dotenv.config();
 
@@ -31,12 +30,11 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Rotas do WhatsApp, Monitoramento, SMS e Automação
+  // Rotas do WhatsApp e Monitoramento
   app.use('/api/whatsapp', whatsappRouter);
   app.use('/api/devices', monitoringRouter);
   app.use('/api/cron', monitoringRouter);
   app.use('/api/sms', smsRouter);
-  app.use('/api/automacao', automationRouter);
 
   // Rota dedicada de teste do WhatsApp compatível com Vercel (/api/test-whatsapp)
   app.all('/api/test-whatsapp', async (req, res) => {
@@ -452,22 +450,7 @@ Pergunta ou solicitação do usuário:
         console.error("[CRON] Erro na verificação HTTP:", response.status, await response.text());
       }
     } catch (err) {
-      console.error("[CRON] Erro ao executar job de monitoramento:", err);
-    }
-
-    // Cron Job Isolado para Automação de Cobrança GetSMS (Verificação a cada 1 minuto)
-    try {
-      const config = readAutomacaoConfig();
-      if (config && config.ativo) {
-        const now = new Date();
-        const currentHHmm = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
-        if (currentHHmm === config.horarioDisparo) {
-          console.log(`[CRON AUTOMAÇÃO GETSMS] Horário programado atingido (${currentHHmm}). Executando rotina...`);
-          await runAutomatedBillingRoutine(false);
-        }
-      }
-    } catch (autoErr) {
-      console.error("[CRON AUTOMAÇÃO GETSMS] Erro isolado na automação de cobrança:", autoErr);
+      console.error("[CRON] Erro ao executar job:", err);
     }
   });
 
