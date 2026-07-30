@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, Copy, Check, Search, X, Users, Eye, ChevronRight, ExternalLink, MapPin, User, Tv, Play, Sparkles, RefreshCw } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, Copy, Check, Search, X, Users, Eye, ChevronRight, ExternalLink, MapPin, User, Tv, Play, Sparkles, RefreshCw, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Cliente } from './ClientesList';
 import { PillProgressButton } from './PillProgressButton';
@@ -1070,24 +1070,44 @@ export function TelasList({ showToast }: { showToast: (type: 'success' | 'error'
               className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity"
             />
 
-            <div className="fixed inset-y-0 right-0 max-w-full flex pl-6">
+            <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 z-50">
               <motion.div 
                 initial={{ x: '100%' }}
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-                className="w-screen max-w-md bg-[#0c0c0e] border-l border-white/10 shadow-2xl flex flex-col justify-between overflow-y-auto"
+                className="w-screen max-w-md bg-[#0c0c0e] border-l border-white/10 shadow-2xl flex flex-col justify-between relative h-full"
               >
+                {/* Botão Seta de Voltar Fixa na Borda Esquerda (50% menor, mantida visível ao rolar) */}
+                <button
+                  onClick={() => setSlideTela(null)}
+                  className="absolute -left-3.5 top-1/2 -translate-y-1/2 bg-amber-500 hover:bg-amber-400 text-slate-950 p-1.5 rounded-full shadow-xl shadow-amber-500/40 flex items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-95 z-50 border-2 border-slate-950 ring-2 ring-amber-500/50"
+                  title="Voltar para a lista de telas"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 stroke-[3]" />
+                </button>
+
                 {/* Header do Drawer */}
                 <div className="pt-8 pb-6 px-6 border-b border-white/10 bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.2)]">
-                      <Tv className="w-3.5 h-3.5" />
-                      Visão Detalhada em Slide
-                    </span>
+                  <div className="flex items-center justify-between mb-4 gap-2">
                     <button
                       onClick={() => setSlideTela(null)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer active:scale-95"
+                      className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md shrink-0"
+                      title="Voltar para a lista de telas"
+                    >
+                      <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
+                      Voltar
+                    </button>
+
+                    <span className="px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-[0_0_12px_rgba(245,158,11,0.2)] truncate">
+                      <Tv className="w-3.5 h-3.5 shrink-0" />
+                      Visão Detalhada
+                    </span>
+
+                    <button
+                      onClick={() => setSlideTela(null)}
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer active:scale-95 shrink-0"
+                      title="Fechar"
                     >
                       <X className="w-5 h-5" />
                     </button>
