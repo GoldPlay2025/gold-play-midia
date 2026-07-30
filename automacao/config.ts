@@ -76,21 +76,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let currentConfig: any = { ...defaultConfig };
 
       if (supabase) {
-        const { data } = await supabase
-          .from('automacao_config')
-          .select('*')
-          .eq('id', 'sistema')
-          .maybeSingle();
+        try {
+          const queryPromise = supabase
+            .from('automacao_config')
+            .select('*')
+            .eq('id', 'sistema')
+            .maybeSingle();
 
-        if (data) {
-          currentConfig = {
-            diasAntecedencia: typeof data.dias_antecedencia === 'number' ? data.dias_antecedencia : 2,
-            horarioDisparo: data.horario_disparo || "09:00",
-            ativo: typeof data.ativo === 'boolean' ? data.ativo : false,
-            mensagemTemplate: data.mensagem_template || defaultConfig.mensagemTemplate,
-            lastRunDate: data.last_run_date || undefined,
-            logs: Array.isArray(data.logs) ? data.logs : []
-          };
+          const timeoutPromise = new Promise((resolve) => 
+            setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 2000)
+          );
+
+          const { data }: any = await Promise.race([queryPromise, timeoutPromise]);
+
+          if (data) {
+            currentConfig = {
+              diasAntecedencia: typeof data.dias_antecedencia === 'number' ? data.dias_antecedencia : 2,
+              horarioDisparo: data.horario_disparo || "09:00",
+              ativo: typeof data.ativo === 'boolean' ? data.ativo : false,
+              mensagemTemplate: data.mensagem_template || defaultConfig.mensagemTemplate,
+              lastRunDate: data.last_run_date || undefined,
+              logs: Array.isArray(data.logs) ? data.logs : []
+            };
+          }
+        } catch (e) {
+          console.warn('[Vercel config] Aviso ao ler do Supabase:', e);
         }
       }
 
@@ -104,16 +114,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       if (supabase) {
-        await supabase.from('automacao_config').upsert({
-          id: 'sistema',
-          dias_antecedencia: updated.diasAntecedencia,
-          horario_disparo: updated.horarioDisparo,
-          ativo: updated.ativo,
-          mensagem_template: updated.mensagemTemplate,
-          last_run_date: updated.lastRunDate || null,
-          logs: updated.logs,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
+        try {
+          const upsertPromise = supabase.from('automacao_config').upsert({
+            id: 'sistema',
+            dias_antecedencia: updated.diasAntecedencia,
+            horario_disparo: updated.horarioDisparo,
+            ativo: updated.ativo,
+            mensagem_template: updated.mensagemTemplate,
+            last_run_date: updated.lastRunDate || null,
+            logs: updated.logs,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+
+          const timeoutWrite = new Promise((resolve) => 
+            setTimeout(() => resolve({ error: { message: 'Timeout write' } }), 2000)
+          );
+
+          await Promise.race([upsertPromise, timeoutWrite]);
+        } catch (writeErr) {
+          console.warn('[Vercel config] Aviso ao salvar no Supabase:', writeErr);
+        }
       }
 
       return res.status(200).json({

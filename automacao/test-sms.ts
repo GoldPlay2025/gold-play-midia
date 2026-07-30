@@ -66,15 +66,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
     if (senderId) payload.sender_id = senderId;
 
-    const smsResp = await fetch(smsUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${smsToken}`
-      },
-      body: JSON.stringify(payload)
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    let smsResp: Response;
+    try {
+      smsResp = await fetch(smsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${smsToken}`
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+    } catch (fetchErr: any) {
+      clearTimeout(timeoutId);
+      return res.status(504).json({
+        success: false,
+        error: fetchErr.name === 'AbortError' ? 'Tempo de conexão esgotado ao acessar o servidor GetSMS.' : 'Erro ao conectar ao GetSMS: ' + fetchErr.message
+      });
+    }
+    clearTimeout(timeoutId);
 
     const rawText = await smsResp.text();
     let smsData: any;
@@ -86,15 +100,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const isSuccess = smsResp.ok && (smsData.status === 'success' || smsData.success === true);
 
-    // Registrar log no Supabase se disponível
+    // Registrar log no Supabase se disponível (não bloqueante / com timeout rápido)
     const supabase = getSupabase();
     if (supabase) {
       try {
-        const { data: configData } = await supabase
+        const queryPromise = supabase
           .from('automacao_config')
           .select('*')
           .eq('id', 'sistema')
           .maybeSingle();
+
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 1500));
+        const { data: configData }: any = await Promise.race([queryPromise, timeoutPromise]);
 
         const logs = configData && Array.isArray(configData.logs) ? configData.logs : [];
         const newLog = {
@@ -110,11 +127,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         logs.unshift(newLog);
         if (logs.length > 200) logs.pop();
 
-        await supabase.from('automacao_config').upsert({
+        const upsertPromise = supabase.from('automacao_config').upsert({
           id: 'sistema',
           logs,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
+
+        const timeoutWrite = new Promise((resolve) => setTimeout(() => resolve(null), 1500));
+        await Promise.race([upsertPromise, timeoutWrite]);
       } catch (logErr) {
         console.error('Erro ao gravar log de teste:', logErr);
       }
