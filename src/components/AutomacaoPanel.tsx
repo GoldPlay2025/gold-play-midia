@@ -283,7 +283,7 @@ ON CONFLICT (id) DO NOTHING;`;
     setTestResult(null);
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
+    const timer = setTimeout(() => controller.abort(), 25000);
 
     try {
       const res = await fetchApi('/api/automacao/test-sms', {
