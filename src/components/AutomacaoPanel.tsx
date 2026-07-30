@@ -18,7 +18,11 @@ import {
   Sparkles,
   PhoneCall,
   History,
-  Sliders
+  Sliders,
+  Database,
+  Copy,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 interface LogItem {
@@ -65,6 +69,36 @@ export function AutomacaoPanel() {
   const [previewData, setPreviewData] = useState<{ count: number; targetDate: string; clients: any[] } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [runningNow, setRunningNow] = useState(false);
+
+  // Estado para exibir e copiar o Script SQL do Supabase
+  const [showSqlScript, setShowSqlScript] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const supabaseSqlScript = `-- SCRIPT SQL PARA O SUPABASE (SQL EDITOR)
+-- Tabela de Automação de Cobrança GetSMS
+
+CREATE TABLE IF NOT EXISTS automacao_config (
+  id TEXT PRIMARY KEY DEFAULT 'sistema',
+  dias_antecedencia INT DEFAULT 2,
+  horario_disparo TEXT DEFAULT '09:00',
+  ativo BOOLEAN DEFAULT false,
+  mensagem_template TEXT DEFAULT 'Ola {cliente}, seu vencimento da mensalidade R$ {valor} e em {vencimento}. Chave PIX: {pix}',
+  last_run_date TEXT DEFAULT NULL,
+  logs JSONB DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Inserir registro inicial obrigatorio ('sistema')
+INSERT INTO automacao_config (id, dias_antecedencia, horario_disparo, ativo, mensagem_template)
+VALUES ('sistema', 2, '09:00', false, 'Ola {cliente}, seu vencimento da mensalidade R$ {valor} e em {vencimento}. Chave PIX: {pix}')
+ON CONFLICT (id) DO NOTHING;`;
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(supabaseSqlScript);
+    setCopiedSql(true);
+    showToast('success', 'Script SQL copiado para a área de transferência!');
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
 
   const showToast = (type: 'success' | 'error' | 'info', message: string) => {
     setToast({ type, message });
@@ -683,6 +717,59 @@ export function AutomacaoPanel() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {/* Card de Configuração do Supabase (Script SQL) */}
+      <div className="bg-[#121216] border border-amber-500/20 rounded-3xl p-6 sm:p-7 space-y-4 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                Tabela Supabase (`automacao_config`)
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono">
+                  Persistência na Vercel
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Execute o script abaixo no SQL Editor do Supabase para criar e popular a tabela de configurações.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopySql}
+              className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+            >
+              {copiedSql ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              <span>{copiedSql ? 'Copiado!' : 'Copiar SQL'}</span>
+            </button>
+
+            <button
+              onClick={() => setShowSqlScript(!showSqlScript)}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs transition-all cursor-pointer"
+              title={showSqlScript ? "Ocultar código SQL" : "Exibir código SQL"}
+            >
+              {showSqlScript ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {showSqlScript && (
+          <div className="space-y-3 pt-2">
+            <div className="relative">
+              <pre className="p-4 rounded-2xl bg-[#0a0a0d] border border-white/10 text-amber-300/90 font-mono text-xs overflow-x-auto leading-relaxed select-all">
+                {supabaseSqlScript}
+              </pre>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              💡 <strong>Como usar:</strong> Acesse seu painel do Supabase, clique em <strong>SQL Editor</strong> no menu lateral, cole o código acima e clique em <strong>RUN</strong>. A tabela <code className="text-amber-400">automacao_config</code> será criada instantaneamente com a linha padrão gravada.
+            </p>
           </div>
         )}
       </div>
