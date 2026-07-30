@@ -65,7 +65,7 @@ export async function readAutomacaoConfigAsync(): Promise<AutomacaoConfig> {
         .maybeSingle();
 
       const timeoutPromise = new Promise((resolve) => 
-        setTimeout(() => resolve({ data: null, error: { message: 'Timeout na consulta do Supabase' } }), 2500)
+        setTimeout(() => resolve({ data: null, error: { message: 'Timeout na consulta do Supabase' } }), 1000)
       );
 
       const { data, error }: any = await Promise.race([queryPromise, timeoutPromise]);
@@ -124,7 +124,7 @@ export async function saveAutomacaoConfigAsync(config: AutomacaoConfig): Promise
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      await supabase.from('automacao_config').upsert({
+      const upsertPromise = supabase.from('automacao_config').upsert({
         id: 'sistema',
         dias_antecedencia: config.diasAntecedencia,
         horario_disparo: config.horarioDisparo,
@@ -134,6 +134,12 @@ export async function saveAutomacaoConfigAsync(config: AutomacaoConfig): Promise
         logs: config.logs,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
+
+      const timeoutWrite = new Promise((resolve) => 
+        setTimeout(() => resolve({ error: { message: 'Timeout write' } }), 1000)
+      );
+
+      await Promise.race([upsertPromise, timeoutWrite]);
     } catch (err) {
       console.warn('[Automação] Aviso ao salvar na tabela automacao_config no Supabase:', err);
     }
