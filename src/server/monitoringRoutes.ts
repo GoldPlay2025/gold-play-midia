@@ -298,7 +298,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
 
     // a) Busca configurações de alertas de forma segura
     let alertsEnabled = true;
-    let adminPhone = '';
+    let adminPhone = (process.env.ADMIN_PHONE || '').trim();
 
     try {
       const { data: configData } = await supabase
@@ -309,7 +309,9 @@ monitoringRouter.all('/check-offline', async (req, res) => {
 
       if (configData) {
         alertsEnabled = configData.alerts_enabled !== false;
-        adminPhone = (configData.admin_phone || '').trim();
+        if (configData.admin_phone && configData.admin_phone.trim()) {
+          adminPhone = configData.admin_phone.trim();
+        }
       }
     } catch (errConfig) {
       console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
@@ -537,9 +539,9 @@ monitoringRouter.all('/check-offline', async (req, res) => {
             console.error('Erro na requisição API GTI SMS:', await smsResp.text());
           }
 
-          if (smsResp.ok && smsData && smsData.status === 'success') {
+          if (smsResp.ok && smsData && (smsData.status === 'success' || smsData.success === true || smsData.code === 200 || smsData.data?.status === 'success')) {
              sentSuccess = true;
-             console.log('Alerta enviado via SMS com sucesso!');
+             console.log('Alerta enviado via SMS com sucesso para', fullNumber);
           } else if (smsData) {
              console.error('Erro retornado pela API GTI SMS:', smsData);
           }
@@ -548,11 +550,15 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         }
       }
 
-      // c) Atualiza a flag alert_sent = true no Supabase
-      await supabase
-        .from('telas')
-        .update({ alert_sent: true, status_online: false })
-        .eq('id', tela.id);
+      // c) Atualiza a flag alert_sent = true no Supabase SOMENTE se enviou com sucesso
+      if (sentSuccess) {
+        await supabase
+          .from('telas')
+          .update({ alert_sent: true, status_online: false })
+          .eq('id', tela.id);
+      } else {
+        console.warn(`Alerta para a tela "${nomeTela}" (${tela.id}) não pôde ser entregue no momento. alert_sent mantido como false para nova tentativa.`);
+      }
 
       alertsSentResults.push({
         telaId: tela.id,
@@ -571,5 +577,28 @@ monitoringRouter.all('/check-offline', async (req, res) => {
   } catch (err: any) {
     console.error('Erro no /api/cron/check-offline:', err);
     return res.status(500).json({ error: err.message || 'Erro interno no servidor' });
+  }
+});
+
+// 4. Rota para resetar as flags de alerta de telas offline (útil para retestar ou forçar novos alertas)
+monitoringRouter.post('/reset-offline-alerts', async (req, res) => {
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return res.status(503).json({ error: 'Supabase não configurado no servidor' });
+    }
+
+    const { error } = await supabase
+      .from('telas')
+      .update({ alert_sent: false })
+      .eq('status_online', false);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ success: true, message: 'Flags de alerta de telas offline resetadas com sucesso.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Erro ao resetar alertas' });
   }
 });
