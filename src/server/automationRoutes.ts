@@ -53,16 +53,22 @@ const defaultConfig: AutomacaoConfig = {
 
 let memoryConfigCache: AutomacaoConfig = { ...defaultConfig };
 
-// Função assíncrona para ler configuração (Supabase + fallback arquivo/memória)
+// Função assíncrona para ler configuração (Supabase + fallback arquivo/memória com Timeout)
 export async function readAutomacaoConfigAsync(): Promise<AutomacaoConfig> {
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      const { data, error } = await supabase
+      const queryPromise = supabase
         .from('automacao_config')
         .select('*')
         .eq('id', 'sistema')
         .maybeSingle();
+
+      const timeoutPromise = new Promise((resolve) => 
+        setTimeout(() => resolve({ data: null, error: { message: 'Timeout na consulta do Supabase' } }), 2500)
+      );
+
+      const { data, error }: any = await Promise.race([queryPromise, timeoutPromise]);
 
       if (!error && data) {
         const config: AutomacaoConfig = {
