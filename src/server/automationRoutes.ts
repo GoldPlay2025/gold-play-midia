@@ -51,13 +51,42 @@ const defaultConfig: AutomacaoConfig = {
   logs: []
 };
 
-// Função auxiliar para carregar configuração
-export function readAutomacaoConfig(): AutomacaoConfig {
+let memoryConfigCache: AutomacaoConfig = { ...defaultConfig };
+
+// Função assíncrona para ler configuração (Supabase + fallback arquivo/memória)
+export async function readAutomacaoConfigAsync(): Promise<AutomacaoConfig> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('automacao_config')
+        .select('*')
+        .eq('id', 'sistema')
+        .maybeSingle();
+
+      if (!error && data) {
+        const config: AutomacaoConfig = {
+          diasAntecedencia: typeof data.dias_antecedencia === 'number' ? data.dias_antecedencia : (typeof data.diasAntecedencia === 'number' ? data.diasAntecedencia : 2),
+          horarioDisparo: data.horario_disparo || data.horarioDisparo || "09:00",
+          ativo: typeof data.ativo === 'boolean' ? data.ativo : false,
+          mensagemTemplate: data.mensagem_template || data.mensagemTemplate || defaultConfig.mensagemTemplate,
+          lastRunDate: data.last_run_date || data.lastRunDate || undefined,
+          logs: Array.isArray(data.logs) ? data.logs : []
+        };
+        memoryConfigCache = config;
+        return config;
+      }
+    } catch (e) {
+      console.warn('[Automação] Tabela automacao_config no Supabase ainda não lida. Usando cache.', e);
+    }
+  }
+
+  // Fallback 1: Leitura de arquivo local se disponível
   try {
     if (fs.existsSync(CONFIG_FILE_PATH)) {
       const content = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
       const parsed = JSON.parse(content);
-      return {
+      const config = {
         ...defaultConfig,
         ...parsed,
         diasAntecedencia: typeof parsed.diasAntecedencia === 'number' ? parsed.diasAntecedencia : 2,
@@ -66,21 +95,55 @@ export function readAutomacaoConfig(): AutomacaoConfig {
         mensagemTemplate: parsed.mensagemTemplate || defaultConfig.mensagemTemplate,
         logs: Array.isArray(parsed.logs) ? parsed.logs : []
       };
+      memoryConfigCache = config;
+      return config;
     }
   } catch (err) {
     console.warn('Erro ao ler automacao_config.json:', err);
   }
-  saveAutomacaoConfig(defaultConfig);
-  return defaultConfig;
+
+  return memoryConfigCache || defaultConfig;
 }
 
-// Função auxiliar para salvar configuração
-export function saveAutomacaoConfig(config: AutomacaoConfig) {
+// Função síncrona para compatibilidade interna
+export function readAutomacaoConfig(): AutomacaoConfig {
+  return memoryConfigCache || defaultConfig;
+}
+
+// Função assíncrona para salvar configuração (Supabase + memory cache + arquivo local)
+export async function saveAutomacaoConfigAsync(config: AutomacaoConfig): Promise<void> {
+  memoryConfigCache = config;
+
+  // 1. Tenta salvar no Supabase na tabela automacao_config
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('automacao_config').upsert({
+        id: 'sistema',
+        dias_antecedencia: config.diasAntecedencia,
+        horario_disparo: config.horarioDisparo,
+        ativo: config.ativo,
+        mensagem_template: config.mensagemTemplate,
+        last_run_date: config.lastRunDate || null,
+        logs: config.logs,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+    } catch (err) {
+      console.warn('[Automação] Aviso ao salvar na tabela automacao_config no Supabase:', err);
+    }
+  }
+
+  // 2. Tenta salvar no arquivo local (silencioso em ambientes read-only como Vercel)
   try {
     fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(config, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Erro ao gravar automacao_config.json:', err);
+    // Ignora erros de escrita em sistemas de arquivos de apenas-leitura
   }
+}
+
+// Função síncrona para compatibilidade
+export function saveAutomacaoConfig(config: AutomacaoConfig) {
+  saveAutomacaoConfigAsync(config).catch(err => console.error('Erro no salvamento assíncrono:', err));
 }
 
 function getSupabaseClient() {
@@ -175,7 +238,7 @@ export async function runAutomatedBillingRoutine(isManualTrigger = false): Promi
   let dispatchedCount = 0;
 
   try {
-    const config = readAutomacaoConfig();
+    const config = await readAutomacaoConfigAsync();
 
     if (!config.ativo && !isManualTrigger) {
       return { executed: false, count: 0, details: [{ message: 'Automação desativada nas configurações.' }] };
@@ -277,7 +340,7 @@ export async function runAutomatedBillingRoutine(isManualTrigger = false): Promi
     if (!isManualTrigger) {
       config.lastRunDate = todayStr;
     }
-    saveAutomacaoConfig(config);
+    await saveAutomacaoConfigAsync(config);
 
     return { executed: true, count: dispatchedCount, details };
 
@@ -292,21 +355,22 @@ export async function runAutomatedBillingRoutine(isManualTrigger = false): Promi
 // --- ENDPOINTS DA API DE AUTOMAÇÃO ---
 
 // 1. Obter configurações da automação
-automationRouter.get('/config', authMiddleware, (req, res) => {
+automationRouter.get('/config', authMiddleware, async (req, res) => {
   try {
-    const config = readAutomacaoConfig();
+    const config = await readAutomacaoConfigAsync();
     return res.json(config);
   } catch (err: any) {
-    return res.status(500).json({ error: 'Erro ao carregar configurações de automação: ' + err.message });
+    console.error('Erro no GET /api/automacao/config:', err);
+    return res.json(defaultConfig); // Retorna padrão resiliente em vez de erro 500
   }
 });
 
 // 2. Atualizar configurações da automação
-automationRouter.post('/config', authMiddleware, (req, res) => {
+automationRouter.post('/config', authMiddleware, async (req, res) => {
   try {
     const { diasAntecedencia, horarioDisparo, ativo, mensagemTemplate } = req.body;
 
-    const current = readAutomacaoConfig();
+    const current = await readAutomacaoConfigAsync();
     const updated: AutomacaoConfig = {
       ...current,
       diasAntecedencia: typeof diasAntecedencia === 'number' ? Math.max(0, diasAntecedencia) : current.diasAntecedencia,
@@ -315,7 +379,7 @@ automationRouter.post('/config', authMiddleware, (req, res) => {
       mensagemTemplate: typeof mensagemTemplate === 'string' && mensagemTemplate ? mensagemTemplate : current.mensagemTemplate
     };
 
-    saveAutomacaoConfig(updated);
+    await saveAutomacaoConfigAsync(updated);
     return res.json({ success: true, message: 'Configurações de automação salvas com sucesso.', config: updated });
   } catch (err: any) {
     return res.status(500).json({ error: 'Erro ao salvar configurações de automação: ' + err.message });
@@ -337,8 +401,8 @@ automationRouter.post('/test-sms', authMiddleware, async (req, res) => {
 
     const result = await sendGtiSmsDirect(numero, testMsg);
 
-    // Registra o log do teste manual sem alterar nenhuma tabela do Supabase de clientes/telas
-    const config = readAutomacaoConfig();
+    // Registra o log do teste manual
+    const config = await readAutomacaoConfigAsync();
     const testLog = {
       id: 'test-' + Date.now(),
       data: new Date().toISOString(),
@@ -352,7 +416,7 @@ automationRouter.post('/test-sms', authMiddleware, async (req, res) => {
 
     config.logs.unshift(testLog);
     if (config.logs.length > 200) config.logs.pop();
-    saveAutomacaoConfig(config);
+    await saveAutomacaoConfigAsync(config);
 
     if (result.success) {
       return res.json({
@@ -391,7 +455,7 @@ automationRouter.post('/run-now', authMiddleware, async (req, res) => {
 // 5. Listar prévia de clientes elegíveis com base no parâmetro atual
 automationRouter.get('/preview-clients', authMiddleware, async (req, res) => {
   try {
-    const config = readAutomacaoConfig();
+    const config = await readAutomacaoConfigAsync();
     const supabase = getSupabaseClient();
     if (!supabase) {
       return res.status(503).json({ error: 'Supabase não disponível.' });
