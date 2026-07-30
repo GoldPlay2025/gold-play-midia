@@ -215,6 +215,9 @@ ON CONFLICT (id) DO NOTHING;`;
   // Salva configurações
   const handleSaveConfig = async () => {
     setSaving(true);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+
     try {
       const res = await fetchApi('/api/automacao/config', {
         method: 'POST',
@@ -224,8 +227,10 @@ ON CONFLICT (id) DO NOTHING;`;
           horarioDisparo: config.horarioDisparo,
           ativo: config.ativo,
           mensagemTemplate: config.mensagemTemplate
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timer);
 
       const data = await safeJsonParse(res);
       if (res.ok && data.success) {
@@ -236,7 +241,8 @@ ON CONFLICT (id) DO NOTHING;`;
         showToast('error', data.error || 'Falha ao salvar configurações.');
       }
     } catch (err: any) {
-      showToast('error', 'Erro ao salvar: ' + err.message);
+      clearTimeout(timer);
+      showToast('error', err.name === 'AbortError' ? 'Tempo de resposta excedido ao salvar.' : ('Erro ao salvar: ' + err.message));
     } finally {
       setSaving(false);
     }
@@ -253,6 +259,9 @@ ON CONFLICT (id) DO NOTHING;`;
     setSendingTest(true);
     setTestResult(null);
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+
     try {
       const res = await fetchApi('/api/automacao/test-sms', {
         method: 'POST',
@@ -261,8 +270,10 @@ ON CONFLICT (id) DO NOTHING;`;
           numero: testTelefone,
           horarioSimulado: testHorario,
           mensagemTeste: testMensagem
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timer);
 
       const data = await safeJsonParse(res);
       if (res.ok && data.success) {
@@ -282,11 +293,13 @@ ON CONFLICT (id) DO NOTHING;`;
         showToast('error', data.error || 'Falha no envio do teste.');
       }
     } catch (err: any) {
+      clearTimeout(timer);
+      const errMsg = err.name === 'AbortError' ? 'Tempo de resposta do servidor esgotado.' : err.message;
       setTestResult({
         success: false,
-        message: 'Erro de conexão no teste: ' + err.message
+        message: 'Erro no teste: ' + errMsg
       });
-      showToast('error', 'Erro no teste: ' + err.message);
+      showToast('error', 'Erro no teste: ' + errMsg);
     } finally {
       setSendingTest(false);
     }
