@@ -151,7 +151,7 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
               const payload: any = {
                 recipient: fullNumber,
                 message: finalOnlineMsg,
-                type: 'unicode'
+                type: 'plain'
               };
               if (senderId) payload.sender_id = senderId;
 
@@ -525,7 +525,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
           const payload: any = {
             recipient: fullNumber,
             message: finalOfflineMsg,
-            type: 'unicode'
+            type: 'plain'
           };
           
           if (senderId) {

@@ -59,7 +59,7 @@ smsRouter.post('/send', authMiddleware, async (req, res) => {
     const payload: any = {
       recipient: fullNumber,
       message: cleanMsg,
-      type: 'unicode'
+      type: 'plain'
     };
     
     if (senderId) {
