@@ -95,23 +95,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (process.env.GTISMS_API_TOKEN) {
             try {
               let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
-              if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
+              if (!smsUrl.includes('sms/send')) {
                 smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
               }
               const smsToken = process.env.GTISMS_API_TOKEN;
-              const senderId = process.env.GTISMS_SENDER_ID || '';
+              let senderId = (process.env.GTISMS_SENDER_ID || '').trim();
+              if (senderId.startsWith('http') || senderId.length > 11 || senderId.length === 0) {
+                senderId = '';
+              }
 
               const sanitizeSms = (text: string) => {
                 let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
+                sanitized = sanitized.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+                sanitized = sanitized.replace(/[*_~`]/g, '');
                 sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
-                return sanitized;
+                return sanitized.trim();
               };
+
+              const shortOnlineMsg = `Gold Play: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} voltou a ficar online.`;
+              const finalOnlineMsg = sanitizeSms(shortOnlineMsg).substring(0, 155);
 
               const payload: any = {
                 recipient: fullNumber,
-                message: sanitizeSms(onlineAlertMessage),
-                type: 'plain'
+                message: finalOnlineMsg,
+                type: 'unicode'
               };
               if (senderId) payload.sender_id = senderId;
 
