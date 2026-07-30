@@ -181,7 +181,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
           }
           const smsToken = process.env.GTISMS_API_TOKEN;
-          const senderId = process.env.GTISMS_SENDER_ID || '';
+          let senderId = process.env.GTISMS_SENDER_ID || '';
+          if (senderId.startsWith('http') || senderId.length > 20) {
+            senderId = '';
+          }
           
           const sanitizeSms = (text: string) => {
             let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
