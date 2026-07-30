@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('id', 'sistema')
       .maybeSingle();
 
-    const isAtivo = typeof configData?.ativo === 'boolean' ? configData.ativo : false;
+    const isAtivo = configData?.ativo === true || configData?.ativo === 'true';
     if (!isAtivo) {
       return res.status(200).json({
         success: true,
@@ -64,11 +64,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     targetDate.setDate(targetDate.getDate() + diasAntecedencia);
     const targetIsoDate = targetDate.toISOString().split('T')[0];
 
-    // 3. Busca clientes com vencimento na data alvo
-    const { data: clients, error: clientErr } = await supabase
+    // 3. Busca clientes e filtra os que vencem na data alvo (suporta timestamp ou date)
+    const { data: allClients, error: clientErr } = await supabase
       .from('clientes')
-      .select('*')
-      .eq('vencimento', targetIsoDate);
+      .select('*');
+
+    if (clientErr) {
+      return res.status(500).json({ error: 'Erro ao buscar clientes no Vercel Cron: ' + clientErr.message });
+    }
+
+    const clients = (allClients || []).filter(cli => {
+      if (!cli.vencimento) return false;
+      try {
+        const cliVencStr = new Date(cli.vencimento).toISOString().split('T')[0];
+        return cliVencStr === targetIsoDate;
+      } catch (e) {
+        return String(cli.vencimento).startsWith(targetIsoDate);
+      }
+    });
 
     if (clientErr) {
       return res.status(500).json({ error: 'Erro ao buscar clientes no Vercel Cron: ' + clientErr.message });
