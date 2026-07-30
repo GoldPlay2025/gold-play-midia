@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { sendGtiSms } from '../../src/lib/gtisms';
 
 function getSupabase() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -74,17 +75,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (conf?.pix_chave) pixChave = conf.pix_chave;
     } catch (e) {}
 
-    const smsToken = process.env.GTISMS_API_TOKEN;
-    if (!smsToken) {
-      return res.status(503).json({ error: 'Token GTI SMS (GTISMS_API_TOKEN) não configurado.' });
-    }
-
-    let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
-    if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
-      smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
-    }
-    const senderId = process.env.GTISMS_SENDER_ID || '';
-
     let dispatched = 0;
     const newLogs: any[] = [];
 
@@ -92,71 +82,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const phoneRaw = client.whatsapp || client.telefone || client.contato;
       if (!phoneRaw) continue;
 
-      const cleaned = String(phoneRaw).replace(/\D/g, '');
-      const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
-
       const valorFormatted = client.valor ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(client.valor) : '0,00';
       const vencFormatted = client.vencimento ? new Date(client.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '';
 
-      let text = config.mensagemTemplate
+      const text = config.mensagemTemplate
         .replace('{cliente}', client.nome_empresa || 'Cliente')
         .replace('{valor}', valorFormatted)
         .replace('{vencimento}', vencFormatted)
         .replace('{pix}', pixChave || '');
 
-      const sanitizeSms = (str: string) => {
-        let s = str.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
-        s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return s.replace(/[^\x00-\x7F]/g, '');
-      };
+      const smsResult = await sendGtiSms({
+        numero: phoneRaw,
+        mensagem: text,
+        timeoutMs: 12000
+      });
 
-      const payload: any = {
-        recipient: fullNumber,
-        message: sanitizeSms(text),
-        type: 'plain'
-      };
-      if (senderId) payload.sender_id = senderId;
+      if (smsResult.success) dispatched++;
 
-      try {
-        const smsResp = await fetch(smsUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${smsToken}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const rawResp = await smsResp.text();
-        let smsData: any = {};
-        try { smsData = JSON.parse(rawResp); } catch(e) {}
-
-        const isOk = smsResp.ok && (smsData.status === 'success' || smsData.success === true);
-        if (isOk) dispatched++;
-
-        newLogs.push({
-          id: 'auto-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-          data: new Date().toISOString(),
-          telefone: fullNumber,
-          clienteNome: client.nome_empresa,
-          status: isOk ? 'sucesso' : 'erro',
-          mensagem: text,
-          detalhe: isOk ? 'Disparado via GetSMS' : (smsData.message || rawResp),
-          tipo: 'automatico'
-        });
-      } catch (errDisparo: any) {
-        newLogs.push({
-          id: 'auto-err-' + Date.now(),
-          data: new Date().toISOString(),
-          telefone: fullNumber,
-          clienteNome: client.nome_empresa,
-          status: 'erro',
-          mensagem: text,
-          detalhe: errDisparo.message || 'Falha de rede',
-          tipo: 'automatico'
-        });
-      }
+      newLogs.push({
+        id: 'auto-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        data: new Date().toISOString(),
+        telefone: phoneRaw,
+        clienteNome: client.nome_empresa,
+        status: smsResult.success ? 'sucesso' : 'erro',
+        mensagem: text,
+        detalhe: smsResult.message,
+        tipo: 'automatico'
+      });
     }
 
     const updatedLogs = [...newLogs, ...config.logs].slice(0, 200);
@@ -164,6 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await supabase.from('automacao_config').upsert({
       id: 'sistema',
       logs: updatedLogs,
+      last_run_date: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
 
@@ -177,3 +130,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Erro ao executar varredura: ' + (err?.message || String(err)) });
   }
 }
+
