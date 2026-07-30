@@ -190,9 +190,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return sanitized;
           };
 
+          const shortOfflineMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} ficou OFFLINE!`;
+          const finalOfflineMsg = sanitizeSms(shortOfflineMsg).substring(0, 155);
+
           const payload: any = {
             recipient: fullNumber,
-            message: sanitizeSms(alertMessage),
+            message: finalOfflineMsg,
             type: 'plain'
           };
           
