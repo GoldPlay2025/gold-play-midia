@@ -124,6 +124,49 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
   };
 
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [isTestingSms, setIsTestingSms] = useState(false);
+
+  const handleTestSms = async () => {
+    if (!form.adminPhone) {
+      showToast('error', 'Por favor, informe o número de celular do administrador.');
+      return;
+    }
+
+    setIsTestingSms(true);
+    try {
+      const response = await fetch('/api/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          numero: form.adminPhone,
+          mensagem: 'ALERTA GOLD PLAY: Teste de envio de SMS configurado com sucesso no sistema!'
+        })
+      });
+
+      const responseText = await response.text();
+      let resData: any = {};
+      try {
+        resData = JSON.parse(responseText);
+      } catch {
+        resData = { error: `Erro no servidor (${response.status}): ${responseText.slice(0, 120)}` };
+      }
+
+      if (response.ok && resData.success) {
+        showToast('success', `SMS de teste enviado com sucesso para ${form.adminPhone}! Verifique seu celular.`);
+        // Força o reset das flags de alerta no banco para garantir que telas offline possam alertar novamente
+        if (isSupabaseConfigured) {
+          fetch('/api/devices/reset-offline-alerts', { method: 'POST' }).catch(() => {});
+        }
+      } else {
+        showToast('error', resData.error || resData.message || 'Falha ao enviar SMS de teste via GTI SMS.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao testar envio de SMS:', err);
+      showToast('error', 'Erro ao conectar com a API de SMS: ' + (err?.message || String(err)));
+    } finally {
+      setIsTestingSms(false);
+    }
+  };
 
   const handleTestEmail = async () => {
     if (!form.smtpEmail) {
@@ -513,7 +556,21 @@ ON CONFLICT (id) DO NOTHING;`);
         </div>
 
         <div className="pt-6 border-t border-white/5 space-y-8">
-          <h3 className="text-lg font-bold text-white mb-4">Notificações e Alertas (WhatsApp/SMS)</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-white mb-1">Notificações e Alertas (WhatsApp/SMS)</h3>
+              <p className="text-xs text-slate-500">Alertas automáticos disparados para o celular quando uma tela fica offline.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestSms}
+              disabled={isTestingSms}
+              className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto disabled:opacity-50"
+            >
+              {isTestingSms ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              {isTestingSms ? 'Enviando...' : 'Testar Envio de SMS'}
+            </button>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div>
