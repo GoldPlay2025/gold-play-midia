@@ -143,14 +143,10 @@ ON CONFLICT (id) DO NOTHING;`;
             logs: Array.isArray(data.logs) ? data.logs : prev.logs
           }));
         }
-      } else {
-        showToast('error', 'Não foi possível carregar as configurações da automação.');
       }
     } catch (err: any) {
-      console.error('Erro ao buscar automação:', err);
-      if (err.name !== 'AbortError') {
-        showToast('error', err.message || 'Erro de conexão com o servidor.');
-      }
+      console.warn('Servidor offline ou resposta lenta. Usando configurações locais:', err);
+      // Mantém as configurações padrão sem travar a interface ou exibir popup intrusivo
     } finally {
       setLoading(false);
     }
@@ -160,13 +156,20 @@ ON CONFLICT (id) DO NOTHING;`;
   const fetchPreview = async () => {
     setLoadingPreview(true);
     try {
-      const res = await fetchApi('/api/automacao/preview-clients');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+
+      const res = await fetchApi('/api/automacao/preview-clients', { signal: controller.signal });
+      clearTimeout(timer);
+
       if (res.ok) {
         const data = await safeJsonParse(res);
-        setPreviewData(data);
+        if (data && typeof data === 'object') {
+          setPreviewData(data);
+        }
       }
     } catch (e) {
-      console.error('Erro ao carregar prévia:', e);
+      console.warn('Erro ao carregar prévia de clientes:', e);
     } finally {
       setLoadingPreview(false);
     }
