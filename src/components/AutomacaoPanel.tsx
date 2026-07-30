@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchApi } from '../lib/api';
 import { 
   Zap, 
   Clock, 
@@ -105,20 +106,34 @@ ON CONFLICT (id) DO NOTHING;`;
     setTimeout(() => setToast(null), 5000);
   };
 
+  // Helper para realizar parse seguro de JSON
+  const safeJsonParse = async (res: Response) => {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return await res.json();
+    }
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw new Error(res.ok ? 'Resposta inválida do servidor.' : `Erro HTTP ${res.status}: Servidor indisponível ou rota não configurada.`);
+    }
+  };
+
   // Carrega configurações
   const fetchConfig = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/automacao/config');
+      const res = await fetchApi('/api/automacao/config');
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJsonParse(res);
         setConfig(data);
       } else {
         showToast('error', 'Não foi possível carregar as configurações da automação.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao buscar automação:', err);
-      showToast('error', 'Erro de conexão com o servidor.');
+      showToast('error', err.message || 'Erro de conexão com o servidor.');
     } finally {
       setLoading(false);
     }
@@ -128,9 +143,9 @@ ON CONFLICT (id) DO NOTHING;`;
   const fetchPreview = async () => {
     setLoadingPreview(true);
     try {
-      const res = await fetch('/api/automacao/preview-clients');
+      const res = await fetchApi('/api/automacao/preview-clients');
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJsonParse(res);
         setPreviewData(data);
       }
     } catch (e) {
@@ -154,7 +169,7 @@ ON CONFLICT (id) DO NOTHING;`;
     setConfig(prev => ({ ...prev, ativo: nextAtivo }));
 
     try {
-      const res = await fetch('/api/automacao/config', {
+      const res = await fetchApi('/api/automacao/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -165,7 +180,7 @@ ON CONFLICT (id) DO NOTHING;`;
         })
       });
 
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       if (res.ok && data.success) {
         showToast('success', nextAtivo ? 'Robô de Automação ATIVADO com sucesso!' : 'Robô de Automação PAUSADO.');
         setConfig(data.config);
@@ -184,7 +199,7 @@ ON CONFLICT (id) DO NOTHING;`;
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/automacao/config', {
+      const res = await fetchApi('/api/automacao/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -195,7 +210,7 @@ ON CONFLICT (id) DO NOTHING;`;
         })
       });
 
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       if (res.ok && data.success) {
         showToast('success', 'Configurações de automação salvas com sucesso!');
         setConfig(data.config);
@@ -222,7 +237,7 @@ ON CONFLICT (id) DO NOTHING;`;
     setTestResult(null);
 
     try {
-      const res = await fetch('/api/automacao/test-sms', {
+      const res = await fetchApi('/api/automacao/test-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -232,7 +247,7 @@ ON CONFLICT (id) DO NOTHING;`;
         })
       });
 
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       if (res.ok && data.success) {
         setTestResult({
           success: true,
@@ -268,11 +283,11 @@ ON CONFLICT (id) DO NOTHING;`;
 
     setRunningNow(true);
     try {
-      const res = await fetch('/api/automacao/run-now', {
+      const res = await fetchApi('/api/automacao/run-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       if (res.ok && data.success) {
         showToast('success', data.message || 'Varredura de automação concluída!');
         fetchConfig();
