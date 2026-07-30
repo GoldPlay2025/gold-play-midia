@@ -119,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               const payload: any = {
                 recipient: fullNumber,
                 message: finalOnlineMsg,
-                type: 'unicode'
+                type: 'plain'
               };
               if (senderId) payload.sender_id = senderId;
 
