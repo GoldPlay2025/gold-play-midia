@@ -866,8 +866,12 @@ export default function AdminPanel({ initialTab }: { initialTab?: 'dashboard' | 
       const wasOnline = prevScreenStatusRef.current.get(tela.id);
       if (wasOnline !== undefined && wasOnline !== isOnline) {
         // Status mudou na interface! Dispara notificação no topo do painel + efeito sonoro
-        // (O envio oficial de SMS é gerido exclusivamente no backend pelo monitor de integridade)
         triggerGlobalNotification(tela.nome_local, isOnline ? 'online' : 'offline');
+        
+        // Se ficou offline, chama a rota de verificação imediata para envio instantâneo do SMS
+        if (!isOnline) {
+          fetch('/api/cron/check-offline', { method: 'POST' }).catch(err => console.warn('Erro ao checar offline:', err));
+        }
       }
     });
 
@@ -1802,8 +1806,8 @@ create policy "Permitir deletar midias" on storage.objects
                         {/* Fully Status */}
                         <div className="flex flex-col justify-center pr-1 sm:pr-2">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[8px] sm:text-[9px] font-mono text-slate-500 uppercase tracking-widest truncate max-w-full mr-1">Fully Status</p>
-                            <Cloud className="w-3 h-3 text-sky-400/80 flex-shrink-0" />
+                            <p className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">FULLY</p>
+                            <Cloud className="w-3.5 h-3.5 text-sky-400/80 shrink-0" />
                           </div>
                           <div className="flex items-center gap-1.5 mt-1">
                             <div className="relative flex h-2 w-2">
@@ -1819,8 +1823,8 @@ create policy "Permitir deletar midias" on storage.objects
                         {/* Status SMS */}
                         <div className="flex flex-col justify-center px-1 sm:px-2">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[8px] sm:text-[9px] font-mono text-slate-500 uppercase tracking-widest truncate max-w-full mr-1">Status SMS</p>
-                            <MessageSquare className="w-3 h-3 text-pink-400/80 flex-shrink-0" />
+                            <p className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">SMS</p>
+                            <MessageSquare className="w-3.5 h-3.5 text-pink-400/80 shrink-0" />
                           </div>
                           <div className="flex items-center gap-1.5 mt-1">
                             <div className="relative flex h-2 w-2">
@@ -1836,8 +1840,8 @@ create policy "Permitir deletar midias" on storage.objects
                         {/* Status E-mail */}
                         <div className="flex flex-col justify-center pl-1 sm:pl-2">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[8px] sm:text-[9px] font-mono text-slate-500 uppercase tracking-widest truncate max-w-full mr-1">Status E-mail</p>
-                            <Mail className="w-3 h-3 text-amber-400/80 flex-shrink-0" />
+                            <p className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">E-MAIL</p>
+                            <Mail className="w-3.5 h-3.5 text-amber-400/80 shrink-0" />
                           </div>
                           <div className="flex items-center gap-1.5 mt-1">
                             <div className="relative flex h-2 w-2">
