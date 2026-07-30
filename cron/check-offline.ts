@@ -181,10 +181,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
           }
           const smsToken = process.env.GTISMS_API_TOKEN;
-          let senderId = process.env.GTISMS_SENDER_ID || '';
-          if (senderId.startsWith('http') || senderId.length > 20) {
-            senderId = '';
-          }
+          const senderId = process.env.GTISMS_SENDER_ID || '';
           
           const sanitizeSms = (text: string) => {
             let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
@@ -193,12 +190,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return sanitized;
           };
 
-          const shortOfflineMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} ficou OFFLINE!`;
-          const finalOfflineMsg = sanitizeSms(shortOfflineMsg).substring(0, 155);
+          const alertMessage = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (Cliente: ${nomeCliente})` : ''} está OFFLINE.`;
 
           const payload: any = {
             recipient: fullNumber,
-            message: finalOfflineMsg,
+            message: sanitizeSms(alertMessage),
             type: 'plain'
           };
           
