@@ -218,6 +218,7 @@ export async function runAutomatedBillingRoutine(isManualTrigger = false): Promi
 
     // Se for execução automática por cron, verifica se já rodou hoje
     if (!isManualTrigger && config.lastRunDate === todayStr) {
+      console.log(`[Automação GetSMS] Execução ignorada: A rotina já foi executada hoje (${todayStr}).`);
       return { executed: false, count: 0, details: [{ message: 'Automação já foi executada na data de hoje.' }] };
     }
 
@@ -341,12 +342,18 @@ automationRouter.post('/config', authMiddleware, async (req, res) => {
     const { diasAntecedencia, horarioDisparo, ativo, mensagemTemplate } = req.body;
 
     const current = await readAutomacaoConfigAsync();
+    
+    // Se o horário de disparo for alterado, resetamos a flag de última execução
+    // para permitir que o usuário teste a nova programação no mesmo dia.
+    const horarioMudou = (typeof horarioDisparo === 'string' && horarioDisparo !== current.horarioDisparo);
+
     const updated: AutomacaoConfig = {
       ...current,
       diasAntecedencia: typeof diasAntecedencia === 'number' ? Math.max(0, diasAntecedencia) : current.diasAntecedencia,
       horarioDisparo: typeof horarioDisparo === 'string' && horarioDisparo ? horarioDisparo : current.horarioDisparo,
       ativo: typeof ativo === 'boolean' ? ativo : current.ativo,
-      mensagemTemplate: typeof mensagemTemplate === 'string' && mensagemTemplate ? mensagemTemplate : current.mensagemTemplate
+      mensagemTemplate: typeof mensagemTemplate === 'string' && mensagemTemplate ? mensagemTemplate : current.mensagemTemplate,
+      lastRunDate: horarioMudou ? undefined : current.lastRunDate
     };
 
     await saveAutomacaoConfigAsync(updated);
