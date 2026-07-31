@@ -37,11 +37,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let configData: any = null;
     try {
-      const configPromise = supabase
+      const configPromise = Promise.resolve(supabase
         .from('automacao_config')
         .select('*')
         .eq('id', 'sistema')
-        .maybeSingle();
+        .maybeSingle());
         
       const configRes: any = await Promise.race([
         configPromise,
@@ -87,9 +87,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let allClients: any[] = [];
     try {
-      const clientsPromise = supabase
+      const clientsPromise = Promise.resolve(supabase
         .from('clientes')
-        .select('*');
+        .select('*'));
         
       const clientsRes: any = await Promise.race([
         clientsPromise,
@@ -113,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Busca chave PIX
     let pixChave = '';
     try {
-      const pixPromise = supabase.from('configuracoes').select('pix_key, pix_chave').eq('id', 'sistema').maybeSingle();
+      const pixPromise = Promise.resolve(supabase.from('configuracoes').select('pix_key, pix_chave').eq('id', 'sistema').maybeSingle());
       const pixRes: any = await Promise.race([
         pixPromise,
         new Promise(resolve => { const t = setTimeout(() => resolve({ data: null }), 2000); pixPromise.finally(() => clearTimeout(t)); })
