@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { sendGtiSms } from '../lib/gtisms';
 
 dotenv.config();
 
@@ -269,12 +270,14 @@ monitoringRouter.post('/disconnect', async (req, res) => {
   }
 });
 
-// 3. Rota de Cron para checagem de telas offline e disparo de alertas WhatsApp
+// 3. Rota de Cron para checagem de telas offline e disparo de alertas WhatsApp/SMS
 monitoringRouter.all('/check-offline', async (req, res) => {
   try {
-    // Validação de segurança via CRON_SECRET
+    const isForce = req.query?.force === 'true' || req.query?.test === 'true' || (req.body && req.body.force === true);
+
+    // Validação de segurança via CRON_SECRET (ignora em disparo de teste forçado no painel)
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
+    if (cronSecret && !isForce) {
       const authHeader = req.headers.authorization || '';
       const querySecret = req.query?.secret || req.headers['x-cron-secret'];
       const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (authHeader as string);
@@ -367,27 +370,45 @@ monitoringRouter.all('/check-offline', async (req, res) => {
       }
     }
 
-    if (!alertsEnabled || !adminPhone) {
+    if (!alertsEnabled && !isForce) {
       return res.json({
         success: true,
         action: 'status_updated_alerts_skipped',
-        reason: !alertsEnabled ? 'Alertas desativados ou pendentes de criação no banco' : 'Número do WhatsApp do Administrador não configurado',
+        reason: 'Alertas de tela desativados no painel Perfil & Sistema',
         alertsEnabled,
         adminPhone,
         offlineCount: allOfflineScreens.length
       });
     }
 
-    // Filtra apenas as telas offline que ainda NÃO enviaram alerta
-    const offlineScreens = allOfflineScreens.filter((tela: any) => !tela.alert_sent);
+    if (!adminPhone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Número de telefone do administrador não cadastrado no painel em Perfil & Sistema.'
+      });
+    }
+
+    // Filtra telas offline pendentes de alerta
+    const offlineScreens = allOfflineScreens.filter((tela: any) => isForce || !tela.alert_sent);
 
     if (offlineScreens.length === 0) {
-      return res.json({
-        success: true,
-        action: 'checked',
-        message: 'Todas as telas estão online ou já notificadas.',
-        offlineCount: allOfflineScreens.length
-      });
+      if (isForce) {
+        // Quando testado manualmente via perfil, simula 1 tela para disparar o alerta de teste
+        offlineScreens.push({
+          id: 'test-simulated-id',
+          nome_local: 'TELA DE TESTE SIMULADA',
+          identificador_unico: 'TESTE-OFFLINE',
+          last_ping: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+          clientes: { nome_empresa: 'Cliente Gold Play Teste' }
+        });
+      } else {
+        return res.json({
+          success: true,
+          action: 'checked',
+          message: 'Todas as telas estão online ou já notificadas.',
+          offlineCount: allOfflineScreens.length
+        });
+      }
     }
 
     const alertsSentResults: any[] = [];
@@ -408,8 +429,25 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         `_Ação recomendada: Verifique a conexão Wi-Fi/Rede ou a alimentação elétrica da TV Box._`;
 
       let sentSuccess = false;
+      let smsResultMsg = '';
 
-      // 1. Tenta envio interno via WhatsApp do sistema
+      // 1. Tenta envio via SMS (GTI SMS)
+      try {
+        const smsRes = await sendGtiSms({
+          numero: adminPhone,
+          mensagem: `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} ficou OFFLINE!`,
+          timeoutMs: 8000
+        });
+        smsResultMsg = smsRes.message;
+        if (smsRes.success) {
+          sentSuccess = true;
+        }
+      } catch (smsErr: any) {
+        console.error('[check-offline] Erro no envio via GTI SMS:', smsErr);
+        smsResultMsg = smsErr?.message || String(smsErr);
+      }
+
+      // 2. Tenta envio interno via WhatsApp do sistema
       try {
         const port = process.env.PORT || 3000;
         const apiDomain = process.env.VERCEL_URL 
@@ -432,132 +470,24 @@ monitoringRouter.all('/check-offline', async (req, res) => {
 
         if (waResp.ok) {
           sentSuccess = true;
-        } else {
-          const errText = await waResp.text();
-          console.warn('Falha no envio interno do WhatsApp:', errText);
         }
       } catch (waErr) {
         console.warn('Erro ao disparar mensagem via WhatsApp interno:', waErr);
       }
 
-      // 2. Tenta envio secundário via BotBot/Webhook externo se configurado
-      if (!sentSuccess) {
-        try {
-          const cleaned = (adminPhone || '').replace(/\D/g, '');
-          const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
-          
-          const botUrl = process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL || process.env.WHATSAPP_API_URL || 'https://api.botbot.chat/v1/send';
-          const appKey = process.env.WHATSAPP_APP_KEY || process.env.BOTBOT_APP_KEY || '';
-          const botToken = process.env.WHATSAPP_AUTH_KEY || process.env.BOTBOT_AUTH_KEY || process.env.BOTBOT_TOKEN || '';
-
-          const payload = {
-            appkey: appKey,
-            authkey: botToken,
-            number: fullNumber,
-            phone: fullNumber,
-            recipient: fullNumber,
-            message: alertMessage,
-            text: alertMessage,
-            caption: alertMessage
-          };
-
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json'
-          };
-          if (appKey) headers['appkey'] = appKey;
-          if (botToken) {
-            headers['authkey'] = botToken;
-            headers['Authorization'] = `Bearer ${botToken}`;
-            headers['x-api-key'] = botToken;
-          }
-
-          const botResp = await fetch(botUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload)
-          });
-          
-          if (botResp.ok) {
-            sentSuccess = true;
-          } else {
-            console.error('Erro na API BotBot:', await botResp.text());
-          }
-        } catch (botErr) {
-          console.error('Erro no envio via API BotBot:', botErr);
-        }
+      // Atualiza a flag alert_sent = true no Supabase (apenas para telas reais)
+      if (tela.id !== 'test-simulated-id') {
+        await supabase
+          .from('telas')
+          .update({ alert_sent: true, status_online: false })
+          .eq('id', tela.id);
       }
-
-      // 3. Tenta envio via SMS (GTI SMS) se configurado
-      if (process.env.GTISMS_API_TOKEN) {
-        try {
-          const cleaned = (adminPhone || '').replace(/\D/g, '');
-          const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
-          
-          let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
-          if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
-             smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
-          }
-          const smsToken = process.env.GTISMS_API_TOKEN;
-          const senderId = process.env.GTISMS_SENDER_ID || '';
-          
-          const sanitizeSms = (text: string) => {
-            let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
-            sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
-            return sanitized;
-          };
-
-          const shortOfflineMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} ficou OFFLINE!`;
-          const finalOfflineMsg = sanitizeSms(shortOfflineMsg).substring(0, 155);
-
-          const payload: any = {
-            recipient: fullNumber,
-            message: finalOfflineMsg,
-            type: 'plain'
-          };
-          
-          if (senderId) {
-            payload.sender_id = senderId;
-          }
-
-          const smsResp = await fetch(smsUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${smsToken}`
-            },
-            body: JSON.stringify(payload)
-          });
-          
-          let smsData;
-          try {
-            smsData = await smsResp.json();
-          } catch(e) {
-            console.error('Erro na requisição API GTI SMS:', await smsResp.text());
-          }
-
-          if (smsResp.ok && smsData && smsData.status === 'success') {
-             sentSuccess = true;
-             console.log('Alerta enviado via SMS com sucesso!');
-          } else if (smsData) {
-             console.error('Erro retornado pela API GTI SMS:', smsData);
-          }
-        } catch (smsErr) {
-          console.error('Erro no envio via API GTI SMS:', smsErr);
-        }
-      }
-
-      // c) Atualiza a flag alert_sent = true no Supabase
-      await supabase
-        .from('telas')
-        .update({ alert_sent: true, status_online: false })
-        .eq('id', tela.id);
 
       alertsSentResults.push({
         telaId: tela.id,
         nomeTela,
         sentSuccess,
+        smsMessage: smsResultMsg,
         adminPhone
       });
     }
@@ -565,6 +495,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
     return res.json({
       success: true,
       action: 'alerts_processed',
+      message: isForce ? 'Alerta de teste disparado com sucesso!' : 'Alertas processados.',
       totalOffline: offlineScreens.length,
       alerts: alertsSentResults
     });
