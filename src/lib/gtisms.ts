@@ -26,13 +26,21 @@ export async function sendGtiSms(options: SendGtiSmsOptions): Promise<SendGtiSms
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       if (supabaseUrl && supabaseKey) {
         const supabase = createClient(supabaseUrl, supabaseKey);
-        const { data: conf } = await supabase.from('configuracoes').select('*').eq('id', 'sistema').maybeSingle();
+
+        const q1 = supabase.from('configuracoes').select('*').eq('id', 'sistema').maybeSingle();
+        const t1 = new Promise(resolve => setTimeout(() => resolve({ data: null }), 1500));
+        const { data: conf }: any = await Promise.race([q1, t1]);
+
         if (conf) {
           token = conf.gtisms_token || conf.sms_token || conf.gtismsToken || '';
           if (!senderId) senderId = conf.gtisms_sender_id || conf.sms_sender_id || '';
         }
+
         if (!token) {
-          const { data: autoConf } = await supabase.from('automacao_config').select('*').eq('id', 'sistema').maybeSingle();
+          const q2 = supabase.from('automacao_config').select('*').eq('id', 'sistema').maybeSingle();
+          const t2 = new Promise(resolve => setTimeout(() => resolve({ data: null }), 1500));
+          const { data: autoConf }: any = await Promise.race([q2, t2]);
+
           if (autoConf) {
             token = autoConf.gtisms_token || autoConf.sms_token || '';
             if (!senderId) senderId = autoConf.gtisms_sender_id || '';
