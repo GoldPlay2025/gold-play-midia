@@ -1,3 +1,5 @@
+import { createClient } from '@supabase/supabase-js';
+
 export interface SendGtiSmsOptions {
   numero: string;
   mensagem: string;
@@ -14,11 +16,38 @@ export interface SendGtiSmsResult {
 }
 
 export async function sendGtiSms(options: SendGtiSmsOptions): Promise<SendGtiSmsResult> {
-  const token = options.smsToken || process.env.GTISMS_API_TOKEN;
+  let token = options.smsToken || process.env.GTISMS_API_TOKEN;
+  let senderId = options.senderId || process.env.GTISMS_SENDER_ID || '';
+
+  // Fallback: Busca token no Supabase se não estiver no ambiente
+  if (!token) {
+    try {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseKey) {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const { data: conf } = await supabase.from('configuracoes').select('*').eq('id', 'sistema').maybeSingle();
+        if (conf) {
+          token = conf.gtisms_token || conf.sms_token || conf.gtismsToken || '';
+          if (!senderId) senderId = conf.gtisms_sender_id || conf.sms_sender_id || '';
+        }
+        if (!token) {
+          const { data: autoConf } = await supabase.from('automacao_config').select('*').eq('id', 'sistema').maybeSingle();
+          if (autoConf) {
+            token = autoConf.gtisms_token || autoConf.sms_token || '';
+            if (!senderId) senderId = autoConf.gtisms_sender_id || '';
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[sendGtiSms] Erro ao buscar token no Supabase:', e);
+    }
+  }
+
   if (!token) {
     return {
       success: false,
-      message: 'Token GTI SMS (GTISMS_API_TOKEN) não configurado nas variáveis de ambiente.'
+      message: 'Token GTI SMS não configurado. Por favor, informe a Chave Token do GTI SMS no painel ou nas variáveis de ambiente.'
     };
   }
 
@@ -36,7 +65,6 @@ export async function sendGtiSms(options: SendGtiSmsOptions): Promise<SendGtiSms
   };
 
   const sanitizedMsg = sanitizeSms(options.mensagem);
-  const senderId = options.senderId || process.env.GTISMS_SENDER_ID || '';
   const timeoutMs = options.timeoutMs || 8000;
 
   // 1. Tentar V3 JSON POST
