@@ -27,6 +27,8 @@ export type SystemSettings = {
   cobrancaImageUrl?: string;
   adminPhone?: string;
   alertsEnabled?: boolean;
+  gtismsToken?: string;
+  gtismsSenderId?: string;
   smtpEmail?: string;
   smtpPassword?: string;
   smtpPort?: string;
@@ -43,7 +45,9 @@ export const defaultSettings: SystemSettings = {
   pixReceiver: '',
   cobrancaImageUrl: '',
   adminPhone: '',
-  alertsEnabled: false,
+  alertsEnabled: true,
+  gtismsToken: '',
+  gtismsSenderId: '',
   smtpEmail: '',
   smtpPassword: '',
   smtpPort: '587',
@@ -103,7 +107,9 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           pixReceiver: data.pix_receiver !== undefined && data.pix_receiver !== null ? data.pix_receiver : (localObj.pixReceiver || ''),
           cobrancaImageUrl: data.cobranca_image_url || localObj.cobrancaImageUrl || '',
           adminPhone: data.admin_phone !== undefined && data.admin_phone !== null ? data.admin_phone : (localObj.adminPhone || ''),
-          alertsEnabled: data.alerts_enabled !== undefined && data.alerts_enabled !== null ? data.alerts_enabled : (localObj.alertsEnabled || false),
+          alertsEnabled: data.alerts_enabled !== undefined && data.alerts_enabled !== null ? data.alerts_enabled : (localObj.alertsEnabled ?? true),
+          gtismsToken: data.gtisms_token || data.sms_token || localObj.gtismsToken || '',
+          gtismsSenderId: data.gtisms_sender_id || data.sms_sender_id || localObj.gtismsSenderId || '',
           smtpEmail: data.smtp_email !== undefined && data.smtp_email !== null ? data.smtp_email : (localObj.smtpEmail || ''),
           smtpPassword: data.smtp_password !== undefined && data.smtp_password !== null ? data.smtp_password : (localObj.smtpPassword || ''),
           smtpPort: data.smtp_port || localObj.smtpPort || '587',
@@ -177,6 +183,34 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
     }
   };
 
+  const [isTestingAlert, setIsTestingAlert] = useState(false);
+
+  const handleTestOfflineAlert = async () => {
+    if (!form.adminPhone) {
+      showToast('error', 'Por favor, preencha o número de celular do administrador antes de testar.');
+      return;
+    }
+
+    setIsTestingAlert(true);
+    try {
+      const response = await fetch('/api/cron/check-offline?force=true', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const resData = await response.json();
+      if (response.ok && resData.success) {
+        showToast('success', `Alerta testado com sucesso! ${resData.message || resData.reason || 'Sinal verificado.'}`);
+      } else {
+        showToast('error', resData.error || resData.reason || 'Não foi possível disparar alerta.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Erro ao disparar alerta de teste: ' + (err?.message || String(err)));
+    } finally {
+      setIsTestingAlert(false);
+    }
+  };
+
   useEffect(() => {
     fetchDbSettings();
   }, []);
@@ -221,7 +255,9 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             pix_receiver: form.pixReceiver || '',
             cobranca_image_url: form.cobrancaImageUrl || '',
             admin_phone: form.adminPhone || '',
-            alerts_enabled: form.alertsEnabled || false,
+            alerts_enabled: form.alertsEnabled ?? true,
+            gtisms_token: form.gtismsToken || '',
+            gtisms_sender_id: form.gtismsSenderId || '',
             smtp_email: form.smtpEmail || '',
             smtp_password: form.smtpPassword || '',
             smtp_port: form.smtpPort || '587',
@@ -513,9 +549,23 @@ ON CONFLICT (id) DO NOTHING;`);
         </div>
 
         <div className="pt-6 border-t border-white/5 space-y-8">
-          <h3 className="text-lg font-bold text-white mb-4">Notificações e Alertas (WhatsApp/SMS)</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-white mb-1">Notificações e Alertas (WhatsApp / SMS GTI)</h3>
+              <p className="text-xs text-slate-500">Configure o canal de disparo de SMS da GTI e os telefones para receber relatórios e avisos de telas offline.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestOfflineAlert}
+              disabled={isTestingAlert}
+              className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto disabled:opacity-50"
+            >
+              {isTestingAlert ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              {isTestingAlert ? 'Verificando...' : 'Testar Alerta Offline'}
+            </button>
+          </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             <div>
               <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Celular do Administrador</label>
               <input 
@@ -527,9 +577,10 @@ ON CONFLICT (id) DO NOTHING;`);
               />
               <p className="text-[10px] text-slate-500 mt-2">DDI + DDD + Número (ex: 55 para Brasil). Receberá alertas de telas offline.</p>
             </div>
+
             <div>
-              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Status de Alertas</label>
-              <label className="flex items-center gap-3 cursor-pointer group">
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Status de Alertas de Tela</label>
+              <label className="flex items-center gap-3 cursor-pointer group mt-2">
                 <div className={`w-12 h-6 rounded-full transition-colors relative ${form.alertsEnabled ? 'bg-purple-500' : 'bg-[#26252a]'}`}>
                   <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${form.alertsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
                 </div>
@@ -539,10 +590,34 @@ ON CONFLICT (id) DO NOTHING;`);
                 <input 
                   type="checkbox" 
                   className="hidden"
-                  checked={form.alertsEnabled || false}
+                  checked={form.alertsEnabled ?? true}
                   onChange={e => setForm({...form, alertsEnabled: e.target.checked})}
                 />
               </label>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Token API GTI SMS</label>
+              <input 
+                type="password" 
+                value={form.gtismsToken || ''}
+                onChange={e => setForm({...form, gtismsToken: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder-slate-700 font-mono"
+                placeholder="Chave API Token do GTI SMS (ex: gti_xxx)"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">Chave de autorização fornecida no painel do operador GTI SMS.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Sender ID (Opcional)</label>
+              <input 
+                type="text" 
+                value={form.gtismsSenderId || ''}
+                onChange={e => setForm({...form, gtismsSenderId: e.target.value})}
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder-slate-700"
+                placeholder="Ex: GOLDPLAY"
+              />
+              <p className="text-[10px] text-slate-500 mt-2">Identificador do remetente cadastrado na operadora GTI SMS (se houver).</p>
             </div>
           </div>
         </div>
