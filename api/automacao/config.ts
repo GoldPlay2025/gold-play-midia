@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .maybeSingle();
 
           const timeoutPromise = new Promise((resolve) => {
-            timer = setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 2000);
+            timer = setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 4000);
           });
 
           const resRace: any = await Promise.race([queryPromise, timeoutPromise]);
@@ -102,10 +102,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .eq('id', 'sistema')
             .maybeSingle();
             
-          const resRace: any = await Promise.race([
+          let t; const resRace: any = await Promise.race([
             queryPromise, 
-            new Promise(resolve => setTimeout(() => resolve({ data: null }), 2000))
-          ]);
+            new Promise(resolve => { t = setTimeout(() => resolve({ data: null }), 4000); })
+          ]); clearTimeout(t);
           data = resRace?.data;
         } catch (e) {}
 
