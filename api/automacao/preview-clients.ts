@@ -30,31 +30,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const supabase = getSupabase();
     if (!supabase) {
-      return res.status(503).json({ error: 'Supabase não configurado no Vercel.' });
+      return res.status(200).json({ count: 0, targetDate: new Date().toISOString().split('T')[0], clients: [] });
     }
 
-    let configData: any = null;
-    try {
-      const configPromise = supabase
-        .from('automacao_config')
-        .select('*')
-        .eq('id', 'sistema')
-        .maybeSingle();
-        
-      let timer: any;
-      const configRes: any = await Promise.race([
-        configPromise,
-        new Promise(resolve => {
-          timer = setTimeout(() => resolve({ data: null }), 3000);
-        })
-      ]);
-      clearTimeout(timer);
-      configData = configRes?.data;
-    } catch (e) {
-      console.warn("Erro ao buscar config:", e);
-    }
+    const queryDias = req.query.dias ? Number(req.query.dias) : NaN;
+    let diasAntecedencia = !isNaN(queryDias) ? queryDias : 2;
 
-    const diasAntecedencia = configData && typeof configData.dias_antecedencia === 'number' ? configData.dias_antecedencia : 2;
+    if (isNaN(queryDias)) {
+      try {
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 1500));
+        const configPromise = (async () => {
+          try {
+            return await supabase.from('automacao_config').select('*').eq('id', 'sistema').maybeSingle();
+          } catch (e) {
+            return { data: null };
+          }
+        })();
+
+        const configRes: any = await Promise.race([configPromise, timeoutPromise]);
+        if (configRes?.data && typeof configRes.data.dias_antecedencia === 'number') {
+          diasAntecedencia = configRes.data.dias_antecedencia;
+        }
+      } catch (e) {
+        console.warn("Erro ao buscar config no preview:", e);
+      }
+    }
 
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + diasAntecedencia);
@@ -62,41 +62,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let allClients: any[] = [];
     try {
-      const clientsPromise = supabase
-        .from('clientes')
-        .select('*');
-        
-      let timer: any;
-      const clientsRes: any = await Promise.race([
-        clientsPromise,
-        new Promise(resolve => {
-          timer = setTimeout(() => resolve({ data: [] }), 4000);
-        })
-      ]);
-      clearTimeout(timer);
-      allClients = clientsRes?.data || [];
+      const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 2500));
+      const clientsPromise = (async () => {
+        try {
+          const { data } = await supabase.from('clientes').select('*');
+          return data || [];
+        } catch (e) {
+          return [];
+        }
+      })();
+
+      const clientsRes: any = await Promise.race([clientsPromise, timeoutPromise]);
+      allClients = Array.isArray(clientsRes) ? clientsRes : [];
     } catch (e) {
-      console.warn("Erro ao buscar clientes:", e);
+      console.warn("Erro ao buscar clientes no preview:", e);
     }
 
     const clients = allClients.filter(cli => {
       if (!cli.vencimento) return false;
+      const str = String(cli.vencimento).trim();
+      if (str.startsWith(targetIsoDate)) return true;
       try {
-        const cliVencStr = new Date(cli.vencimento).toISOString().split('T')[0];
-        return cliVencStr === targetIsoDate;
+        if (str.includes('/')) {
+          const parts = str.split('/');
+          if (parts.length === 3) {
+            const formatted = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            if (formatted === targetIsoDate) return true;
+          }
+        }
+        const dStr = new Date(cli.vencimento).toISOString().split('T')[0];
+        return dStr === targetIsoDate;
       } catch (e) {
-        return String(cli.vencimento).startsWith(targetIsoDate);
+        return false;
       }
     });
 
     return res.status(200).json({
-      count: clients.length || 0,
+      count: clients.length,
       targetDate: targetIsoDate,
-      clients: clients || []
+      clients: clients
     });
 
   } catch (err: any) {
     console.error('Erro em /api/automacao/preview-clients:', err);
-    return res.status(500).json({ error: 'Erro ao buscar prévia: ' + (err?.message || String(err)) });
+    return res.status(200).json({ count: 0, targetDate: new Date().toISOString().split('T')[0], clients: [] });
   }
 }

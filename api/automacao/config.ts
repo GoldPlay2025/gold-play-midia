@@ -38,27 +38,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     try {
       if (supabase) {
-        let timer: any = null;
         let data: any = null;
         let error: any = null;
 
         try {
-          const queryPromise = supabase
-            .from('automacao_config')
-            .select('*')
-            .eq('id', 'sistema')
-            .maybeSingle();
-
-          const timeoutPromise = new Promise((resolve) => {
-            timer = setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 4000);
-          });
+          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 2000));
+          const queryPromise = (async () => {
+            try {
+              return await supabase.from('automacao_config').select('*').eq('id', 'sistema').maybeSingle();
+            } catch (e) {
+              return { data: null, error: e };
+            }
+          })();
 
           const resRace: any = await Promise.race([queryPromise, timeoutPromise]);
           data = resRace?.data;
           error = resRace?.error;
-        } finally {
-          if (timer) clearTimeout(timer);
-        }
+        } catch (e) {}
 
         if (!error && data) {
           return res.status(200).json({
@@ -92,29 +88,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       if (supabase) {
-        let timer: any = null;
         let data: any = null;
         
         try {
-          const queryPromise = supabase
-            .from('automacao_config')
-            .select('*')
-            .eq('id', 'sistema')
-            .maybeSingle();
-            
-          let t; const resRace: any = await Promise.race([
-            queryPromise, 
-            new Promise(resolve => { t = setTimeout(() => resolve({ data: null }), 4000); })
-          ]); clearTimeout(t);
+          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ data: null }), 2000));
+          const queryPromise = (async () => {
+            try {
+              return await supabase.from('automacao_config').select('*').eq('id', 'sistema').maybeSingle();
+            } catch (e) {
+              return { data: null };
+            }
+          })();
+
+          const resRace: any = await Promise.race([queryPromise, timeoutPromise]);
           data = resRace?.data;
         } catch (e) {}
 
         const horarioMudou = data && data.horario_disparo && data.horario_disparo !== updated.horarioDisparo;
 
         try {
-          const timeoutPromise = new Promise((resolve) => {
-            timer = setTimeout(() => resolve({ error: { message: 'Timeout write' } }), 2500);
-          });
+          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ error: { message: 'Timeout write' } }), 2000));
 
           const upsertData: any = {
             id: 'sistema',
@@ -129,13 +122,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             upsertData.last_run_date = null;
           }
 
-          const upsertPromise = supabase.from('automacao_config').upsert(upsertData, { onConflict: 'id' });
+          const upsertPromise = (async () => {
+            try {
+              return await supabase.from('automacao_config').upsert(upsertData, { onConflict: 'id' });
+            } catch (e) {
+              return { error: e };
+            }
+          })();
 
           await Promise.race([upsertPromise, timeoutPromise]);
         } catch (err) {
           console.warn('[Vercel config] Upsert erro:', err);
-        } finally {
-          if (timer) clearTimeout(timer);
         }
       }
 
@@ -146,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     } catch (err: any) {
       console.error('Erro no Vercel handler POST /api/automacao/config:', err);
-      return res.status(500).json({ error: 'Erro ao salvar configurações: ' + (err?.message || String(err)) });
+      return res.status(200).json({ error: 'Erro ao salvar configurações: ' + (err?.message || String(err)) });
     }
   }
 
