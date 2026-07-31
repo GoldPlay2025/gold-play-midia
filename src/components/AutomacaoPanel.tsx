@@ -148,11 +148,7 @@ ON CONFLICT (id) DO NOTHING;`;
   const fetchConfig = async () => {
     setLoading(true);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
-
-      const res = await fetchApi('/api/automacao/config', { signal: controller.signal });
-      clearTimeout(timer);
+      const res = await fetchApi('/api/automacao/config');
 
       if (res.ok) {
         const data = await safeJsonParse(res);
@@ -189,10 +185,7 @@ ON CONFLICT (id) DO NOTHING;`;
     setLoadingPreview(true);
     setPreviewError(null);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
-      const res = await fetchApi('/api/automacao/preview-clients', { signal: controller.signal });
-      clearTimeout(timer);
+      const res = await fetchApi('/api/automacao/preview-clients');
 
       if (res.ok) {
         const data = await safeJsonParse(res);
@@ -245,9 +238,6 @@ ON CONFLICT (id) DO NOTHING;`;
     updateAndPersistConfig(prev => ({ ...prev }));
 
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
-
       const res = await fetchApi('/api/automacao/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -257,9 +247,7 @@ ON CONFLICT (id) DO NOTHING;`;
           ativo: config.ativo,
           mensagemTemplate: config.mensagemTemplate
         }),
-        signal: controller.signal
-      });
-      clearTimeout(timer);
+        });
 
       if (res.ok) {
         const data = await safeJsonParse(res);
@@ -287,9 +275,6 @@ ON CONFLICT (id) DO NOTHING;`;
     setSendingTest(true);
     setTestResult(null);
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25000);
-
     try {
       const res = await fetchApi('/api/automacao/test-sms', {
         method: 'POST',
@@ -299,9 +284,7 @@ ON CONFLICT (id) DO NOTHING;`;
           horarioSimulado: testHorario,
           mensagemTeste: testMensagem
         }),
-        signal: controller.signal
-      });
-      clearTimeout(timer);
+        });
 
       const data = await safeJsonParse(res);
       if (res.ok && data.success) {
