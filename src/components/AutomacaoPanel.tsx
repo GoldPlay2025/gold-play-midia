@@ -363,8 +363,13 @@ ON CONFLICT (id) DO NOTHING;`;
     setSendingTest(true);
     setTestResult(null);
 
+    let timer: any = null;
     try {
-      const res = await fetchApi('/api/automacao/test-sms', {
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Tempo limite da requisição esgotado (12s).')), 12000);
+      });
+
+      const fetchPromise = fetchApi('/api/automacao/test-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -372,28 +377,32 @@ ON CONFLICT (id) DO NOTHING;`;
           horarioSimulado: testHorario,
           mensagemTeste: testMensagem
         }),
-        });
+      });
+
+      const res: any = await Promise.race([fetchPromise, timeoutPromise]);
+      if (timer) clearTimeout(timer);
 
       const data = await safeJsonParse(res);
-      if (res.ok && data.success) {
+      if (res && res.ok && data?.success) {
         setTestResult({
           success: true,
           message: data.message || `SMS de teste enviado para ${testTelefone}!`,
-          details: data.response
+          details: data.details || data.response
         });
         showToast('success', `Teste disparado com sucesso para ${testTelefone}!`);
         fetchConfig(); // Atualiza logs
       } else {
+        const errMsg = data?.error || 'Falha ao enviar SMS de teste via GetSMS.';
         setTestResult({
           success: false,
-          message: data.error || 'Falha ao enviar SMS de teste via GetSMS.',
-          details: data.details
+          message: errMsg,
+          details: data?.details
         });
-        showToast('error', data.error || 'Falha no envio do teste.');
+        showToast('error', errMsg);
       }
     } catch (err: any) {
-      clearTimeout(timer);
-      const errMsg = err.name === 'AbortError' ? 'Tempo de resposta do servidor esgotado.' : err.message;
+      if (timer) clearTimeout(timer);
+      const errMsg = err.name === 'AbortError' ? 'Tempo de resposta do servidor esgotado.' : (err.message || String(err));
       setTestResult({
         success: false,
         message: 'Erro no teste: ' + errMsg
