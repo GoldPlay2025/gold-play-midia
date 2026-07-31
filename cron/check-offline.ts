@@ -15,7 +15,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Validação de segurança via CRON_SECRET
     const cronSecret = process.env.CRON_SECRET;
-    const isForce = req.query?.force === 'true' || req.query?.test === 'true';
+    const urlStr = String(req.url || '');
+    const isForce = req.query?.force === 'true' || req.query?.test === 'true' || urlStr.includes('force=true') || urlStr.includes('test=true') || (req.body && req.body.force === true);
 
     if (cronSecret && !isForce) {
       const authHeader = req.headers.authorization || '';
@@ -101,12 +102,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (offlineScreens.length === 0) {
-      return res.status(200).json({
-        success: true,
-        action: 'checked',
-        message: 'Todas as telas estão online ou já notificadas.',
-        offlineCount: 0
-      });
+      if (isForce) {
+        // Quando forçado o teste manual, simula 1 tela offline para disparar o alerta de teste
+        offlineScreens.push({
+          id: 'test-simulated-id',
+          nome_local: 'TELA DE TESTE SIMULADA',
+          identificador_unico: 'TESTE-OFFLINE',
+          last_ping: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+          clientes: { nome_empresa: 'Cliente Teste Gold Play' }
+        });
+      } else {
+        return res.status(200).json({
+          success: true,
+          action: 'checked',
+          message: 'Todas as telas estão online ou já notificadas.',
+          offlineCount: 0
+        });
+      }
     }
 
     const alertsSentResults: any[] = [];
@@ -168,10 +180,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Disparo seguro via GTI SMS helper
         try {
+          const shortSmsMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} ficou OFFLINE!`;
           const smsRes = await sendGtiSms({
             numero: adminPhone,
-            mensagem: alertMessage,
-            timeoutMs: 10000
+            mensagem: shortSmsMsg,
+            timeoutMs: 4000
           });
           smsResultMsg = smsRes.message;
           if (smsRes.success) {
@@ -179,7 +192,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         } catch (smsErr: any) {
           console.error('Erro no envio GTI SMS:', smsErr);
-          smsResultMsg = smsErr.message || String(smsErr);
+          smsResultMsg = smsErr?.message || String(smsErr);
         }
       }
 
