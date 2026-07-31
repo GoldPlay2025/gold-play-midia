@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchApi } from '../lib/api';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { 
   Zap, 
   Clock, 
@@ -186,28 +187,88 @@ ON CONFLICT (id) DO NOTHING;`;
     }
   };
 
-  // Carrega prévia de clientes
-  const fetchPreview = async () => {
+  // Carrega prévia de clientes com timeout rápido e fallback direto ao Supabase
+  const fetchPreview = async (overrideDias?: number) => {
     setLoadingPreview(true);
     setPreviewError(null);
-    try {
-      const res = await fetchApi('/api/automacao/preview-clients');
 
-      if (res.ok) {
+    const diasVal = typeof overrideDias === 'number' ? overrideDias : (Number(config.diasAntecedencia) || 0);
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + diasVal);
+    const targetIsoDate = targetDate.toISOString().split('T')[0];
+
+    let loaded = false;
+
+    // 1. Tenta rota da API com timeout estrito de 2 segundos
+    try {
+      let timer: any;
+      const timeoutPromise = new Promise(resolve => {
+        timer = setTimeout(() => resolve(null), 2000);
+      });
+      const fetchPromise = fetchApi(`/api/automacao/preview-clients?dias=${diasVal}`);
+      const res: any = await Promise.race([fetchPromise, timeoutPromise]);
+      if (timer) clearTimeout(timer);
+
+      if (res && res.ok) {
         const data = await safeJsonParse(res);
-        if (data && typeof data === 'object') {
+        if (data && typeof data === 'object' && Array.isArray(data.clients)) {
           setPreviewData(data);
+          loaded = true;
         }
-      } else {
-         const data = await safeJsonParse(res).catch(() => ({}));
-         setPreviewError(data?.error || `Erro HTTP ${res.status}`);
       }
     } catch (e: any) {
-      console.warn('Erro ao carregar prévia de clientes:', e);
-      setPreviewError(e.message || String(e));
-    } finally {
-      setLoadingPreview(false);
+      console.warn('API preview-clients indisponível ou lenta. Acionando consulta direta ao Supabase:', e);
     }
+
+    // 2. Fallback direto ao Supabase frontend
+    if (!loaded) {
+      try {
+        if (isSupabaseConfigured) {
+          const { data: clientsData, error } = await supabase
+            .from('clientes')
+            .select('*');
+
+          if (!error && Array.isArray(clientsData)) {
+            const filtered = clientsData.filter(cli => {
+              if (!cli.vencimento) return false;
+              const str = String(cli.vencimento).trim();
+              if (str.startsWith(targetIsoDate)) return true;
+              try {
+                if (str.includes('/')) {
+                  const parts = str.split('/');
+                  if (parts.length === 3) {
+                    const formatted = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                    if (formatted === targetIsoDate) return true;
+                  }
+                }
+                return new Date(cli.vencimento).toISOString().split('T')[0] === targetIsoDate;
+              } catch (e) {
+                return false;
+              }
+            });
+
+            setPreviewData({
+              count: filtered.length,
+              targetDate: targetIsoDate,
+              clients: filtered
+            });
+            loaded = true;
+          }
+        }
+      } catch (e: any) {
+        console.warn('Erro na consulta direta de clientes no Supabase:', e);
+      }
+    }
+
+    if (!loaded && !previewData) {
+      setPreviewData({
+        count: 0,
+        targetDate: targetIsoDate,
+        clients: []
+      });
+    }
+
+    setLoadingPreview(false);
   };
 
   useEffect(() => {
@@ -223,7 +284,9 @@ ON CONFLICT (id) DO NOTHING;`;
     showToast('success', nextAtivo ? 'Robô de Automação ATIVADO com sucesso!' : 'Robô de Automação PAUSADO.');
 
     try {
-      await fetchApi('/api/automacao/config', {
+      let timer: any;
+      const timeoutPromise = new Promise(resolve => { timer = setTimeout(() => resolve(null), 2000); });
+      const savePromise = fetchApi('/api/automacao/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -233,40 +296,59 @@ ON CONFLICT (id) DO NOTHING;`;
           mensagemTemplate: config.mensagemTemplate
         })
       });
+      await Promise.race([savePromise, timeoutPromise]);
+      if (timer) clearTimeout(timer);
     } catch (err: any) {
       console.warn('Status salvo localmente. Aviso ao sincronizar com servidor:', err);
     }
   };
 
-  // Salva configurações
+  // Salva configurações com resposta instantânea e sincronização em segundo plano
   const handleSaveConfig = async () => {
     setSaving(true);
-    updateAndPersistConfig(prev => ({ ...prev }));
+    const updatedDias = Number(config.diasAntecedencia) || 0;
+
+    // Atualização e persistência local INSTANTÂNEA
+    updateAndPersistConfig(prev => ({
+      ...prev,
+      diasAntecedencia: updatedDias,
+      horarioDisparo: config.horarioDisparo,
+      ativo: config.ativo,
+      mensagemTemplate: config.mensagemTemplate
+    }));
+
+    showToast('success', 'Configurações de automação salvas!');
 
     try {
-      const res = await fetchApi('/api/automacao/config', {
+      let timer: any;
+      const timeoutPromise = new Promise(resolve => {
+        timer = setTimeout(() => resolve(null), 2000);
+      });
+      const savePromise = fetchApi('/api/automacao/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          diasAntecedencia: Number(config.diasAntecedencia),
+          diasAntecedencia: updatedDias,
           horarioDisparo: config.horarioDisparo,
           ativo: config.ativo,
           mensagemTemplate: config.mensagemTemplate
         }),
-        });
+      });
 
-      if (res.ok) {
+      const res: any = await Promise.race([savePromise, timeoutPromise]);
+      if (timer) clearTimeout(timer);
+
+      if (res && res.ok) {
         const data = await safeJsonParse(res);
         if (data && data.config) {
           updateAndPersistConfig(prev => ({ ...prev, ...data.config }));
         }
       }
-      showToast('success', 'Configurações de automação salvas com sucesso!');
     } catch (err: any) {
-      showToast('success', 'Configurações salvas!');
+      console.warn('Configurações salvas localmente:', err);
     } finally {
       setSaving(false);
-      fetchPreview();
+      fetchPreview(updatedDias);
     }
   };
 
@@ -530,7 +612,7 @@ ON CONFLICT (id) DO NOTHING;`;
               </div>
 
               <button
-                onClick={fetchPreview}
+                onClick={() => fetchPreview(Number(config.diasAntecedencia))}
                 disabled={loadingPreview}
                 className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer active:scale-95"
                 title="Atualizar lista de clientes"
@@ -538,6 +620,13 @@ ON CONFLICT (id) DO NOTHING;`;
                 <RefreshCw className={`w-4 h-4 ${loadingPreview ? 'animate-spin text-amber-400' : ''}`} />
               </button>
             </div>
+
+            {loadingPreview && !previewData && (
+              <div className="flex items-center justify-center py-6 gap-2 text-slate-400">
+                <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                <span className="text-xs font-mono">Buscando clientes elegíveis...</span>
+              </div>
+            )}
 
             {previewError && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl mt-3"><p className="text-xs text-red-400 font-bold">Erro ao carregar clientes: {previewError}</p><p className="text-[10px] text-red-400/80 mt-1">Verifique as variáveis de ambiente (Supabase URL/Key) na Vercel.</p></div>}{previewData && !previewError && (
               <div className="space-y-3">
