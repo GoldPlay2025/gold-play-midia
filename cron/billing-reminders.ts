@@ -64,7 +64,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     targetDate.setDate(targetDate.getDate() + diasAntecedencia);
     const targetIsoDate = targetDate.toISOString().split('T')[0];
 
-    // 3. Busca clientes e filtra os que vencem na data alvo (suporta timestamp ou date)
+    // Helper para comparar data de vencimento (aceita DD/MM/YYYY, ISO, timestamp)
+    const matchesTargetDate = (vencimento: any, target: string) => {
+      if (!vencimento) return false;
+      const str = String(vencimento).trim();
+      if (str.startsWith(target)) return true;
+      if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length === 3) {
+          const day = parts[0].padStart(2, '0');
+          const month = parts[1].padStart(2, '0');
+          const year = parts[2].trim();
+          if (`${year}-${month}-${day}` === target) return true;
+        }
+      }
+      try {
+        const d = new Date(vencimento);
+        if (!isNaN(d.getTime())) {
+          if (d.toISOString().split('T')[0] === target) return true;
+        }
+      } catch (e) {}
+      return false;
+    };
+
+    // 3. Busca clientes e filtra os que vencem na data alvo
     const { data: allClients, error: clientErr } = await supabase
       .from('clientes')
       .select('*');
@@ -73,19 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Erro ao buscar clientes no Vercel Cron: ' + clientErr.message });
     }
 
-    const clients = (allClients || []).filter(cli => {
-      if (!cli.vencimento) return false;
-      try {
-        const cliVencStr = new Date(cli.vencimento).toISOString().split('T')[0];
-        return cliVencStr === targetIsoDate;
-      } catch (e) {
-        return String(cli.vencimento).startsWith(targetIsoDate);
-      }
-    });
-
-    if (clientErr) {
-      return res.status(500).json({ error: 'Erro ao buscar clientes no Vercel Cron: ' + clientErr.message });
-    }
+    const clients = (allClients || []).filter(cli => matchesTargetDate(cli.vencimento, targetIsoDate));
 
     if (!clients || clients.length === 0) {
       return res.status(200).json({
@@ -99,8 +110,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 4. Busca chave PIX
     let pixChave = '';
     try {
-      const { data: conf } = await supabase.from('configuracoes').select('pix_chave').eq('id', 'sistema').maybeSingle();
-      if (conf?.pix_chave) pixChave = conf.pix_chave;
+      const { data: conf } = await supabase.from('configuracoes').select('pix_key, pix_chave').eq('id', 'sistema').maybeSingle();
+      if (conf) pixChave = conf.pix_key || conf.pix_chave || '';
     } catch (e) {}
 
     let dispatched = 0;

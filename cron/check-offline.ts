@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
+import { sendGtiSms } from '../../src/lib/gtisms';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,7 +15,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Validação de segurança via CRON_SECRET
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
+    const isForce = req.query?.force === 'true' || req.query?.test === 'true';
+
+    if (cronSecret && !isForce) {
       const authHeader = req.headers.authorization || '';
       const querySecret = req.query?.secret || req.headers['x-cron-secret'];
       const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (authHeader as string);
@@ -63,16 +66,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.warn('Aviso ao consultar configuracoes no cron:', errConfig);
     }
 
-    if (!alertsEnabled) {
+    if (!alertsEnabled && !isForce) {
       return res.status(200).json({
         success: true,
         action: 'skipped',
-        reason: 'Alertas desativados nas configurações',
+        reason: 'Alertas desativados nas configurações (ative os Alertas de Tela no painel Perfil & Sistema)',
         alertsEnabled
       });
     }
 
-    // b) Busca telas onde last_ping seja maior que 3 minutos atrás (ou criadas há > 3m sem ping) e alert_sent = false
+    // b) Busca telas onde last_ping seja maior que 3 minutos atrás (ou criadas há > 3m sem ping)
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
 
     const { data: screens, error: queryErr } = await supabase
@@ -84,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const offlineScreens = (screens || []).filter((tela: any) => {
-      if (tela.alert_sent) return false;
+      if (!isForce && tela.alert_sent) return false;
 
       if (tela.last_ping) {
         return new Date(tela.last_ping).getTime() < new Date(threeMinutesAgo).getTime();
@@ -120,119 +123,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `A tela *${nomeTela}*${nomeCliente ? ` (${nomeCliente})` : ''} está *OFFLINE*!\n` +
         `📍 *ID:* ${idUnico}\n` +
         `🕒 *Último Sinal:* ${lastPingText}\n` +
-        `⚠️ *Status:* Parou de responder há mais de 20 minutos.\n\n` +
+        `⚠️ *Status:* Parou de responder há mais de 3 minutos.\n\n` +
         `_Ação recomendada: Verifique a conexão Wi-Fi/Rede ou a alimentação elétrica da TV Box._`;
 
       let sentSuccess = false;
+      let smsResultMsg = '';
 
       // Disparo via BotBot.chat ou API do WhatsApp
-      try {
-        const cleaned = (adminPhone || '').replace(/\D/g, '');
-        const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
-        
-        const targetUrl = process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL || process.env.WHATSAPP_API_URL || 'https://api.botbot.chat/v1/send';
-        const appKey = process.env.WHATSAPP_APP_KEY || process.env.BOTBOT_APP_KEY || '';
-        const authKey = process.env.WHATSAPP_AUTH_KEY || process.env.BOTBOT_AUTH_KEY || process.env.BOTBOT_TOKEN || '';
-
-        const payload = {
-          appkey: appKey,
-          authkey: authKey,
-          number: fullNumber,
-          phone: fullNumber,
-          recipient: fullNumber,
-          message: alertMessage,
-          text: alertMessage,
-          caption: alertMessage
-        };
-
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
-        };
-        if (appKey) headers['appkey'] = appKey;
-        if (authKey) {
-          headers['authkey'] = authKey;
-          headers['Authorization'] = `Bearer ${authKey}`;
-          headers['x-api-key'] = authKey;
-        }
-
-        const botResp = await fetch(targetUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(payload)
-        });
-        
-        if (botResp.ok) {
-          sentSuccess = true;
-        } else {
-          console.error('Erro na API BotBot:', await botResp.text());
-        }
-      } catch (e) {
-        console.error('Erro no BotBot:', e);
-      }
-
-      // Disparo via GTI SMS
-      if (process.env.GTISMS_API_TOKEN) {
+      if (adminPhone) {
         try {
-          const cleaned = (adminPhone || '').replace(/\D/g, '');
+          const cleaned = adminPhone.replace(/\D/g, '');
           const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
           
-          let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
-          if (!smsUrl.includes('sms/send')) {
-             smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
-          }
-          const smsToken = process.env.GTISMS_API_TOKEN;
-          let senderId = (process.env.GTISMS_SENDER_ID || '').trim();
-          if (senderId.startsWith('http') || senderId.length > 11 || senderId.length === 0) {
-            senderId = '';
-          }
-          
-          const sanitizeSms = (text: string) => {
-            let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
-            sanitized = sanitized.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-            sanitized = sanitized.replace(/[*_~`]/g, '');
-            sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
-            return sanitized.trim();
-          };
+          const targetUrl = process.env.BOTBOT_API_URL || process.env.WHATSAPP_BOT_URL || process.env.WHATSAPP_API_URL || 'https://api.botbot.chat/v1/send';
+          const appKey = process.env.WHATSAPP_APP_KEY || process.env.BOTBOT_APP_KEY || '';
+          const authKey = process.env.WHATSAPP_AUTH_KEY || process.env.BOTBOT_AUTH_KEY || process.env.BOTBOT_TOKEN || '';
 
-          const shortOfflineMsg = `Gold Play: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} esta offline.`;
-          const finalOfflineMsg = sanitizeSms(shortOfflineMsg).substring(0, 155);
+          if (appKey || authKey) {
+            const payload = {
+              appkey: appKey,
+              authkey: authKey,
+              number: fullNumber,
+              phone: fullNumber,
+              recipient: fullNumber,
+              message: alertMessage,
+              text: alertMessage,
+              caption: alertMessage
+            };
 
-          const payload: any = {
-            recipient: fullNumber,
-            message: finalOfflineMsg,
-            type: 'plain'
-          };
-          
-          if (senderId) {
-            payload.sender_id = senderId;
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (appKey) headers['appkey'] = appKey;
+            if (authKey) {
+              headers['authkey'] = authKey;
+              headers['Authorization'] = `Bearer ${authKey}`;
+              headers['x-api-key'] = authKey;
+            }
+
+            const botResp = await fetch(targetUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+            if (botResp.ok) sentSuccess = true;
           }
+        } catch (e) {
+          console.error('Erro no BotBot:', e);
+        }
 
-          const smsResp = await fetch(smsUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${smsToken}`
-            },
-            body: JSON.stringify(payload)
+        // Disparo seguro via GTI SMS helper
+        try {
+          const smsRes = await sendGtiSms({
+            numero: adminPhone,
+            mensagem: alertMessage,
+            timeoutMs: 10000
           });
-          
-          let smsData;
-          try {
-            smsData = await smsResp.json();
-          } catch(e) {
-            console.error('Erro na requisição API GTI SMS:', await smsResp.text());
+          smsResultMsg = smsRes.message;
+          if (smsRes.success) {
+            sentSuccess = true;
           }
-
-          if (smsResp.ok && smsData && (smsData.status === 'success' || smsData.success === true || smsData.code === 200 || smsData.data?.status === 'success')) {
-             sentSuccess = true;
-             console.log('Alerta OFFLINE enviado via SMS com sucesso para', fullNumber);
-          } else if (smsData) {
-             console.error('Erro retornado pela API GTI SMS:', smsData);
-          }
-        } catch (smsErr) {
-          console.error('Erro no envio via API GTI SMS:', smsErr);
+        } catch (smsErr: any) {
+          console.error('Erro no envio GTI SMS:', smsErr);
+          smsResultMsg = smsErr.message || String(smsErr);
         }
       }
 
@@ -247,57 +194,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               host: smtpHost || 'smtp.gmail.com',
               port: smtpPort || 587,
               secure: smtpPort === 465,
-              auth: {
-                user: smtpEmail,
-                pass: sanitizedPassword,
-              },
+              auth: { user: smtpEmail, pass: sanitizedPassword },
               tls: { rejectUnauthorized: false },
               connectionTimeout: 5000,
               greetingTimeout: 5000,
               socketTimeout: 5000
             });
 
-          const mailHtml = `<div style="font-family: Arial, sans-serif; padding: 24px; background: #0f0f11; color: #f8fafc; border-radius: 16px; border: 1px solid #1e293b;">
-            <h2 style="color: #f43f5e; margin-bottom: 12px; font-size: 20px;">🚨 ALERTA GOLD PLAY - TELA OFFLINE</h2>
-            <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6;">A tela <strong>${nomeTela}</strong>${nomeCliente ? ` (${nomeCliente})` : ''} foi detectada como <strong>OFFLINE</strong>.</p>
-            <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; margin: 16px 0;">
-              <ul style="color: #e2e8f0; font-size: 13px; line-height: 1.8; margin: 0; padding-left: 20px;">
-                <li><strong>Identificador da Tela:</strong> <span style="font-family: monospace; color: #fbbf24;">${idUnico}</span></li>
-                <li><strong>Último Sinal:</strong> ${lastPingText}</li>
-                <li><strong>Data do Alerta:</strong> ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</li>
-              </ul>
-            </div>
-            <p style="font-size: 12px; color: #94a3b8; margin-top: 15px;">Ação recomendada: Verifique a conexão com a Internet e a energia elétrica do aparelho.</p>
-          </div>`;
+            const mailHtml = `<div style="font-family: Arial, sans-serif; padding: 24px; background: #0f0f11; color: #f8fafc; border-radius: 16px; border: 1px solid #1e293b;">
+              <h2 style="color: #f43f5e; margin-bottom: 12px; font-size: 20px;">🚨 ALERTA GOLD PLAY - TELA OFFLINE</h2>
+              <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6;">A tela <strong>${nomeTela}</strong>${nomeCliente ? ` (${nomeCliente})` : ''} foi detectada como <strong>OFFLINE</strong>.</p>
+              <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; margin: 16px 0;">
+                <ul style="color: #e2e8f0; font-size: 13px; line-height: 1.8; margin: 0; padding-left: 20px;">
+                  <li><strong>Identificador da Tela:</strong> <span style="font-family: monospace; color: #fbbf24;">${idUnico}</span></li>
+                  <li><strong>Último Sinal:</strong> ${lastPingText}</li>
+                  <li><strong>Data do Alerta:</strong> ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</li>
+                </ul>
+              </div>
+              <p style="font-size: 12px; color: #94a3b8; margin-top: 15px;">Ação recomendada: Verifique a conexão com a Internet e a energia elétrica do aparelho.</p>
+            </div>`;
 
-          await transporter.sendMail({
-            from: `"GOLD PLAY Alertas" <${smtpEmail}>`,
-            to: smtpEmail,
-            subject: `🚨 ALERTA OFFLINE: Tela ${nomeTela} - GOLD PLAY`,
-            html: mailHtml,
-          });
-          sentSuccess = true;
-          console.log('E-mail de alerta enviado para', smtpEmail);
+            await transporter.sendMail({
+              from: `"GOLD PLAY Alertas" <${smtpEmail}>`,
+              to: smtpEmail,
+              subject: `🚨 ALERTA OFFLINE: Tela ${nomeTela} - GOLD PLAY`,
+              html: mailHtml,
+            });
+            sentSuccess = true;
           }
         } catch (emailErr) {
           console.error('Erro ao enviar e-mail de alerta offline:', emailErr);
         }
       }
 
-      // Marca alert_sent = true somente se enviou com sucesso
-      if (sentSuccess) {
-        await supabase
-          .from('telas')
-          .update({ alert_sent: true, status_online: false })
-          .eq('id', tela.id);
-      } else {
-        console.warn(`Alerta Vercel Cron para a tela "${nomeTela}" (${tela.id}) mantido alert_sent = false.`);
-      }
+      // Marca alert_sent = true
+      await supabase
+        .from('telas')
+        .update({ alert_sent: true, status_online: false })
+        .eq('id', tela.id);
 
       alertsSentResults.push({
         telaId: tela.id,
         nomeTela,
         sentSuccess,
+        smsResultMsg,
         adminPhone
       });
     }
