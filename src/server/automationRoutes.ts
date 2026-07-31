@@ -183,7 +183,7 @@ async function sendGtiSmsDirect(numero: string, mensagem: string): Promise<{ suc
   const result = await sendGtiSms({
     numero,
     mensagem,
-    timeoutMs: 15000
+    timeoutMs: 5000
   });
 
   if (result.success) {
