@@ -78,7 +78,7 @@ export function AutomacaoPanel() {
     });
   };
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
@@ -144,13 +144,18 @@ ON CONFLICT (id) DO NOTHING;`;
     }
   };
 
-  // Carrega configurações
+  // Carrega configurações em segundo plano sem bloquear a interface
   const fetchConfig = async () => {
     setLoading(true);
+    let timer: any = null;
     try {
-      const res = await fetchApi('/api/automacao/config');
+      const timeoutPromise = new Promise(resolve => {
+        timer = setTimeout(() => resolve(null), 2500);
+      });
+      const fetchPromise = fetchApi('/api/automacao/config');
+      const res: any = await Promise.race([fetchPromise, timeoutPromise]);
 
-      if (res.ok) {
+      if (res && res.ok) {
         const data = await safeJsonParse(res);
         if (data && typeof data === 'object') {
           let savedLocal: any = null;
@@ -176,6 +181,7 @@ ON CONFLICT (id) DO NOTHING;`;
     } catch (err: any) {
       console.warn('Servidor offline ou resposta lenta. Usando configurações locais:', err);
     } finally {
+      if (timer) clearTimeout(timer);
       setLoading(false);
     }
   };
@@ -342,15 +348,6 @@ ON CONFLICT (id) DO NOTHING;`;
       setRunningNow(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3 text-amber-500">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <p className="text-sm font-mono tracking-wider uppercase">Carregando Módulo de Automação...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
