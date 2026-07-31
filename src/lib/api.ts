@@ -31,8 +31,24 @@ export async function fetchApi(path: string, options?: RequestInit): Promise<Res
     headers.set('Content-Type', 'application/json');
   }
 
-  return fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    return await fetch(url, {
+      ...options,
+      headers,
+    });
+  } catch (err: any) {
+    // Se a URL customizada falhou (ex: CORS, backend fora do ar), tenta rota relativa na mesma origem
+    if (url !== path && path.startsWith('/')) {
+      console.warn(`[fetchApi] Falha ao conectar em ${url}. Re-tentando rota relativa ${path}...`);
+      try {
+        return await fetch(path, {
+          ...options,
+          headers,
+        });
+      } catch (retryErr) {
+        throw retryErr;
+      }
+    }
+    throw err;
+  }
 }

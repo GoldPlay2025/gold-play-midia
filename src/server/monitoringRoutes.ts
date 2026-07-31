@@ -127,25 +127,20 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
           if (process.env.GTISMS_API_TOKEN) {
             try {
               let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
-              if (!smsUrl.includes('sms/send')) {
+              if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
                 smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
               }
               const smsToken = process.env.GTISMS_API_TOKEN;
-              let senderId = (process.env.GTISMS_SENDER_ID || '').trim();
-              if (senderId.startsWith('http') || senderId.length > 11 || senderId.length === 0) {
-                senderId = '';
-              }
+              const senderId = process.env.GTISMS_SENDER_ID || '';
 
               const sanitizeSms = (text: string) => {
                 let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
-                sanitized = sanitized.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-                sanitized = sanitized.replace(/[*_~`]/g, '');
                 sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
-                return sanitized.trim();
+                return sanitized;
               };
 
-              const shortOnlineMsg = `Gold Play: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} voltou a ficar online.`;
+              const shortOnlineMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} voltou a ficar ONLINE!`;
               const finalOnlineMsg = sanitizeSms(shortOnlineMsg).substring(0, 155);
 
               const payload: any = {
@@ -303,7 +298,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
 
     // a) Busca configurações de alertas de forma segura
     let alertsEnabled = true;
-    let adminPhone = (process.env.ADMIN_PHONE || '').trim();
+    let adminPhone = '';
 
     try {
       const { data: configData } = await supabase
@@ -314,9 +309,7 @@ monitoringRouter.all('/check-offline', async (req, res) => {
 
       if (configData) {
         alertsEnabled = configData.alerts_enabled !== false;
-        if (configData.admin_phone && configData.admin_phone.trim()) {
-          adminPhone = configData.admin_phone.trim();
-        }
+        adminPhone = (configData.admin_phone || '').trim();
       }
     } catch (errConfig) {
       console.warn('Aviso ao consultar configuracoes em monitoringRoutes:', errConfig);
@@ -501,25 +494,20 @@ monitoringRouter.all('/check-offline', async (req, res) => {
           const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
           
           let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
-          if (!smsUrl.includes('sms/send')) {
+          if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
              smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
           }
           const smsToken = process.env.GTISMS_API_TOKEN;
-          let senderId = (process.env.GTISMS_SENDER_ID || '').trim();
-          if (senderId.startsWith('http') || senderId.length > 11 || senderId.length === 0) {
-            senderId = '';
-          }
+          const senderId = process.env.GTISMS_SENDER_ID || '';
           
           const sanitizeSms = (text: string) => {
             let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
-            sanitized = sanitized.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-            sanitized = sanitized.replace(/[*_~`]/g, '');
             sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
-            return sanitized.trim();
+            return sanitized;
           };
 
-          const shortOfflineMsg = `Gold Play: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} esta offline.`;
+          const shortOfflineMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} ficou OFFLINE!`;
           const finalOfflineMsg = sanitizeSms(shortOfflineMsg).substring(0, 155);
 
           const payload: any = {
@@ -549,9 +537,9 @@ monitoringRouter.all('/check-offline', async (req, res) => {
             console.error('Erro na requisição API GTI SMS:', await smsResp.text());
           }
 
-          if (smsResp.ok && smsData && (smsData.status === 'success' || smsData.success === true || smsData.code === 200 || smsData.data?.status === 'success')) {
+          if (smsResp.ok && smsData && smsData.status === 'success') {
              sentSuccess = true;
-             console.log('Alerta enviado via SMS com sucesso para', fullNumber);
+             console.log('Alerta enviado via SMS com sucesso!');
           } else if (smsData) {
              console.error('Erro retornado pela API GTI SMS:', smsData);
           }
@@ -560,15 +548,11 @@ monitoringRouter.all('/check-offline', async (req, res) => {
         }
       }
 
-      // c) Atualiza a flag alert_sent = true no Supabase SOMENTE se enviou com sucesso
-      if (sentSuccess) {
-        await supabase
-          .from('telas')
-          .update({ alert_sent: true, status_online: false })
-          .eq('id', tela.id);
-      } else {
-        console.warn(`Alerta para a tela "${nomeTela}" (${tela.id}) não pôde ser entregue no momento. alert_sent mantido como false para nova tentativa.`);
-      }
+      // c) Atualiza a flag alert_sent = true no Supabase
+      await supabase
+        .from('telas')
+        .update({ alert_sent: true, status_online: false })
+        .eq('id', tela.id);
 
       alertsSentResults.push({
         telaId: tela.id,
@@ -587,28 +571,5 @@ monitoringRouter.all('/check-offline', async (req, res) => {
   } catch (err: any) {
     console.error('Erro no /api/cron/check-offline:', err);
     return res.status(500).json({ error: err.message || 'Erro interno no servidor' });
-  }
-});
-
-// 4. Rota para resetar as flags de alerta de telas offline (útil para retestar ou forçar novos alertas)
-monitoringRouter.post('/reset-offline-alerts', async (req, res) => {
-  try {
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return res.status(503).json({ error: 'Supabase não configurado no servidor' });
-    }
-
-    const { error } = await supabase
-      .from('telas')
-      .update({ alert_sent: false })
-      .eq('status_online', false);
-
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
-
-    return res.json({ success: true, message: 'Flags de alerta de telas offline resetadas com sucesso.' });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Erro ao resetar alertas' });
   }
 });
