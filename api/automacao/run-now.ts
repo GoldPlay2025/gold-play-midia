@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
       const configRes: any = await Promise.race([
         configPromise,
-        new Promise(resolve => { const t = setTimeout(() => resolve({ data: null }), 3000); configPromise.finally(() => clearTimeout(t)); })
+        new Promise(resolve => setTimeout(() => resolve({ data: null }), 3000))
       ]);
       configData = configRes?.data;
     } catch (e) {
@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
       const clientsRes: any = await Promise.race([
         clientsPromise,
-        new Promise(resolve => { const t = setTimeout(() => resolve({ data: [] }), 4000); clientsPromise.finally(() => clearTimeout(t)); })
+        new Promise(resolve => setTimeout(() => resolve({ data: [] }), 4000))
       ]);
       allClients = clientsRes?.data || [];
     } catch (e) {
@@ -101,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const pixPromise = supabase.from('configuracoes').select('pix_chave').eq('id', 'sistema').maybeSingle();
       const pixRes: any = await Promise.race([
         pixPromise,
-        new Promise(resolve => { const t = setTimeout(() => resolve({ data: null }), 2000); pixPromise.finally(() => clearTimeout(t)); })
+        new Promise(resolve => setTimeout(() => resolve({ data: null }), 2000))
       ]);
       if (pixRes?.data?.pix_chave) pixChave = pixRes.data.pix_chave;
     } catch (e) {}
