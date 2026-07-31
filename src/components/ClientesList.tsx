@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Download, MessageCircle, MessageSquare, Mail, ArrowLeft } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Download, MessageCircle, Mail, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PillProgressButton } from './PillProgressButton';
 
@@ -99,13 +99,6 @@ ${pixKeyStr}
 • Estamos à disposição.`;
 };
 
-const getSmsCobrancaText = (cliente: Cliente, sysSettings: any) => {
-  const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-';
-  const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
-  const pixKeyStr = sysSettings?.pixKey || 'N/A';
-  return `Gold Midias: Mensalidade de ${valorStr} vence dia ${vencStr}. Pix para pgto: ${pixKeyStr}. Ignore se ja pago.`;
-};
-
 const getEmailCobrancaHtml = (cliente: Cliente, sysSettings: any) => {
   const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-';
   const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
@@ -182,10 +175,6 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
   const [renewSuccessId, setRenewSuccessId] = useState<string | null>(null);
   const [cobrancaModalOpen, setCobrancaModalOpen] = useState(false);
   const [cobrancaCliente, setCobrancaCliente] = useState<Cliente | null>(null);
-  const [smsModalOpen, setSmsModalOpen] = useState(false);
-  const [smsCliente, setSmsCliente] = useState<Cliente | null>(null);
-  const [smsText, setSmsText] = useState("");
-  const [isSendingSms, setIsSendingSms] = useState(false);
 
   // Email Modal State
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -549,7 +538,7 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
     },
     { 
       key: 'whatsapp', 
-      header: 'WhatsApp / SMS',
+      header: 'WhatsApp',
       render: (row) => {
         if (!row.whatsapp) return '-';
         const rawNumbers = row.whatsapp.replace(/\D/g, '');
@@ -711,77 +700,57 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 </div>
               </div>
 
-              {/* Botões de Ação de Cobrança (Organizados em 2 linhas no mobile) */}
+              {/* Botões de Ação de Cobrança */}
               <div className="flex items-center justify-between pt-2 border-t border-white/5">
                 <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
                   <DollarSign className="w-3 h-3 text-amber-500" /> Cobrança
                 </span>
 
-                <div className="flex flex-col gap-1.5 items-end">
-                  {/* Linha 1: WhatsApp e SMS */}
-                  <div className="flex items-center gap-1.5">
-                    {/* WhatsApp */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCobrancaCliente(row);
-                        setCobrancaModalOpen(true);
-                      }}
-                      className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
-                      title="Cobrança via WhatsApp"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 fill-emerald-500/20 text-emerald-400" />
-                    </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* WhatsApp */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCobrancaCliente(row);
+                      setCobrancaModalOpen(true);
+                    }}
+                    className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
+                    title="Cobrança via WhatsApp"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 fill-emerald-500/20 text-emerald-400" />
+                  </button>
 
-                    {/* SMS */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSmsCliente(row);
-                        setSmsText(getSmsCobrancaText(row, settings));
-                        setSmsModalOpen(true);
-                      }}
-                      className="p-2 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 active:scale-95 transition-all cursor-pointer shadow-md"
-                      title="Cobrança via SMS"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  </div>
+                  {/* E-mail */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEmailCliente(row);
+                      setEmailDestination(row.email || settings?.smtpEmail || '');
+                      setEmailSubject(`Cobrança de Mensalidade - ${row.nome_empresa}`);
+                      setEmailModalOpen(true);
+                    }}
+                    className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
+                    title="Cobrança via E-mail"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-sky-400" />
+                  </button>
 
-                  {/* Linha 2: E-mail e Confirmar Pagamento */}
-                  <div className="flex items-center gap-1.5">
-                    {/* E-mail */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEmailCliente(row);
-                        setEmailDestination(row.email || settings?.smtpEmail || '');
-                        setEmailSubject(`Cobrança de Mensalidade - ${row.nome_empresa}`);
-                        setEmailModalOpen(true);
-                      }}
-                      className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 active:scale-95 transition-all cursor-pointer shadow-md"
-                      title="Cobrança via E-mail"
-                    >
-                      <Mail className="w-3.5 h-3.5 text-sky-400" />
-                    </button>
-
-                    {/* Confirmar Pagamento */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRenewPayment(row);
-                      }}
-                      disabled={renewingId === row.id || getDaysToVencimento(row.vencimento) > 5}
-                      className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer shadow-md flex items-center justify-center"
-                      title="Confirmar Pagamento (Renovar)"
-                    >
-                      {renewingId === row.id ? (
-                        <Loader2 className="w-3.5 h-3.5 text-emerald-300 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      )}
-                    </button>
-                  </div>
+                  {/* Confirmar Pagamento */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRenewPayment(row);
+                    }}
+                    disabled={renewingId === row.id || getDaysToVencimento(row.vencimento) > 5}
+                    className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer shadow-md flex items-center justify-center"
+                    title="Confirmar Pagamento (Renovar)"
+                  >
+                    {renewingId === row.id ? (
+                      <Loader2 className="w-3.5 h-3.5 text-emerald-300 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -952,17 +921,6 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                         setCobrancaModalOpen(true);
                       }}
                       variant="whatsapp"
-                      className="h-8 px-3 text-xs font-extrabold tracking-tight whitespace-nowrap"
-                    />
-                    <PillProgressButton
-                      label="SMS"
-                      icon={<MessageSquare className="w-3.5 h-3.5 text-slate-950" />}
-                      onClick={() => {
-                        setSmsCliente(row);
-                        setSmsText(getSmsCobrancaText(row, settings));
-                        setSmsModalOpen(true);
-                      }}
-                      variant="white"
                       className="h-8 px-3 text-xs font-extrabold tracking-tight whitespace-nowrap"
                     />
                     <PillProgressButton
@@ -1254,110 +1212,6 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 label="Enviar WhatsApp"
                 icon={<CheckCircle2 className="w-4 h-4" />}
                 variant="emerald"
-              />
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Modal de Enviar SMS */}
-      <Modal
-        isOpen={smsModalOpen}
-        onClose={() => {
-          setSmsModalOpen(false);
-          setSmsCliente(null);
-        }}
-        title="Enviar SMS de Cobrança"
-      >
-        {smsCliente && (
-          <div className="space-y-6">
-            <div className="mx-auto w-[320px] max-w-full bg-[#1c1c1e] rounded-[40px] border-[8px] border-[#0a0a0c] overflow-hidden shadow-xl shadow-black relative pb-6">
-              <div className="absolute top-0 inset-x-0 h-6 bg-[#0a0a0c] rounded-b-3xl w-40 mx-auto z-10" />
-              
-              <div className="bg-[#1c1c1e] h-full pt-10 px-4 flex flex-col gap-3">
-                <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-                    <span className="text-blue-400 text-xs font-bold">SMS</span>
-                  </div>
-                  <div>
-                    <div className="text-white text-sm font-semibold">{smsCliente.nome_empresa}</div>
-                    <div className="text-blue-500 text-[10px] font-medium">Mensagem</div>
-                  </div>
-                </div>
-
-                <div className="bg-[#26252a] rounded-2xl rounded-tl-sm p-3 w-full shadow-md relative group">
-                  <textarea 
-                    value={smsText}
-                    onChange={(e) => setSmsText(e.target.value)}
-                    className="w-full bg-transparent text-white text-[12px] leading-relaxed font-sans resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded p-1 min-h-[120px]"
-                  />
-                  <div className="flex justify-between items-center mt-2">
-                    <div className={`text-[10px] ${smsText.length > 160 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
-                      {smsText.length} / 160
-                    </div>
-                    <div className="text-[10px] text-white/50">Agora</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
-              <button
-                onClick={() => {
-                  setSmsModalOpen(false);
-                  setSmsCliente(null);
-                }}
-                disabled={isSendingSms}
-                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-              >
-                Cancelar
-              </button>
-              <PillProgressButton
-                onClick={async () => {
-                  if (smsText.length > 160) {
-                    showToast('error', 'A mensagem deve ter no máximo 160 caracteres.');
-                    return;
-                  }
-                  if (!smsCliente.whatsapp && !smsCliente.telefone && !smsCliente.contato) {
-                    showToast('error', 'Cliente sem telefone cadastrado.');
-                    return;
-                  }
-                  
-                  setIsSendingSms(true);
-                  try {
-                    const phone = smsCliente.whatsapp || smsCliente.telefone || smsCliente.contato || '';
-                    
-                    const response = await fetch('/api/sms/send', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': import.meta.env.VITE_WHATSAPP_API_KEY || 'minha-chave-secreta'
-                      },
-                      body: JSON.stringify({
-                        numero: phone,
-                        mensagem: smsText
-                      })
-                    });
-                    
-                    const data = await response.json().catch(() => ({ error: `Resposta inválida do servidor (HTTP ${response.status})` }));
-                    
-                    if (response.ok && data.success) {
-                      showToast('success', 'SMS enviado com sucesso!');
-                      setSmsModalOpen(false);
-                    } else {
-                      showToast('error', data.error || data.message || 'Falha ao enviar SMS.');
-                    }
-                  } catch (err: any) {
-                    showToast('error', err?.message || 'Erro de conexão ao enviar SMS.');
-                  } finally {
-                    setIsSendingSms(false);
-                  }
-                }}
-                label="Enviar SMS"
-                loadingLabel="Enviando..."
-                isLoading={isSendingSms}
-                icon={<CheckCircle2 className="w-4 h-4" />}
-                variant="slate"
               />
             </div>
           </div>
