@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
       const configRes: any = await Promise.race([
         configPromise,
-        new Promise(resolve => setTimeout(() => resolve({ data: null }), 3000))
+        new Promise(resolve => { const t = setTimeout(() => resolve({ data: null }), 3000); configPromise.finally(() => clearTimeout(t)); })
       ]);
       configData = configRes?.data;
     } catch (e) {
@@ -62,6 +62,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     targetDate.setDate(targetDate.getDate() + config.diasAntecedencia);
     const targetIsoDate = targetDate.toISOString().split('T')[0];
 
+    // Helper para comparar data de vencimento (aceita DD/MM/YYYY, ISO, timestamp)
+    const matchesTargetDate = (vencimento: any, target: string) => {
+      if (!vencimento) return false;
+      const str = String(vencimento).trim();
+      if (str.startsWith(target)) return true;
+      if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length === 3) {
+          const day = parts[0].padStart(2, '0');
+          const month = parts[1].padStart(2, '0');
+          const year = parts[2].trim();
+          if (`${year}-${month}-${day}` === target) return true;
+        }
+      }
+      try {
+        const d = new Date(vencimento);
+        if (!isNaN(d.getTime())) {
+          if (d.toISOString().split('T')[0] === target) return true;
+        }
+      } catch (e) {}
+      return false;
+    };
+
     let allClients: any[] = [];
     try {
       const clientsPromise = supabase
@@ -70,22 +93,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
       const clientsRes: any = await Promise.race([
         clientsPromise,
-        new Promise(resolve => setTimeout(() => resolve({ data: [] }), 4000))
+        new Promise(resolve => { const t = setTimeout(() => resolve({ data: [] }), 4000); clientsPromise.finally(() => clearTimeout(t)); })
       ]);
       allClients = clientsRes?.data || [];
     } catch (e) {
       console.warn("Erro ao buscar clientes no run-now:", e);
     }
 
-    const clients = allClients.filter(cli => {
-      if (!cli.vencimento) return false;
-      try {
-        const cliVencStr = new Date(cli.vencimento).toISOString().split('T')[0];
-        return cliVencStr === targetIsoDate;
-      } catch (e) {
-        return String(cli.vencimento).startsWith(targetIsoDate);
-      }
-    });
+    const clients = allClients.filter(cli => matchesTargetDate(cli.vencimento, targetIsoDate));
 
     if (!clients || clients.length === 0) {
       return res.status(200).json({
@@ -98,12 +113,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Busca chave PIX
     let pixChave = '';
     try {
-      const pixPromise = supabase.from('configuracoes').select('pix_chave').eq('id', 'sistema').maybeSingle();
+      const pixPromise = supabase.from('configuracoes').select('pix_key, pix_chave').eq('id', 'sistema').maybeSingle();
       const pixRes: any = await Promise.race([
         pixPromise,
-        new Promise(resolve => setTimeout(() => resolve({ data: null }), 2000))
+        new Promise(resolve => { const t = setTimeout(() => resolve({ data: null }), 2000); pixPromise.finally(() => clearTimeout(t)); })
       ]);
-      if (pixRes?.data?.pix_chave) pixChave = pixRes.data.pix_chave;
+      if (pixRes?.data) pixChave = pixRes.data.pix_key || pixRes.data.pix_chave || '';
     } catch (e) {}
 
     let dispatched = 0;
