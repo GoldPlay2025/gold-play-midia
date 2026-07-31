@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { sendGtiSms } from '../lib/gtisms';
 
 dotenv.config();
 
@@ -123,49 +122,6 @@ monitoringRouter.post('/heartbeat', async (req, res) => {
 
           const cleaned = adminPhone.replace(/\D/g, '');
           const fullNumber = cleaned.startsWith('55') || cleaned.length > 11 ? cleaned : `55${cleaned}`;
-
-          // Envio de SMS via GTI SMS
-          if (process.env.GTISMS_API_TOKEN) {
-            try {
-              let smsUrl = process.env.GTISMS_API_URL || 'https://sms.gtisms.com/api/v3/sms/send';
-              if (smsUrl.includes('/api/http') && !smsUrl.includes('sms/send')) {
-                smsUrl = 'https://sms.gtisms.com/api/v3/sms/send';
-              }
-              const smsToken = process.env.GTISMS_API_TOKEN;
-              const senderId = process.env.GTISMS_SENDER_ID || '';
-
-              const sanitizeSms = (text: string) => {
-                let sanitized = text.replace(/[\u00A0\u200B\u200C\u200D\u20FE\uFEFF]/g, ' ');
-                sanitized = sanitized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                sanitized = sanitized.replace(/[^\x00-\x7F]/g, '');
-                return sanitized;
-              };
-
-              const shortOnlineMsg = `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} voltou a ficar ONLINE!`;
-              const finalOnlineMsg = sanitizeSms(shortOnlineMsg).substring(0, 155);
-
-              const payload: any = {
-                recipient: fullNumber,
-                message: finalOnlineMsg,
-                type: 'plain'
-              };
-              if (senderId) payload.sender_id = senderId;
-
-              const smsResp = await fetch(smsUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                  'Authorization': `Bearer ${smsToken}`
-                },
-                body: JSON.stringify(payload)
-              });
-              const smsResultText = await smsResp.text();
-              console.log('📱 Resposta envio GTI SMS (Reconexão):', smsResp.status, smsResultText);
-            } catch (smsErr) {
-              console.error('Erro ao enviar SMS de reconexão:', smsErr);
-            }
-          }
 
           // Envio via WhatsApp interno ou BotBot
           try {
@@ -430,22 +386,6 @@ monitoringRouter.all('/check-offline', async (req, res) => {
 
       let sentSuccess = false;
       let smsResultMsg = '';
-
-      // 1. Tenta envio via SMS (GTI SMS)
-      try {
-        const smsRes = await sendGtiSms({
-          numero: adminPhone,
-          mensagem: `ALERTA GOLD PLAY: A tela ${nomeTela}${nomeCliente ? ` (${nomeCliente})` : ''} ficou OFFLINE!`,
-          timeoutMs: 8000
-        });
-        smsResultMsg = smsRes.message;
-        if (smsRes.success) {
-          sentSuccess = true;
-        }
-      } catch (smsErr: any) {
-        console.error('[check-offline] Erro no envio via GTI SMS:', smsErr);
-        smsResultMsg = smsErr?.message || String(smsErr);
-      }
 
       // 2. Tenta envio interno via WhatsApp do sistema
       try {

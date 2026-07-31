@@ -1,3 +1,6 @@
+const fs = require('fs');
+
+const content = `
 export function getApiUrl(path: string): string {
   let savedSettings: any = null;
   try {
@@ -14,9 +17,9 @@ export function getApiUrl(path: string): string {
   const backendUrl = localBackend || envBackend || '';
   
   if (backendUrl) {
-    const base = backendUrl.replace(/\/$/, '');
-    const formattedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${base}${formattedPath}`;
+    const base = backendUrl.replace(/\\/$/, '');
+    const formattedPath = path.startsWith('/') ? path : \`/\${path}\`;
+    return \`\${base}\${formattedPath}\`;
   }
   return path;
 }
@@ -53,10 +56,13 @@ export async function fetchApi(path: string, options?: RequestInit): Promise<Res
         throw err;
       }
       
-      console.warn(`[fetchApi] Falha ou timeout em ${url}. Re-tentando rota relativa ${path}...`);
+      console.warn(\`[fetchApi] Falha ou timeout em \${url}. Re-tentando rota relativa \${path}...\`);
       return await fetch(path, { ...options, headers });
     }
   }
 
   return await fetch(url, { ...options, headers });
 }
+`;
+
+fs.writeFileSync('src/lib/api.ts', content.trim() + '\n');

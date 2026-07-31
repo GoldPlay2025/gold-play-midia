@@ -1,39 +1,18 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/components/ClientesList.tsx', 'utf8');
+let content = fs.readFileSync('src/components/AutomacaoPanel.tsx', 'utf8');
 
-const target = `      if (error) throw error;
-      
-      setRenewingId(null);`;
+// replace fetchConfig controller
+content = content.replace(/const controller = new AbortController\(\);\s*const timer = setTimeout\(\(\) => controller\.abort\(\), 15000\);\s*const res = await fetchApi\('\/api\/automacao\/config', \{ signal: controller\.signal \}\);\s*clearTimeout\(timer\);/, "const res = await fetchApi('/api/automacao/config');");
 
-const replacement = `      if (error) throw error;
-      
-      if (cliente.email) {
-        // Enviar e-mail de confirmação de pagamento
-        const newVencimentoDate = new Date(newVencimento);
-        newVencimentoDate.setMinutes(newVencimentoDate.getMinutes() + newVencimentoDate.getTimezoneOffset());
-        const dateStr = newVencimentoDate.toLocaleDateString('pt-BR');
+// replace fetchPreview controller
+content = content.replace(/const controller = new AbortController\(\);\s*const timer = setTimeout\(\(\) => controller\.abort\(\), 15000\);\s*const res = await fetchApi\('\/api\/automacao\/preview-clients', \{ signal: controller\.signal \}\);\s*clearTimeout\(timer\);/, "const res = await fetchApi('/api/automacao/preview-clients');");
 
-        fetch('/api/email/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: cliente.email,
-            subject: 'Confirmação de Pagamento - GOLD PLAY Digital Signage',
-            html: \`
-              <div style="font-family: Arial, sans-serif; padding: 20px; background: #0f0f11; color: #fff; borderRadius: 12px; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #10b981; margin-bottom: 10px;">Pagamento Confirmado!</h2>
-                <p style="color: #cbd5e1; font-size: 16px;">Olá <strong>\${cliente.nome_empresa}</strong>,</p>
-                <p style="color: #cbd5e1; font-size: 14px;">Confirmamos o recebimento do seu pagamento. Sua assinatura foi renovada com sucesso e seu novo vencimento é <strong>\${dateStr}</strong>.</p>
-                <p style="color: #cbd5e1; font-size: 14px;">Agradecemos a confiança em nossos serviços!</p>
-                <hr style="border-color: #334155; margin: 20px 0;" />
-                <p style="font-size: 12px; color: #64748b;">GOLD PLAY Digital Signage<br/>Mensagem automática, não é necessário responder.</p>
-              </div>
-            \`
-          })
-        }).catch(err => console.error('Erro ao enviar e-mail de confirmação:', err));
-      }
+// replace handleSaveConfig controller
+content = content.replace(/const controller = new AbortController\(\);\s*const timer = setTimeout\(\(\) => controller\.abort\(\), 15000\);\s*const res = await fetchApi\('\/api\/automacao\/config', \{/g, "const res = await fetchApi('/api/automacao/config', {");
+content = content.replace(/signal: controller\.signal\s*\}\);\s*clearTimeout\(timer\);/g, "});");
 
-      setRenewingId(null);`;
+// replace handleRunManualTest controller
+content = content.replace(/const controller = new AbortController\(\);\s*const timer = setTimeout\(\(\) => controller\.abort\(\), 25000\);\s*try \{\s*const res = await fetchApi\('\/api\/automacao\/test-sms', \{/g, "try {\n      const res = await fetchApi('/api/automacao/test-sms', {");
+content = content.replace(/signal: controller\.signal\s*\}\);\s*clearTimeout\(timer\);/g, "});");
 
-code = code.replace(target, replacement);
-fs.writeFileSync('src/components/ClientesList.tsx', code);
+fs.writeFileSync('src/components/AutomacaoPanel.tsx', content);

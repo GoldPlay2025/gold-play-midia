@@ -27,8 +27,6 @@ export type SystemSettings = {
   cobrancaImageUrl?: string;
   adminPhone?: string;
   alertsEnabled?: boolean;
-  gtismsToken?: string;
-  gtismsSenderId?: string;
   smtpEmail?: string;
   smtpPassword?: string;
   smtpPort?: string;
@@ -46,8 +44,6 @@ export const defaultSettings: SystemSettings = {
   cobrancaImageUrl: '',
   adminPhone: '',
   alertsEnabled: true,
-  gtismsToken: '',
-  gtismsSenderId: '',
   smtpEmail: '',
   smtpPassword: '',
   smtpPort: '587',
@@ -108,8 +104,6 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
           cobrancaImageUrl: data.cobranca_image_url || localObj.cobrancaImageUrl || '',
           adminPhone: data.admin_phone !== undefined && data.admin_phone !== null ? data.admin_phone : (localObj.adminPhone || ''),
           alertsEnabled: data.alerts_enabled !== undefined && data.alerts_enabled !== null ? data.alerts_enabled : (localObj.alertsEnabled ?? true),
-          gtismsToken: data.gtisms_token || data.sms_token || localObj.gtismsToken || '',
-          gtismsSenderId: data.gtisms_sender_id || data.sms_sender_id || localObj.gtismsSenderId || '',
           smtpEmail: data.smtp_email !== undefined && data.smtp_email !== null ? data.smtp_email : (localObj.smtpEmail || ''),
           smtpPassword: data.smtp_password !== undefined && data.smtp_password !== null ? data.smtp_password : (localObj.smtpPassword || ''),
           smtpPort: data.smtp_port || localObj.smtpPort || '587',
@@ -263,8 +257,6 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
             cobranca_image_url: form.cobrancaImageUrl || '',
             admin_phone: form.adminPhone || '',
             alerts_enabled: form.alertsEnabled ?? true,
-            gtisms_token: form.gtismsToken || '',
-            gtisms_sender_id: form.gtismsSenderId || '',
             smtp_email: form.smtpEmail || '',
             smtp_password: form.smtpPassword || '',
             smtp_port: form.smtpPort || '587',
@@ -558,8 +550,8 @@ ON CONFLICT (id) DO NOTHING;`);
         <div className="pt-6 border-t border-white/5 space-y-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-bold text-white mb-1">Notificações e Alertas (WhatsApp / SMS GTI)</h3>
-              <p className="text-xs text-slate-500">Configure o canal de disparo de SMS da GTI e os telefones para receber relatórios e avisos de telas offline.</p>
+              <h3 className="text-lg font-bold text-white mb-1">Notificações e Alertas (WhatsApp / E-mail)</h3>
+              <p className="text-xs text-slate-500">Configure o número do administrador e os alertas para receber avisos de telas offline.</p>
             </div>
             <button
               type="button"
@@ -601,30 +593,6 @@ ON CONFLICT (id) DO NOTHING;`);
                   onChange={e => setForm({...form, alertsEnabled: e.target.checked})}
                 />
               </label>
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Token API GTI SMS</label>
-              <input 
-                type="password" 
-                value={form.gtismsToken || ''}
-                onChange={e => setForm({...form, gtismsToken: e.target.value})}
-                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder-slate-700 font-mono"
-                placeholder="Chave API Token do GTI SMS (ex: gti_xxx)"
-              />
-              <p className="text-[10px] text-slate-500 mt-2">Chave de autorização fornecida no painel do operador GTI SMS.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Sender ID (Opcional)</label>
-              <input 
-                type="text" 
-                value={form.gtismsSenderId || ''}
-                onChange={e => setForm({...form, gtismsSenderId: e.target.value})}
-                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder-slate-700"
-                placeholder="Ex: GOLDPLAY"
-              />
-              <p className="text-[10px] text-slate-500 mt-2">Identificador do remetente cadastrado na operadora GTI SMS (se houver).</p>
             </div>
           </div>
         </div>
