@@ -91,6 +91,7 @@ export function AutomacaoPanel() {
 
   // Prévia de clientes elegíveis
   const [previewData, setPreviewData] = useState<{ count: number; targetDate: string; clients: any[] } | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [runningNow, setRunningNow] = useState(false);
 
@@ -148,7 +149,7 @@ ON CONFLICT (id) DO NOTHING;`;
     setLoading(true);
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
+      const timer = setTimeout(() => controller.abort(), 15000);
 
       const res = await fetchApi('/api/automacao/config', { signal: controller.signal });
       clearTimeout(timer);
@@ -186,10 +187,10 @@ ON CONFLICT (id) DO NOTHING;`;
   // Carrega prévia de clientes
   const fetchPreview = async () => {
     setLoadingPreview(true);
+    setPreviewError(null);
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3000);
-
+      const timer = setTimeout(() => controller.abort(), 15000);
       const res = await fetchApi('/api/automacao/preview-clients', { signal: controller.signal });
       clearTimeout(timer);
 
@@ -198,9 +199,13 @@ ON CONFLICT (id) DO NOTHING;`;
         if (data && typeof data === 'object') {
           setPreviewData(data);
         }
+      } else {
+         const data = await safeJsonParse(res).catch(() => ({}));
+         setPreviewError(data?.error || `Erro HTTP ${res.status}`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Erro ao carregar prévia de clientes:', e);
+      setPreviewError(e.message || String(e));
     } finally {
       setLoadingPreview(false);
     }
@@ -241,7 +246,7 @@ ON CONFLICT (id) DO NOTHING;`;
 
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3000);
+      const timer = setTimeout(() => controller.abort(), 15000);
 
       const res = await fetchApi('/api/automacao/config', {
         method: 'POST',
@@ -554,7 +559,7 @@ ON CONFLICT (id) DO NOTHING;`;
               </button>
             </div>
 
-            {previewData && (
+            {previewError && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl mt-3"><p className="text-xs text-red-400 font-bold">Erro ao carregar clientes: {previewError}</p><p className="text-[10px] text-red-400/80 mt-1">Verifique as variáveis de ambiente (Supabase URL/Key) na Vercel.</p></div>}{previewData && !previewError && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs font-mono text-slate-400">
                   <span>Clientes encontrados: <strong className="text-amber-400 font-bold">{previewData.count}</strong></span>
