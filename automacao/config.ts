@@ -49,20 +49,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(data);
     }
 
-    if (req.method === 'POST') {
-      const novaConfig = req.body;
-      
-      const { error } = await supabase.from('automacao_config').upsert({ id: 1, ...novaConfig });
+if (req.method === 'GET') {
+    try {
+      const { data, error } = await supabase
+        .from('automacao_config')
+        .select('*')
+        .eq('id', 'sistema')
+        .maybeSingle();
 
-      if (error) {
-        throw error;
+      if (error || !data) {
+        return res.status(200).json(defaultConfig);
       }
 
-      return res.status(200).json({ sucesso: true, mensagem: 'Configurações salvas com sucesso!' });
+      return res.status(200).json({
+        diasAntecedencia: typeof data.dias_antecedencia === 'number' ? data.dias_antecedencia : 2,
+        horarioDisparo: data.horario_disparo || "09:00",
+        ativo: typeof data.ativo === 'boolean' ? data.ativo : false,
+        mensagemTemplate: data.mensagem_template || defaultConfig.mensagemTemplate,
+        lastRunDate: data.last_run_date || undefined
+      });
+    } catch (err: any) {
+      return res.status(200).json(defaultConfig);
     }
-
-    return res.status(405).json({ erro: 'Método não permitido' });
-  } catch (erro: any) {
-    return res.status(500).json({ erro: erro.message || 'Erro interno no servidor' });
   }
-}
