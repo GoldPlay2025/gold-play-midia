@@ -34,41 +34,121 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const supabase = getSupabase();
-  
-  if (!supabase) {
-    return res.status(500).json({ erro: 'Credenciais do Supabase não configuradas nas variáveis de ambiente da Vercel.' });
-  }
 
-  try {
-    if (req.method === 'GET') {
-      const { data, error } = await supabase.from('automacao_config').select('*').maybeSingle();
-      
-      if (error || !data) {
-        return res.status(200).json(defaultConfig);
-      }
-      return res.status(200).json(data);
-    }
-
-if (req.method === 'GET') {
+  if (req.method === 'GET') {
     try {
-      const { data, error } = await supabase
-        .from('automacao_config')
-        .select('*')
-        .eq('id', 'sistema')
-        .maybeSingle();
+      if (supabase) {
+        let timer: any = null;
+        let data: any = null;
+        let error: any = null;
 
-      if (error || !data) {
-        return res.status(200).json(defaultConfig);
+        try {
+          const queryPromise = supabase
+            .from('automacao_config')
+            .select('*')
+            .eq('id', 'sistema')
+            .maybeSingle();
+
+          const timeoutPromise = new Promise((resolve) => {
+            timer = setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 2000);
+          });
+
+          const resRace: any = await Promise.race([queryPromise, timeoutPromise]);
+          data = resRace?.data;
+          error = resRace?.error;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+
+        if (!error && data) {
+          return res.status(200).json({
+            diasAntecedencia: typeof data.dias_antecedencia === 'number' ? data.dias_antecedencia : 2,
+            horarioDisparo: data.horario_disparo || "09:00",
+            ativo: typeof data.ativo === 'boolean' ? data.ativo : false,
+            mensagemTemplate: data.mensagem_template || defaultConfig.mensagemTemplate,
+            lastRunDate: data.last_run_date || undefined,
+            logs: Array.isArray(data.logs) ? data.logs : []
+          });
+        }
       }
-
-      return res.status(200).json({
-        diasAntecedencia: typeof data.dias_antecedencia === 'number' ? data.dias_antecedencia : 2,
-        horarioDisparo: data.horario_disparo || "09:00",
-        ativo: typeof data.ativo === 'boolean' ? data.ativo : false,
-        mensagemTemplate: data.mensagem_template || defaultConfig.mensagemTemplate,
-        lastRunDate: data.last_run_date || undefined
-      });
+      return res.status(200).json(defaultConfig);
     } catch (err: any) {
+      console.error('Erro no Vercel handler GET /api/automacao/config:', err);
       return res.status(200).json(defaultConfig);
     }
   }
+
+  if (req.method === 'POST') {
+    try {
+      const bodyData = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+      const { diasAntecedencia, horarioDisparo, ativo, mensagemTemplate } = bodyData;
+
+      const updated = {
+        diasAntecedencia: typeof diasAntecedencia === 'number' ? Math.max(0, diasAntecedencia) : 2,
+        horarioDisparo: typeof horarioDisparo === 'string' && horarioDisparo.trim() ? horarioDisparo.trim() : "09:00",
+        ativo: typeof ativo === 'boolean' ? ativo : false,
+        mensagemTemplate: typeof mensagemTemplate === 'string' && mensagemTemplate ? mensagemTemplate : defaultConfig.mensagemTemplate,
+        logs: []
+      };
+
+      if (supabase) {
+        let timer: any = null;
+        let data: any = null;
+        
+        try {
+          const queryPromise = supabase
+            .from('automacao_config')
+            .select('*')
+            .eq('id', 'sistema')
+            .maybeSingle();
+            
+          const resRace: any = await Promise.race([
+            queryPromise, 
+            new Promise(resolve => setTimeout(() => resolve({ data: null }), 2000))
+          ]);
+          data = resRace?.data;
+        } catch (e) {}
+
+        const horarioMudou = data && data.horario_disparo && data.horario_disparo !== updated.horarioDisparo;
+
+        try {
+          const timeoutPromise = new Promise((resolve) => {
+            timer = setTimeout(() => resolve({ error: { message: 'Timeout write' } }), 2500);
+          });
+
+          const upsertData: any = {
+            id: 'sistema',
+            dias_antecedencia: updated.diasAntecedencia,
+            horario_disparo: updated.horarioDisparo,
+            ativo: updated.ativo,
+            mensagem_template: updated.mensagemTemplate,
+            updated_at: new Date().toISOString()
+          };
+          
+          if (horarioMudou) {
+            upsertData.last_run_date = null;
+          }
+
+          const upsertPromise = supabase.from('automacao_config').upsert(upsertData, { onConflict: 'id' });
+
+          await Promise.race([upsertPromise, timeoutPromise]);
+        } catch (err) {
+          console.warn('[Vercel config] Upsert erro:', err);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Configurações salvas com sucesso.',
+        config: updated
+      });
+    } catch (err: any) {
+      console.error('Erro no Vercel handler POST /api/automacao/config:', err);
+      return res.status(500).json({ error: 'Erro ao salvar configurações: ' + (err?.message || String(err)) });
+    }
+  }
+
+  return res.status(405).json({ error: 'Método não permitido.' });
+}
