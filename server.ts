@@ -8,7 +8,7 @@ import cron from "node-cron";
 import { whatsappRouter } from "./src/server/whatsappRoutes";
 import { monitoringRouter } from "./src/server/monitoringRoutes";
 import { smsRouter } from "./src/server/smsRoutes";
-import { automationRouter, runAutomatedBillingRoutine, readAutomacaoConfig } from "./src/server/automationRoutes";
+import { automationRouter, runAutomatedBillingRoutine, readAutomacaoConfigAsync } from "./src/server/automationRoutes";
 
 dotenv.config();
 
@@ -457,7 +457,7 @@ Pergunta ou solicitação do usuário:
 
     // Cron Job Isolado para Automação de Cobrança GetSMS (Verificação a cada 1 minuto)
     try {
-      const config = readAutomacaoConfig();
+      const config = await readAutomacaoConfigAsync();
       if (config && config.ativo) {
         const now = new Date();
         const currentHHmm = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
