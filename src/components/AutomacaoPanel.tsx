@@ -366,7 +366,7 @@ ON CONFLICT (id) DO NOTHING;`;
     let timer: any = null;
     try {
       const timeoutPromise = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Tempo limite da requisição esgotado (12s).')), 12000);
+        timer = setTimeout(() => reject(new Error('Tempo limite de resposta do servidor esgotado (25s).')), 25000);
       });
 
       const fetchPromise = fetchApi('/api/automacao/test-sms', {

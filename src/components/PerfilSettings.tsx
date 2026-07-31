@@ -198,11 +198,18 @@ export function PerfilSettings({ showToast, settings, onSettingsChange }: Perfil
         headers: { 'Content-Type': 'application/json' }
       });
 
-      const resData = await response.json();
+      const rawText = await response.text();
+      let resData: any = {};
+      try {
+        resData = JSON.parse(rawText);
+      } catch (e) {
+        resData = { error: rawText || 'Resposta inválida do servidor.' };
+      }
+
       if (response.ok && resData.success) {
         showToast('success', `Alerta testado com sucesso! ${resData.message || resData.reason || 'Sinal verificado.'}`);
       } else {
-        showToast('error', resData.error || resData.reason || 'Não foi possível disparar alerta.');
+        showToast('error', resData.error || resData.reason || resData.message || 'Não foi possível disparar alerta de teste.');
       }
     } catch (err: any) {
       showToast('error', 'Erro ao disparar alerta de teste: ' + (err?.message || String(err)));
