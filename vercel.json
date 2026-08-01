@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/billing-reminders",
+      "path": "/api/cron/cobranca",
       "schedule": "0 12 * * *"
     },
     {
