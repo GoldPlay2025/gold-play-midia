@@ -1,15 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export default async function handler(req, res) {
   // 1. Verificação de status via navegador (GET)
   if (req.method === 'GET') {
     return res.status(200).json({ 
       status: "Online!", 
-      mensagem: "A API do WhatsApp com Supabase está ativa e pronta!" 
+      mensagem: "A API do WhatsApp está ativa e pronta!" 
     });
   }
 
@@ -18,15 +12,22 @@ export default async function handler(req, res) {
     try {
       const { phone, message, disparar_lote } = req.body;
 
-      // OPÇÃO A: Disparar em lote puxando direto do Supabase
-      if (disparar_lote) {
-        // Altere 'clientes' caso o nome da sua tabela no banco seja outro
-        const { data: clientes, error } = await supabase
-          .from('clientes')
-          .select('*');
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_KEY;
 
-        if (error) {
-          return res.status(500).json({ sucesso: false, erro: 'Erro ao consultar o Supabase: ' + error.message });
+      // OPÇÃO A: Disparar em lote puxando direto do Supabase via REST API nativa
+      if (disparar_lote) {
+        const supRes = await fetch(`${supabaseUrl}/rest/v1/clientes?select=*`, {
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`
+          }
+        });
+
+        const clientes = await supRes.json();
+
+        if (!supRes.ok) {
+          throw new Error(clientes.message || 'Erro ao consultar os dados no Supabase');
         }
 
         if (!clientes || clientes.length === 0) {
@@ -36,7 +37,6 @@ export default async function handler(req, res) {
         let resultados = [];
 
         for (const cliente of clientes) {
-          // Puxa os campos do seu banco (ajuste se os nomes das colunas forem diferentes)
           const telefone = cliente.whatsapp || cliente.telefone;
           const nome = cliente.nome || 'Cliente';
           const vencimento = cliente.vencimento || '';
@@ -49,7 +49,6 @@ export default async function handler(req, res) {
             numeroLimpo = '55' + numeroLimpo;
           }
 
-          // Mensagem padrão formatada com as variáveis do banco
           const textoMensagem = message || `Olá ${nome}, passamos para lembrar que o seu vencimento é em ${vencimento} no valor de R$ ${valor}. Regularize para evitar o bloqueio!`;
 
           const respostaBot = await fetch('https://api.botbot.chat/api/v2/sendText', {
@@ -80,11 +79,11 @@ export default async function handler(req, res) {
         });
       }
 
-      // OPÇÃO B: Teste ou Envio Individual direto
+      // OPÇÃO B: Envio Individual / Teste Direto
       if (!phone || !message) {
         return res.status(400).json({ 
           sucesso: false, 
-          erro: 'Envie "phone" e "message" para envio individual, ou "disparar_lote: true" para buscar do Supabase.' 
+          erro: 'Envie "phone" e "message" para envio individual, ou "disparar_lote: true" para buscar do banco.' 
         });
       }
 
