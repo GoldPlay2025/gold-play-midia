@@ -136,8 +136,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         nomeTela 
       } = body;
 
-      const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://v3o4yftcg3lues4kuk7y24.supabase.co';
-      const supabaseKey = process.env.SUPABASE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+      const supabaseUrl = 
+        body.supabaseUrl || 
+        body.supabase_url || 
+        process.env.SUPABASE_URL || 
+        process.env.NEXT_PUBLIC_SUPABASE_URL || 
+        process.env.VITE_SUPABASE_URL || 
+        'https://v3o4yftcg3lues4kuk7y24.supabase.co';
+
+      const supabaseKey = 
+        body.supabaseKey || 
+        body.supabase_key || 
+        body.supabaseAnonKey || 
+        body.supabase_anon_key || 
+        process.env.SUPABASE_KEY || 
+        process.env.SUPABASE_ANON_KEY || 
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+        process.env.VITE_SUPABASE_ANON_KEY || 
+        process.env.SUPABASE_SERVICE_ROLE_KEY || 
+        '';
 
       const defaultAppKey = '90d7b9ff-d861-49ae-a452-9ed6238f038d';
       const defaultAuthKey = 'kMo4v73UxTTdDFmUGe7eYjQYCpZjykRb7lqZtlQu9Z8iDXN6Td';
