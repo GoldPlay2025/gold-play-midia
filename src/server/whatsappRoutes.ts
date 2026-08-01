@@ -1,8 +1,18 @@
 import { Router } from 'express';
+import handler from '../../api/whatsapp/index';
 
 export const whatsappRouter = Router();
 
-// Middleware simples para proteger as rotas com API_KEY
+// Delegar GET e POST na raiz /api/whatsapp para o handler
+whatsappRouter.get('/', async (req: any, res: any) => {
+  return await handler(req, res);
+});
+
+whatsappRouter.post('/', async (req: any, res: any) => {
+  return await handler(req, res);
+});
+
+// Middleware simples para proteger as rotas legadas com API_KEY
 const authMiddleware = (req: any, res: any, next: any) => {
   const apiKey = (process.env.VITE_WHATSAPP_API_KEY || process.env.API_KEY || 'minha-chave-secreta').trim();
   const providedKey = String(req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '') || req.query.apiKey || '').trim();

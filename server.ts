@@ -30,6 +30,15 @@ async function startServer() {
   app.use(express.json());
 
   // Rotas do WhatsApp e Monitoramento
+  app.all('/api/cron/cobranca', async (req, res) => {
+    try {
+      const handlerModule = await import('./api/cron/cobranca.ts');
+      return await handlerModule.default(req as any, res as any);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || 'Erro ao carregar /api/cron/cobranca' });
+    }
+  });
+
   app.use('/api/whatsapp', whatsappRouter);
   app.use('/api/devices', monitoringRouter);
   app.use('/api/cron', monitoringRouter);
@@ -428,27 +437,41 @@ Pergunta ou solicitação do usuário:
     });
   }
 
-  // Iniciar Cron Job para monitoramento de telas offline (a cada 1 minuto)
+  // Iniciar Cron Job para monitoramento de telas offline e cobrança agendada (a cada 1 minuto)
   cron.schedule('* * * * *', async () => {
+    const secret = process.env.CRON_SECRET || "";
+    // 1. Verificação de telas offline
     try {
-      console.log("[CRON] Iniciando verificação de telas offline...");
-      const secret = process.env.CRON_SECRET || "";
-      const url = `http://127.0.0.1:${PORT}/api/cron/check-offline`;
-      const response = await fetch(url, {
+      const urlOffline = `http://127.0.0.1:${PORT}/api/cron/check-offline`;
+      await fetch(urlOffline, {
         method: 'POST',
         headers: {
           'x-cron-secret': secret,
           'Content-Type': 'application/json'
         }
       });
-      if (response.ok) {
-        const data = await response.json();
-        console.log("[CRON] Verificação concluída:", data);
-      } else {
-        console.error("[CRON] Erro na verificação HTTP:", response.status, await response.text());
+    } catch (err) {
+      console.error("[CRON] Erro ao executar monitoramento de telas:", err);
+    }
+
+    // 2. Disparo de cobrança agendada no horário
+    try {
+      const urlCobranca = `http://127.0.0.1:${PORT}/api/cron/cobranca`;
+      const resCob = await fetch(urlCobranca, {
+        method: 'POST',
+        headers: {
+          'x-cron-secret': secret,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (resCob.ok) {
+        const dataCob = await resCob.json();
+        if (dataCob.action !== 'skipped') {
+          console.log("[CRON] Execução de cobrança automática concluída:", dataCob);
+        }
       }
     } catch (err) {
-      console.error("[CRON] Erro ao executar job de monitoramento:", err);
+      console.error("[CRON] Erro ao executar disparo agendado de cobrança:", err);
     }
   });
 

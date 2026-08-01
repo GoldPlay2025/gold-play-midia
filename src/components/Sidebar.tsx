@@ -11,7 +11,8 @@ import {
   TrendingUp,
   Wallet,
   Activity,
-  Zap
+  Zap,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -61,6 +62,7 @@ export function Sidebar({ isOpen, setIsOpen, activeTab, setActiveTab, onLogout, 
         <MenuButton icon={TrendingUp} label="Gestão Financeira" active={activeTab === 'gestao'} onClick={() => { setActiveTab('gestao'); setIsOpen(false); }} />
         <MenuButton icon={Users} label="Clientes" active={activeTab === 'clientes'} onClick={() => { setActiveTab('clientes'); setIsOpen(false); }} />
         <MenuButton icon={Monitor} label="Telas" active={activeTab === 'telas'} onClick={() => { setActiveTab('telas'); setIsOpen(false); }} />
+        <MenuButton icon={MessageCircle} label="WhatsApp" active={activeTab === 'whatsapp'} onClick={() => { setActiveTab('whatsapp'); setIsOpen(false); }} />
         <MenuButton icon={Cloud} label="Cloud Manager" active={activeTab === 'cloud'} onClick={() => { setActiveTab('cloud'); setIsOpen(false); }} />
         <MenuButton icon={Film} label="Gerenciar Mídias" active={activeTab === 'nova-midia'} onClick={() => { setActiveTab('nova-midia'); setIsOpen(false); }} />
         <MenuButton icon={Settings} label="Perfil" active={activeTab === 'perfil'} onClick={() => { setActiveTab('perfil'); setIsOpen(false); }} />

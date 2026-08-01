@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
-import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Download, MessageCircle, Mail, ArrowLeft } from 'lucide-react';
+import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Download, MessageCircle, Mail, ArrowLeft, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PillProgressButton } from './PillProgressButton';
+import { formatCobrancaMessage } from '../lib/cobrancaTemplate';
 
 import { checkIsOnline } from './TelasList';
 
@@ -76,27 +77,9 @@ const getVencimentoStatus = (vencimento?: string) => {
   return 'ok';
 };
 
-const getCobrancaText = (cliente: Cliente, sysSettings: any) => {
-  const vencStr = cliente.vencimento ? new Date(cliente.vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-';
-  const valorStr = cliente.valor != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.valor) : '-';
+const getCobrancaText = (cliente: Cliente, sysSettings: any, templateOverride?: string) => {
   const pixKeyStr = sysSettings?.pixKey || 'Não configurada';
-
-  return `Olá *${cliente.nome_empresa}!*
-
-• 𝑷𝒂𝒔𝒔𝒂𝒏𝒅𝒐 𝒑𝒂𝒓𝒂 𝒍𝒆𝒎𝒃𝒓𝒂𝒓 𝒒𝒖𝒆 𝒔𝒖𝒂 𝒎𝒆𝒏𝒔𝒂𝒍𝒊𝒅𝒂𝒅𝒆:
-
-*GOLD MÍDIAS*
----------------------
-• Vence: ${vencStr}
-• Valor: ${valorStr}
-
-╰⊱❖ Gold Play ❖⊱╯
-
-Pagamento:
-Pix:
-${pixKeyStr}
-
-• Estamos à disposição.`;
+  return formatCobrancaMessage(templateOverride, cliente, pixKeyStr);
 };
 
 const getEmailCobrancaHtml = (cliente: Cliente, sysSettings: any) => {
@@ -184,6 +167,8 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const [settings, setSettings] = useState<any>(null);
+  const [templateCobranca, setTemplateCobranca] = useState<string>('');
+  const [isSendingWhatsapp, setIsSendingWhatsapp] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -192,9 +177,19 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
       if (local) {
         try { localObj = JSON.parse(local); } catch(e){}
       }
+
+      const localTpl = typeof window !== 'undefined' ? localStorage.getItem('gpm_whatsapp_template') : null;
+      if (localTpl) setTemplateCobranca(localTpl);
+
       const { data } = await supabase.from('configuracoes').select('*').eq('id', 'sistema').maybeSingle();
+      
+      const { data: scheduleData } = await supabase.from('configuracoes').select('*').eq('id', 'whatsapp_schedule').maybeSingle();
+      if (scheduleData) {
+        if (scheduleData.template_cobranca) setTemplateCobranca(scheduleData.template_cobranca);
+      }
+
       const merged = {
-        pixKey: data?.pix_key || localObj?.pixKey || '',
+        pixKey: scheduleData?.pix_key || data?.pix_key || localObj?.pixKey || '',
         pixReceiver: data?.pix_receiver || localObj?.pixReceiver || '',
         systemName: data?.system_name || localObj?.systemName || 'GOLD PLAY',
         logoUrl: data?.logo_url || localObj?.logoUrl || '/gpm.png',
@@ -1179,40 +1174,83 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                 {/* Message Bubble */}
                 <div className="bg-[#26252a] rounded-2xl rounded-tl-sm p-3 w-full shadow-md">
                   <div className="text-white text-[12px] leading-relaxed whitespace-pre-wrap font-sans">
-                    {getCobrancaText(cobrancaCliente, settings)}
+                    {getCobrancaText(cobrancaCliente, settings, templateCobranca)}
                   </div>
                   <div className="text-[10px] text-white/50 text-right mt-2">Agora</div>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
-              <button
-                onClick={() => {
-                  setCobrancaModalOpen(false);
-                  setCobrancaCliente(null);
-                }}
-                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-white/5">
+              <a
+                href={`https://wa.me/${cobrancaCliente.whatsapp ? cobrancaCliente.whatsapp.replace(/\D/g, '') : ''}?text=${encodeURIComponent(getCobrancaText(cobrancaCliente, settings, templateCobranca))}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-slate-400 hover:text-white underline transition-colors flex items-center gap-1"
               >
-                Cancelar
-              </button>
-              <PillProgressButton
-                onClick={() => {
-                  if (!cobrancaCliente.whatsapp) {
-                    showToast('error', 'Cliente sem WhatsApp cadastrado.');
-                    return;
-                  }
-                  
-                  const msg = getCobrancaText(cobrancaCliente, settings);
-                  const rawNumbers = cobrancaCliente.whatsapp.replace(/\D/g, '');
-                  const waLink = `https://wa.me/${rawNumbers.startsWith('55') ? rawNumbers : '55' + rawNumbers}?text=${encodeURIComponent(msg)}`;
-                  window.open(waLink, '_blank');
-                  setCobrancaModalOpen(false);
-                }}
-                label="Enviar WhatsApp"
-                icon={<CheckCircle2 className="w-4 h-4" />}
-                variant="emerald"
-              />
+                <ExternalLink className="w-3 h-3 text-slate-400" />
+                <span>Abrir no WhatsApp Web (Navegador)</span>
+              </a>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setCobrancaModalOpen(false);
+                    setCobrancaCliente(null);
+                  }}
+                  className="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (!cobrancaCliente?.whatsapp) {
+                      showToast('error', 'Cliente sem WhatsApp cadastrado.');
+                      return;
+                    }
+
+                    setIsSendingWhatsapp(true);
+                    try {
+                      const msg = getCobrancaText(cobrancaCliente, settings, templateCobranca);
+                      const raw = cobrancaCliente.whatsapp.replace(/\D/g, '');
+                      const phone = raw.startsWith('55') ? raw : '55' + raw;
+
+                      const res = await fetch('/api/whatsapp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone, message: msg })
+                      });
+
+                      const data = await res.json().catch(() => ({}));
+                      if (data.sucesso) {
+                        showToast('success', `Cobrança enviada com sucesso para ${cobrancaCliente.nome_empresa}!`);
+                        setCobrancaModalOpen(false);
+                      } else {
+                        showToast('error', data.erro || 'Falha ao enviar mensagem via API de WhatsApp.');
+                      }
+                    } catch (err) {
+                      showToast('error', 'Erro ao conectar com a API do WhatsApp.');
+                    } finally {
+                      setIsSendingWhatsapp(false);
+                    }
+                  }}
+                  disabled={isSendingWhatsapp}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black flex items-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer font-sans"
+                >
+                  {isSendingWhatsapp ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-black" />
+                      <span>Enviando via API...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 text-black" />
+                      <span>Enviar Disparo Imediato (API)</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
