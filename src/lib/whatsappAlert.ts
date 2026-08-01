@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 
 /**
  * Função exportável para enviar alerta de status de tela (OFF/ON) para o WhatsApp do Administrador.
@@ -80,7 +80,9 @@ export async function enviarAlertaStatusTela(status: 'OFF' | 'ON' | 'off' | 'on'
         phone: adminPhone,
         message: mensagemAlerta,
         appKey,
-        authKey
+        authKey,
+        supabaseUrl: supabaseUrl || undefined,
+        supabaseKey: supabaseAnonKey || undefined
       })
     });
 
