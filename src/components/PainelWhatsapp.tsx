@@ -26,7 +26,7 @@ import {
   QrCode
 } from 'lucide-react';
 import { enviarAlertaStatusTela } from '../lib/whatsappAlert';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { formatCobrancaMessage, DEFAULT_COBRANCA_TEMPLATE } from '../lib/cobrancaTemplate';
 
 interface PainelWhatsappProps {
@@ -250,7 +250,9 @@ export function PainelWhatsapp({ showToast }: PainelWhatsappProps) {
           template_cobranca: templateCobranca,
           pix_key: pixKey,
           appKey,
-          authKey
+          authKey,
+          supabaseUrl: supabaseUrl || undefined,
+          supabaseKey: supabaseAnonKey || undefined
         })
       });
 
@@ -322,7 +324,9 @@ export function PainelWhatsapp({ showToast }: PainelWhatsappProps) {
           pix_key: pixKey,
           dias_antecedencia: Number(diasAntes),
           horario_envio: horarioEnvio,
-          agendamento_ativo: agendamentoAtivo
+          agendamento_ativo: agendamentoAtivo,
+          supabaseUrl: supabaseUrl || undefined,
+          supabaseKey: supabaseAnonKey || undefined
         })
       });
 
@@ -352,7 +356,14 @@ export function PainelWhatsapp({ showToast }: PainelWhatsappProps) {
       const res = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: telefoneTeste, message: mensagemTeste, appKey, authKey })
+        body: JSON.stringify({ 
+          phone: telefoneTeste, 
+          message: mensagemTeste, 
+          appKey, 
+          authKey,
+          supabaseUrl: supabaseUrl || undefined,
+          supabaseKey: supabaseAnonKey || undefined
+        })
       });
       const data = await res.json().catch(() => ({ sucesso: false, erro: 'Resposta inválida' }));
       addLog('Teste Individual', data);
@@ -385,16 +396,22 @@ export function PainelWhatsapp({ showToast }: PainelWhatsappProps) {
   // Executa disparo em lote de cobrança
   const executarDisparoLote = async () => {
     const dataAlvoBR = getDataAlvoPreview(diasAntes);
-    if (!window.confirm(`Deseja executar o disparo automático em lote para os clientes com vencimento em ${diasAntes} dia(s) (${dataAlvoBR})?`)) {
-      return;
-    }
 
     setLoadingLote(true);
     try {
       const res = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ disparar_lote: true, dias_antecedencia: Number(diasAntes), appKey, authKey })
+        body: JSON.stringify({ 
+          disparar_lote: true, 
+          dias_antecedencia: Number(diasAntes), 
+          appKey, 
+          authKey,
+          supabaseUrl: supabaseUrl || undefined,
+          supabaseKey: supabaseAnonKey || undefined,
+          template_cobranca: templateCobranca,
+          pix_key: pixKey
+        })
       });
       const data = await res.json().catch(() => ({ sucesso: false, erro: 'Erro na resposta do servidor' }));
       addLog('Disparo em Lote (Supabase)', data);
