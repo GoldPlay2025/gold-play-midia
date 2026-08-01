@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { DataTable, Column } from './DataTable';
 import { Modal } from './Modal';
 import { Loader2, Edit2, Trash2, Monitor, X, Calendar, Film, Play, Tv, Check, Eye, ChevronRight, ExternalLink, MapPin, DollarSign, AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Download, MessageCircle, Mail, ArrowLeft, Send } from 'lucide-react';
@@ -1219,7 +1219,12 @@ export function ClientesList({ showToast }: { showToast: (type: 'success' | 'err
                       const res = await fetch('/api/whatsapp', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ phone, message: msg })
+                        body: JSON.stringify({ 
+                          phone, 
+                          message: msg,
+                          supabaseUrl: supabaseUrl || undefined,
+                          supabaseKey: supabaseAnonKey || undefined
+                        })
                       });
 
                       const data = await res.json().catch(() => ({}));
