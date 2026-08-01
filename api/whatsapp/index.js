@@ -1,14 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Conexão com o Supabase utilizando as variáveis de ambiente seguras da Vercel
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
-  // 1. Verificação rápida de status via navegador (GET)
+  // 1. Verificação de status via navegador (GET)
   if (req.method === 'GET') {
     return res.status(200).json({ 
       status: "Online!", 
-      mensagem: "A API do WhatsApp na Vercel está ativa e pronta!" 
+      mensagem: "A API do WhatsApp com Supabase está ativa e pronta!" 
     });
   }
 
@@ -17,26 +18,39 @@ export default async function handler(req, res) {
     try {
       const { phone, message, disparar_lote } = req.body;
 
-      // OPÇÃO A: Disparo em lote automático buscando do Supabase
+      // OPÇÃO A: Disparar em lote puxando direto do Supabase
       if (disparar_lote) {
+        // Altere 'clientes' caso o nome da sua tabela no banco seja outro
         const { data: clientes, error } = await supabase
-          .from('clientes') // Altere 'clientes' se o nome da sua tabela for diferente
-          .select('nome, whatsapp, vencimento, valor');
+          .from('clientes')
+          .select('*');
 
-        if (error) throw error;
+        if (error) {
+          return res.status(500).json({ sucesso: false, erro: 'Erro ao consultar o Supabase: ' + error.message });
+        }
+
+        if (!clientes || clientes.length === 0) {
+          return res.status(200).json({ sucesso: true, mensagem: 'Nenhum cliente encontrado na tabela.' });
+        }
 
         let resultados = [];
 
         for (const cliente of clientes) {
-          if (!cliente.whatsapp) continue;
+          // Puxa os campos do seu banco (ajuste se os nomes das colunas forem diferentes)
+          const telefone = cliente.whatsapp || cliente.telefone;
+          const nome = cliente.nome || 'Cliente';
+          const vencimento = cliente.vencimento || '';
+          const valor = cliente.valor || '';
 
-          let numeroLimpo = cliente.whatsapp.replace(/\D/g, '');
+          if (!telefone) continue;
+
+          let numeroLimpo = telefone.replace(/\D/g, '');
           if (numeroLimpo.length === 10 || numeroLimpo.length === 11) {
             numeroLimpo = '55' + numeroLimpo;
           }
 
-          // Mensagem personalizada utilizando as variáveis do banco
-          const textoMensagem = `Olá ${cliente.nome}, passamos para lembrar que o seu vencimento é em ${cliente.vencimento} no valor de R$ ${cliente.valor}. Regularize para evitar o bloqueio!`;
+          // Mensagem padrão formatada com as variáveis do banco
+          const textoMensagem = message || `Olá ${nome}, passamos para lembrar que o seu vencimento é em ${vencimento} no valor de R$ ${valor}. Regularize para evitar o bloqueio!`;
 
           const respostaBot = await fetch('https://api.botbot.chat/api/v2/sendText', {
             method: 'POST',
@@ -53,7 +67,7 @@ export default async function handler(req, res) {
 
           const dadosBot = await respostaBot.json();
           resultados.push({ 
-            cliente: cliente.nome, 
+            cliente: nome, 
             status: respostaBot.ok ? 'Enviado com sucesso' : 'Falha', 
             detalhe: dadosBot 
           });
@@ -66,11 +80,11 @@ export default async function handler(req, res) {
         });
       }
 
-      // OPÇÃO B: Disparo de Teste Individual (Passando número e mensagem direto)
+      // OPÇÃO B: Teste ou Envio Individual direto
       if (!phone || !message) {
         return res.status(400).json({ 
           sucesso: false, 
-          erro: 'Envie "phone" e "message" para teste, ou ative "disparar_lote: true" para buscar do banco.' 
+          erro: 'Envie "phone" e "message" para envio individual, ou "disparar_lote: true" para buscar do Supabase.' 
         });
       }
 
