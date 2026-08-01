@@ -1,3 +1,12 @@
+// Responde quando você abre o link direto no navegador (GET)
+export async function GET() {
+  return Response.json({ 
+    status: "Online!", 
+    mensagem: "A API do WhatsApp na Vercel está ativa e pronta para receber envios via POST." 
+  });
+}
+
+// Executa o envio real quando o seu sistema chama (POST)
 export async function POST(request) {
   try {
     const { phone, message } = await request.json();
@@ -6,13 +15,11 @@ export async function POST(request) {
       return Response.json({ sucesso: false, erro: 'Telefone e mensagem são obrigatórios.' }, { status: 400 });
     }
 
-    // Limpeza inteligente do número (garante o 55 e remove símbolos)
     let numeroLimpo = phone.replace(/\D/g, '');
     if (numeroLimpo.length === 10 || numeroLimpo.length === 11) {
       numeroLimpo = '55' + numeroLimpo;
     }
 
-    // Disparo direto para a API oficial do botbot.chat usando as variáveis da Vercel
     const respostaBot = await fetch('https://api.botbot.chat/api/v2/sendText', {
       method: 'POST',
       headers: {
