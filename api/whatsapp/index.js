@@ -5,32 +5,32 @@ export default async function handler(req, res) {
       <html lang="pt-BR">
       <head>
           <meta charset="UTF-8">
-          <title>Painel de Teste - WhatsApp Vercel</title>
+          <title>Painel de Diagnóstico - Botbot.chat</title>
           <style>
               body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-              .card { background: #1e293b; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 450px; border: 1px solid #334155; }
+              .card { background: #1e293b; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 500px; border: 1px solid #334155; }
               h2 { color: #38bdf8; margin-top: 0; font-size: 18px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
               .form-group { margin-bottom: 15px; }
               label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 5px; }
               input, textarea { width: 100%; background: #0f172a; border: 1px solid #475569; color: #fff; padding: 10px; border-radius: 6px; box-sizing: border-box; font-size: 13px; }
               button { background: #0ea5e9; border: none; color: white; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; margin-top: 5px; }
               button:hover { background: #0284c7; }
-              .log-box { margin-top: 15px; font-size: 12px; padding: 10px; background: #0f172a; border-radius: 6px; min-height: 30px; word-break: break-all; color: #f87171; }
+              .log-box { margin-top: 15px; font-size: 12px; padding: 12px; background: #0f172a; border-radius: 6px; min-height: 60px; max-height: 150px; overflow-y: auto; word-break: break-all; color: #38bdf8; font-family: monospace; white-space: pre-wrap; border: 1px solid #334155; }
           </style>
       </head>
       <body>
           <div class="card">
-              <h2>Painel de Teste - Botbot.chat</h2>
+              <h2>Diagnóstico de Envio - Botbot.chat</h2>
               <div class="form-group">
-                  <label>Número (com DDD):</label>
+                  <label>Número de Destino (com DDD):</label>
                   <input type="text" id="numero" value="5544991762249">
               </div>
               <div class="form-group">
                   <label>Mensagem:</label>
-                  <textarea id="mensagem" rows="3">Teste de envio direto pela Vercel com botbot.chat!</textarea>
+                  <textarea id="mensagem" rows="3">Teste de rastreio direto da Vercel!</textarea>
               </div>
-              <button onclick="enviarTeste()">Enviar Mensagem de Teste</button>
-              <div id="resultado" class="log-box">Aguardando ação...</div>
+              <button onclick="enviarTeste()">Testar Envio e Ver Resposta</button>
+              <div id="resultado" class="log-box">Aguardando disparo...</div>
           </div>
 
           <script>
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
                   const resDiv = document.getElementById('resultado');
 
                   resDiv.style.color = '#38bdf8';
-                  resDiv.innerText = 'Enviando...';
+                  resDiv.innerText = 'Enviando requisição...';
 
                   try {
                       const response = await fetch('/api/whatsapp', {
@@ -49,16 +49,13 @@ export default async function handler(req, res) {
                           body: JSON.stringify({ phone: numero, message: mensagem })
                       });
                       const data = await response.json();
-                      if (data.sucesso) {
-                          resDiv.style.color = '#34d399';
-                          resDiv.innerText = 'Sucesso! Mensagem enviada.';
-                      } else {
-                          resDiv.style.color = '#f87171';
-                          resDiv.innerText = 'Erro: ' + (data.erro || 'Falha ao enviar');
-                      }
+                      
+                      // Mostra exatamente o JSON que o botbot.chat devolveu
+                      resDiv.style.color = data.sucesso ? '#34d399' : '#f87171';
+                      resDiv.innerText = JSON.stringify(data, null, 2);
                   } catch (e) {
                       resDiv.style.color = '#f87171';
-                      resDiv.innerText = 'Erro de conexão.';
+                      resDiv.innerText = 'Erro crítico de conexão.';
                   }
               }
           </script>
@@ -70,21 +67,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { phone, message, disparar_lote } = req.body;
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_KEY;
-
-      if (disparar_lote) {
-        const supRes = await fetch(`${supabaseUrl}/rest/v1/clientes?select=*`, {
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`
-          }
-        });
-        const clientes = await supRes.json();
-        // ... (lógica de lote mantida ou simplificada para teste)
-        return res.status(200).json({ sucesso: true, total: clientes.length });
-      }
+      const { phone, message } = req.body;
 
       if (!phone || !message) {
         return res.status(400).json({ sucesso: false, erro: 'Informe o telefone e a mensagem.' });
@@ -95,10 +78,7 @@ export default async function handler(req, res) {
         numeroLimpo = '55' + numeroLimpo;
       }
 
-      // Testando com a URL limpa base do botbot.chat (caso 'api.' esteja incorreto)
-      const urlBot = 'https://botbot.chat/api/v2/sendText';
-
-      const respostaBot = await fetch(urlBot, {
+      const respostaBot = await fetch('https://botbot.chat/api/v2/sendText', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -111,17 +91,15 @@ export default async function handler(req, res) {
         })
       });
 
-      const dados = await respostaBot.json();
+      const dadosBot = await respostaBot.json();
 
-      if (!respostaBot.ok) {
-        throw new Error(dados.message || 'Erro retornado pela API do botbot.chat');
-      }
-
-      return res.status(200).json({ sucesso: true, resultado: dados });
+      return res.status(200).json({ 
+        sucesso: respostaBot.ok, 
+        statusHttpBot: respostaBot.status, 
+        respostaDoBotBot: dadosBot 
+      });
     } catch (err) {
-      // Retorna o erro detalhado da causa do fetch failed
-      const detalhesErro = err.cause ? `${err.message} (${JSON.stringify(err.cause)})` : err.message;
-      return res.status(500).json({ sucesso: false, erro: detalhesErro });
+      return res.status(500).json({ sucesso: false, erro: err.message });
     }
   }
 
